@@ -52,11 +52,14 @@ const FALLBACK_SCENARIOS: Record<string, Scenario> = {
   },
 };
 
+const FALLBACK_IDS = Object.keys(FALLBACK_SCENARIOS);
+
 export default function ScenarioDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const [scenario, setScenario] = useState<Scenario | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const isFallback = FALLBACK_IDS.includes(params.id);
 
   useEffect(() => {
     async function load() {
@@ -151,13 +154,28 @@ export default function ScenarioDetailPage({ params }: { params: { id: string } 
         </div>
       )}
 
+      {/* Fallback warning */}
+      {isFallback && (
+        <div className="bg-amber-900/20 border border-amber-700/50 rounded-xl p-4 mb-4 text-sm text-amber-300">
+          <span className="font-semibold">Demo scenario</span> — this scenario is not yet saved to your database.
+          To create a room, run <code className="bg-amber-900/40 px-1 rounded">supabase/seeds.sql</code> in your
+          Supabase SQL Editor first, or publish a real scenario from the{" "}
+          <Link href="/dashboard" className="underline hover:text-amber-200">Creator Dashboard</Link>.
+        </div>
+      )}
+
       {/* CTA */}
       <div className="flex gap-4">
         <Link
           href={createRoomHref}
-          className="flex-1 bg-purple-600 hover:bg-purple-500 text-white py-3 rounded-lg font-medium text-center transition-colors"
+          className={`flex-1 py-3 rounded-lg font-medium text-center transition-colors ${
+            isFallback
+              ? "bg-slate-700 text-slate-400 cursor-not-allowed pointer-events-none"
+              : "bg-purple-600 hover:bg-purple-500 text-white"
+          }`}
+          aria-disabled={isFallback}
         >
-          Create Room
+          {isFallback ? "Create Room (seed DB first)" : "Create Room"}
         </Link>
         <Link
           href="/play/hub"
