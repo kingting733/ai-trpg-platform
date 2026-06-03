@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 
 interface Player {
   user_id: string;
-  users: { username: string } | null;
+  username: string;
 }
 
 interface Room {
@@ -15,7 +15,6 @@ interface Room {
   host_id: string;
   status: string;
   max_players: number;
-  scenario_id: string;
 }
 
 export default function LobbyPage({ params }: { params: { id: string } }) {
@@ -45,16 +44,32 @@ export default function LobbyPage({ params }: { params: { id: string } }) {
       return;
     }
 
-    const { data: playersData } = await supabase
+    // Step 1: get room_players without any join (avoids RLS issues on users table)
+    const { data: rpData } = await supabase
       .from("room_players")
-      .select("user_id, users(username)")
+      .select("user_id")
       .eq("room_id", params.id);
-    // Fall back gracefully if the users join returns null (e.g. anonymous users not in public.users)
-    const safePlayers = (playersData ?? []).map((p: any) => ({
-      user_id: p.user_id,
-      users: p.users ?? { username: "Player" },
-    }));
-    setPlayers(safePlayers);
+
+    const userIds = (rpData ?? []).map((r: { user_id: string }) => r.user_id);
+    if (userIds.length === 0) { setPlayers([]); return; }
+
+    // Step 2: try to fetch usernames separately; fall back gracefully if it fails
+    const { data: usersData } = await supabase
+      .from("users")
+      .select("id, username")
+      .in("id", userIds);
+
+    const usernameMap: Record<string, string> = {};
+    (usersData ?? []).forEach((u: { id: string; username: string }) => {
+      usernameMap[u.id] = u.username;
+    });
+
+    setPlayers(
+      userIds.map((id, i) => ({
+        user_id: id,
+        username: usernameMap[id] ?? `Player ${i + 1}`,
+      }))
+    );
   }, [params.id, router]);
 
   useEffect(() => {
@@ -88,7 +103,9 @@ export default function LobbyPage({ params }: { params: { id: string } }) {
   return (
     <div className="max-w-lg mx-auto">
       <h1 className="text-3xl font-bold text-white mb-1">{room?.name ?? "Loading..."}</h1>
-      <p className="text-slate-400 mb-2 text-sm">Waiting for players to join...</p>
+      <p className="text-slate-400 mb-2 text-sm">
+        {isHost ? "Share the room code and start when ready." : "Waiting for the host to start..."}
+      </p>
 
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 mb-4 text-center">
         <div className="text-xs text-slate-500 mb-1">Room Code — share with friends</div>
@@ -106,23 +123,23 @@ export default function LobbyPage({ params }: { params: { id: string } }) {
         <div className="flex flex-col gap-2">
           {players.map((p) => (
             <div key={p.user_id} className="flex items-center justify-between py-2 px-3 bg-slate-900/50 rounded-lg">
-              <span className="text-white font-medium">{p.users?.username ?? "Player"}</span>
+              <span className="text-white font-medium">{p.username}</span>
               {p.user_id === room?.host_id && (
                 <span className="text-xs bg-amber-900/50 text-amber-300 border border-amber-800 px-2 py-0.5 rounded">Host</span>
               )}
             </div>
           ))}
-          {players.length === 0 && <p className="text-slate-500 text-sm">Waiting...</p>}
+          {players.length === 0 && <p className="text-slate-500 text-sm">Loading players...</p>}
         </div>
       </div>
 
       {isHost ? (
         <button
           onClick={handleStartGame}
-          disabled={loading || players.length < 1}  /* solo play allowed: min 1 */
+          disabled={loading || players.length < 1}
           className="w-full bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white py-3 rounded-lg font-medium text-lg"
         >
-          {loading ? "Starting..." : "Start Game"}
+          {loading ? "Starting..." : `Start Game${players.length === 1 ? " (Solo)" : ""}`}
         </button>
       ) : (
         <div className="text-center text-slate-400 text-sm py-3">
