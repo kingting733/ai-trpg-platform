@@ -12,6 +12,14 @@ interface Scenario {
   max_players: number;
 }
 
+interface ActiveRoom {
+  id: string;
+  name: string;
+  room_code: string;
+  status: string;
+  scenarios: { title: string; genre: string } | null;
+}
+
 const FALLBACK_SCENARIOS: Scenario[] = [
   { id: "00000000-0000-0000-0000-000000000001", title: "The Lost Temple", genre: "Fantasy", description: "An ancient temple hides deadly secrets and forgotten treasures.", max_players: 4 },
   { id: "00000000-0000-0000-0000-000000000002", title: "Neon Shadows", genre: "Cyberpunk", description: "Navigate a corrupt megacity where corporations rule everything.", max_players: 6 },
@@ -24,27 +32,46 @@ export default function HubPage() {
   const [joinCode, setJoinCode] = useState("");
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [loadingScenarios, setLoadingScenarios] = useState(true);
+  const [activeRooms, setActiveRooms] = useState<ActiveRoom[]>([]);
 
   useEffect(() => {
     const name = localStorage.getItem("trpg_username");
     if (!name) { router.push("/play"); return; }
     setUsername(name);
 
-    async function loadScenarios() {
+    async function loadData() {
       const supabase = createClient();
-      const { data } = await supabase
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Load scenarios
+      const { data: scenarioData } = await supabase
         .from("scenarios")
         .select("id, title, genre, description, max_players")
         .eq("status", "published")
         .order("created_at", { ascending: false });
-      if (data && data.length > 0) {
-        setScenarios(data);
-      } else {
-        setScenarios(FALLBACK_SCENARIOS);
-      }
+      setScenarios(scenarioData && scenarioData.length > 0 ? scenarioData : FALLBACK_SCENARIOS);
       setLoadingScenarios(false);
+
+      // Load active rooms the user is in
+      if (user) {
+        const { data: rpData } = await supabase
+          .from("room_players")
+          .select("room_id")
+          .eq("user_id", user.id);
+
+        const roomIds = (rpData ?? []).map((r: { room_id: string }) => r.room_id);
+        if (roomIds.length > 0) {
+          const { data: roomData } = await supabase
+            .from("rooms")
+            .select("id, name, room_code, status, scenarios(title, genre)")
+            .in("id", roomIds)
+            .in("status", ["waiting", "in_progress"])
+            .order("created_at", { ascending: false });
+          setActiveRooms((roomData as unknown as ActiveRoom[]) ?? []);
+        }
+      }
     }
-    loadScenarios();
+    loadData();
   }, [router]);
 
   return (
@@ -53,6 +80,43 @@ export default function HubPage() {
         <p className="text-slate-400 text-sm mb-1">Playing as</p>
         <h1 className="text-3xl font-bold text-white">{username || "..."}</h1>
       </div>
+
+      {/* Active rooms — shown prominently if player has one */}
+      {activeRooms.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">
+            Return to Active Game
+          </h2>
+          <div className="flex flex-col gap-3">
+            {activeRooms.map((r) => (
+              <Link key={r.id} href={r.status === "waiting" ? `/rooms/${r.id}/lobby` : `/rooms/${r.id}`}>
+                <div className="bg-purple-900/20 border border-purple-700/60 hover:border-purple-500 rounded-xl p-4 flex items-center justify-between transition-colors cursor-pointer">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-white font-semibold">{r.name}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded border ${
+                        r.status === "in_progress"
+                          ? "bg-green-900/40 text-green-300 border-green-800"
+                          : "bg-slate-700 text-slate-400 border-slate-600"
+                      }`}>
+                        {r.status === "in_progress" ? "In Progress" : "Waiting"}
+                      </span>
+                    </div>
+                    <p className="text-slate-400 text-sm">
+                      {r.scenarios?.title ?? "Unknown Scenario"}
+                      <span className="text-slate-600 mx-1">·</span>
+                      <span className="font-mono text-slate-500">{r.room_code}</span>
+                    </p>
+                  </div>
+                  <span className="text-purple-400 font-medium text-sm shrink-0">
+                    {r.status === "in_progress" ? "Return to Game →" : "Back to Lobby →"}
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
