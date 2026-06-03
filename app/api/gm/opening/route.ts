@@ -144,19 +144,22 @@ export async function POST(request: Request) {
     );
   }
 
-  const party: PartyMember[] = [...characters]
-    .sort((a: any, b: any) => b.speed - a.speed)
-    .map((c: any) => ({
-      name: c.name,
-      playerName: c.users?.username ?? null,
-      background: c.background ?? null,
-      speed: c.speed, hp: c.hp, str: c.str, agi: c.agi,
-      int: c.int, cha: c.cha, luck: c.luck, san: c.san,
-    }));
+  const sortedChars = [...characters].sort((a: any, b: any) => b.speed - a.speed);
+  // The opening choices are for the FIRST acting player (highest speed)
+  const firstPlayerId = sortedChars[0]?.user_id ?? null;
 
-  // TEMP DEBUG: log the real party roster sent to the AI GM
+  const party: PartyMember[] = sortedChars.map((c: any) => ({
+    name: c.name,
+    playerName: c.users?.username ?? null,
+    background: c.background ?? null,
+    speed: c.speed, hp: c.hp, str: c.str, agi: c.agi,
+    int: c.int, cha: c.cha, luck: c.luck, san: c.san,
+  }));
+
+  // TEMP DEBUG: log the real party roster + which player the opening choices target
   console.log("[GM opening] room", roomId, "party roster:",
-    JSON.stringify(party.map((c) => ({ name: c.name, player: c.playerName, speed: c.speed }))));
+    JSON.stringify(party.map((c) => ({ name: c.name, player: c.playerName, speed: c.speed }))),
+    "| choices generated for:", sortedChars[0]?.name, "(player", firstPlayerId + ")");
 
   const scenario = (room as any).scenarios;
   const opening = await generateOpening(
@@ -174,7 +177,10 @@ export async function POST(request: Request) {
     content: opening.scene,
   });
 
-  await supabase.from("rooms").update({ current_choices: opening.choices }).eq("id", roomId);
+  await supabase.from("rooms").update({
+    current_choices: opening.choices,
+    current_choices_for_player_id: firstPlayerId,
+  }).eq("id", roomId);
 
-  return NextResponse.json(opening);
+  return NextResponse.json({ ...opening, choicesForPlayerId: firstPlayerId });
 }

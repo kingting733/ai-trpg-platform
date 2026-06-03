@@ -42,6 +42,9 @@ export async function POST(request: Request) {
   const sortedBySpeed = [...characters].sort((a, b) => b.speed - a.speed);
   const currentIndex = sortedBySpeed.findIndex((c) => c.user_id === user.id);
 
+  // resolvedActor = the character who just submitted the action (narration is about them)
+  const resolvedActor = sortedBySpeed.find((c) => c.user_id === (actingUserId || user.id)) ?? null;
+
   // Save action to story_logs
   await supabase.from("story_logs").insert({
     room_id: roomId,
@@ -52,7 +55,7 @@ export async function POST(request: Request) {
     content: actionText,
   });
 
-  // Advance turn
+  // Advance turn — determine nextActor (the character whose turn is now active)
   let nextRound = room.current_round;
   let nextPlayerId: string;
   const nextIndex = currentIndex + 1;
@@ -60,23 +63,26 @@ export async function POST(request: Request) {
     // Last player in round — start new round from first player
     nextRound = room.current_round + 1;
     nextPlayerId = sortedBySpeed[0]?.user_id ?? user.id;
-    await supabase.from("rooms").update({
-      current_turn_player_id: nextPlayerId,
-      current_round: nextRound,
-      current_choices: [],
-    }).eq("id", roomId);
+  } else {
+    nextPlayerId = sortedBySpeed[nextIndex].user_id;
+  }
+  const nextActor = sortedBySpeed.find((c) => c.user_id === nextPlayerId) ?? sortedBySpeed[0];
+
+  // Clear old choices immediately so the previous player's suggestions never linger
+  await supabase.from("rooms").update({
+    current_turn_player_id: nextPlayerId,
+    current_round: nextRound,
+    current_choices: [],
+    current_choices_for_player_id: null,
+  }).eq("id", roomId);
+
+  if (nextRound !== room.current_round) {
     await supabase.from("story_logs").insert({
       room_id: roomId,
       round_number: nextRound,
       entry_type: "system",
       content: `--- Round ${nextRound} begins ---`,
     });
-  } else {
-    nextPlayerId = sortedBySpeed[nextIndex].user_id;
-    await supabase.from("rooms").update({
-      current_turn_player_id: nextPlayerId,
-      current_choices: [],
-    }).eq("id", roomId);
   }
 
   // Fetch recent story log for GM context
@@ -87,7 +93,6 @@ export async function POST(request: Request) {
     .order("created_at", { ascending: false })
     .limit(15);
 
-  const myCharacter = sortedBySpeed.find((c) => c.user_id === (actingUserId || user.id));
   const storyLogSoFar = (logs ?? [])
     .reverse()
     .map((l: any) => {
@@ -113,14 +118,18 @@ export async function POST(request: Request) {
     characters: partyForAI,
     storyLogSoFar,
     currentRound: room.current_round,
-    actingCharacterName: myCharacter?.name ?? "Unknown",
+    actingCharacterName: resolvedActor?.name ?? "Unknown",
+    nextCharacterName: nextActor?.name ?? "Unknown",
     playerAction: actionText,
   };
 
-  // TEMP DEBUG: log the real party roster sent to the AI GM
-  console.log("[GM respond] room", roomId, "party roster:",
-    JSON.stringify(partyForAI.map((c) => ({ name: c.name, player: c.playerName, speed: c.speed }))),
-    "| acting:", input.actingCharacterName);
+  // TEMP DEBUG: turn-lag investigation
+  console.log("[GM respond] room", roomId,
+    "| resolvedActor:", resolvedActor?.name,
+    "| nextActor:", nextActor?.name,
+    "| prev turn player:", room.current_turn_player_id,
+    "| new turn player:", nextPlayerId,
+    "| choices generated for:", nextActor?.name);
 
   try {
     const gmResponse = await generateGMResponse(input);
@@ -132,9 +141,19 @@ export async function POST(request: Request) {
       content: gmResponse.narration,
     });
 
-    await supabase.from("rooms").update({ current_choices: gmResponse.choices }).eq("id", roomId);
+    // Choices belong to the NEXT acting player — tag them so the UI can verify
+    await supabase.from("rooms").update({
+      current_choices: gmResponse.choices,
+      current_choices_for_player_id: nextPlayerId,
+    }).eq("id", roomId);
 
-    return NextResponse.json({ response: gmResponse.narration, choices: gmResponse.choices });
+    console.log("[GM respond] saved choices for player", nextPlayerId, "->", JSON.stringify(gmResponse.choices));
+
+    return NextResponse.json({
+      response: gmResponse.narration,
+      choices: gmResponse.choices,
+      choicesForPlayerId: nextPlayerId,
+    });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

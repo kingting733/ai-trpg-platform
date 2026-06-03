@@ -6,7 +6,10 @@ export interface GMAIInput {
   characters: Array<{ name: string; playerName?: string | null; background: string | null; speed: number; hp: number; str: number; agi: number; int: number; cha: number; luck: number; san: number }>;
   storyLogSoFar: string[];
   currentRound: number;
+  /** The character who just submitted the action — narration resolves THIS actor. */
   actingCharacterName: string;
+  /** The character whose turn is now active — suggested choices are for THIS actor. */
+  nextCharacterName: string;
   playerAction: string;
 }
 
@@ -92,16 +95,17 @@ ${charList}
 NARRATION RULES:
 - This is a MULTIPLAYER game. Narrate in THIRD PERSON as a neutral Game Master.
 - NEVER use "you". Refer to every character by their exact roster name.
-- The acting character this turn is ${input.actingCharacterName}. Focus on their action, but acknowledge other roster members when relevant.
-- The 3 suggested next actions must be written for ${input.actingCharacterName} in third person (e.g., "${input.actingCharacterName} searches the room" not "Search the room" or "You search the room").
+- ${input.actingCharacterName} just acted. Your narration must resolve and describe the outcome of ${input.actingCharacterName}'s action, acknowledging other roster members when relevant.
+- After narrating, it becomes ${input.nextCharacterName}'s turn. The 3 suggested next actions MUST be written for ${input.nextCharacterName} (the NEXT acting character), NOT for ${input.actingCharacterName}.
+- Write the suggested actions in third person for ${input.nextCharacterName} (e.g., "${input.nextCharacterName} searches the room" not "Search the room" or "You search the room").
 
 Round ${input.currentRound}. Recent story log:
 ${recentLog || "(Adventure just started)"}
 
-Respond to ${input.actingCharacterName}'s action with vivid third-person narration (2-4 sentences), then suggest 3 possible next actions for ${input.actingCharacterName}.
+First, narrate the outcome of ${input.actingCharacterName}'s action (2-4 sentences, third person). Then suggest 3 possible next actions for ${input.nextCharacterName}, whose turn is now active.
 
 Respond ONLY with valid JSON, no markdown, no extra text:
-{"narration":"<2-4 sentence third-person narration>","choices":["<${input.actingCharacterName} action 1>","<${input.actingCharacterName} action 2>","<${input.actingCharacterName} action 3>"]}`;
+{"narration":"<2-4 sentence third-person narration of ${input.actingCharacterName}'s outcome>","choices":["<${input.nextCharacterName} action 1>","<${input.nextCharacterName} action 2>","<${input.nextCharacterName} action 3>"]}`;
 }
 
 async function callOpenAICompatible(apiKey: string, model: string, system: string, user: string, baseUrl: string): Promise<string> {

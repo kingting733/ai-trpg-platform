@@ -30,6 +30,7 @@ interface Room {
   current_turn_player_id: string | null;
   host_id: string;
   current_choices: string[] | null;
+  current_choices_for_player_id: string | null;
 }
 
 interface RoomPlayer {
@@ -213,6 +214,8 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   }
 
   const isMyTurn = room.current_turn_player_id === currentUserId;
+  // Choices must belong to the current turn player — guards against stale one-turn-lag choices
+  const choicesAreForMe = room.current_choices_for_player_id === currentUserId;
   const sortedBySpeed = [...characters].sort((a, b) => b.speed - a.speed);
   const currentTurnChar = sortedBySpeed.find((c) => c.user_id === room.current_turn_player_id);
   const allHaveChars = roomPlayers.length > 0 && roomPlayers.every((p) => p.character_id);
@@ -287,8 +290,8 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           <div ref={logEndRef} />
         </div>
 
-        {/* Suggested choices — stored in DB so all players see them on their turn */}
-        {isMyTurn && (room.current_choices?.length ?? 0) === 3 && hasStarted && (
+        {/* Suggested choices — only shown if they were generated FOR the current turn player */}
+        {isMyTurn && choicesAreForMe && (room.current_choices?.length ?? 0) === 3 && hasStarted && (
           <div className="flex flex-col gap-2 shrink-0">
             <p className="text-xs text-slate-500 uppercase tracking-wider">Suggested actions — or type your own below</p>
             <div className="grid grid-cols-1 gap-2">

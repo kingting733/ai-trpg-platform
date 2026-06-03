@@ -116,6 +116,8 @@ CREATE TABLE IF NOT EXISTS public.rooms (
   max_players INTEGER NOT NULL DEFAULT 4,
   current_round INTEGER NOT NULL DEFAULT 0,
   current_turn_player_id UUID REFERENCES public.users(id),
+  current_choices JSONB DEFAULT '[]'::jsonb,
+  current_choices_for_player_id UUID REFERENCES public.users(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
