@@ -2,22 +2,49 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
 
-const SCENARIOS = [
-  { id: "00000000-0000-0000-0000-000000000001", title: "The Lost Temple", genre: "Fantasy", description: "A ancient temple hides deadly secrets.", maxPlayers: 4 },
-  { id: "00000000-0000-0000-0000-000000000002", title: "Neon Shadows", genre: "Cyberpunk", description: "Navigate a corrupt megacity.", maxPlayers: 6 },
-  { id: "00000000-0000-0000-0000-000000000003", title: "The Haunting", genre: "Horror", description: "Investigate an abandoned mansion.", maxPlayers: 4 },
+interface Scenario {
+  id: string;
+  title: string;
+  genre: string;
+  description: string;
+  max_players: number;
+}
+
+const FALLBACK_SCENARIOS: Scenario[] = [
+  { id: "00000000-0000-0000-0000-000000000001", title: "The Lost Temple", genre: "Fantasy", description: "An ancient temple hides deadly secrets and forgotten treasures.", max_players: 4 },
+  { id: "00000000-0000-0000-0000-000000000002", title: "Neon Shadows", genre: "Cyberpunk", description: "Navigate a corrupt megacity where corporations rule everything.", max_players: 6 },
+  { id: "00000000-0000-0000-0000-000000000003", title: "The Haunting", genre: "Horror", description: "Investigate strange occurrences in an abandoned mansion.", max_players: 4 },
 ];
 
 export default function HubPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [joinCode, setJoinCode] = useState("");
+  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [loadingScenarios, setLoadingScenarios] = useState(true);
 
   useEffect(() => {
     const name = localStorage.getItem("trpg_username");
     if (!name) { router.push("/play"); return; }
     setUsername(name);
+
+    async function loadScenarios() {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("scenarios")
+        .select("id, title, genre, description, max_players")
+        .eq("status", "published")
+        .order("created_at", { ascending: false });
+      if (data && data.length > 0) {
+        setScenarios(data);
+      } else {
+        setScenarios(FALLBACK_SCENARIOS);
+      }
+      setLoadingScenarios(false);
+    }
+    loadScenarios();
   }, [router]);
 
   return (
@@ -28,7 +55,6 @@ export default function HubPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-        {/* Join room */}
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
           <h2 className="text-lg font-semibold text-white mb-1">Join a Room</h2>
           <p className="text-slate-400 text-sm mb-4">Enter a room code from your friend</p>
@@ -49,27 +75,29 @@ export default function HubPage() {
             </button>
           </div>
         </div>
-
-        {/* Stats placeholder */}
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 flex flex-col justify-center">
           <h2 className="text-lg font-semibold text-white mb-3">Create a Room</h2>
-          <p className="text-slate-400 text-sm">Pick a scenario below and start your own adventure.</p>
+          <p className="text-slate-400 text-sm">Pick a scenario below to start your own adventure.</p>
         </div>
       </div>
 
       <h2 className="text-xl font-semibold text-white mb-4">Choose a Scenario</h2>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {SCENARIOS.map((s) => (
-          <Link key={s.id} href={`/play/create-room?scenario=${s.id}&title=${encodeURIComponent(s.title)}&genre=${s.genre}`}>
-            <div className="bg-slate-800/50 border border-slate-700 hover:border-purple-500 rounded-xl p-5 cursor-pointer transition-colors h-full">
-              <span className="text-xs bg-purple-900/50 text-purple-300 border border-purple-800 px-2 py-0.5 rounded">{s.genre}</span>
-              <h3 className="text-white font-semibold mt-3 mb-2">{s.title}</h3>
-              <p className="text-slate-400 text-sm">{s.description}</p>
-              <div className="text-xs text-slate-500 mt-3">Up to {s.maxPlayers} players</div>
-            </div>
-          </Link>
-        ))}
-      </div>
+      {loadingScenarios ? (
+        <div className="text-slate-500 text-sm">Loading scenarios...</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {scenarios.map((s) => (
+            <Link key={s.id} href={`/play/create-room?scenario=${s.id}&title=${encodeURIComponent(s.title)}&genre=${encodeURIComponent(s.genre)}`}>
+              <div className="bg-slate-800/50 border border-slate-700 hover:border-purple-500 rounded-xl p-5 cursor-pointer transition-colors h-full">
+                <span className="text-xs bg-purple-900/50 text-purple-300 border border-purple-800 px-2 py-0.5 rounded">{s.genre}</span>
+                <h3 className="text-white font-semibold mt-3 mb-2">{s.title}</h3>
+                <p className="text-slate-400 text-sm">{s.description}</p>
+                <div className="text-xs text-slate-500 mt-3">Up to {s.max_players} players</div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

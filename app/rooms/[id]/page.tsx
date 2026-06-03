@@ -178,6 +178,17 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
       await supabase.from("turns").update({ status: "completed" }).eq("id", turnId);
     }
 
+    // Call AI GM
+    try {
+      await fetch("/api/gm/respond", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roomId: room.id, actionText: actionText.trim() }),
+      });
+    } catch {
+      // GM response failure is non-blocking
+    }
+
     // Advance to next player
     const nextIndex = currentIndex + 1;
     if (nextIndex < sortedBySpeed.length) {
