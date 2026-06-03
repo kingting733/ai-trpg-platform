@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 
 interface Player {
   user_id: string;
-  users: { username: string };
+  users: { username: string } | null;
 }
 
 interface Room {
@@ -49,7 +49,12 @@ export default function LobbyPage({ params }: { params: { id: string } }) {
       .from("room_players")
       .select("user_id, users(username)")
       .eq("room_id", params.id);
-    setPlayers((playersData as unknown as Player[]) ?? []);
+    // Fall back gracefully if the users join returns null (e.g. anonymous users not in public.users)
+    const safePlayers = (playersData ?? []).map((p: any) => ({
+      user_id: p.user_id,
+      users: p.users ?? { username: "Player" },
+    }));
+    setPlayers(safePlayers);
   }, [params.id, router]);
 
   useEffect(() => {
@@ -101,7 +106,7 @@ export default function LobbyPage({ params }: { params: { id: string } }) {
         <div className="flex flex-col gap-2">
           {players.map((p) => (
             <div key={p.user_id} className="flex items-center justify-between py-2 px-3 bg-slate-900/50 rounded-lg">
-              <span className="text-white font-medium">{p.users?.username ?? "Unknown"}</span>
+              <span className="text-white font-medium">{p.users?.username ?? "Player"}</span>
               {p.user_id === room?.host_id && (
                 <span className="text-xs bg-amber-900/50 text-amber-300 border border-amber-800 px-2 py-0.5 rounded">Host</span>
               )}
@@ -114,7 +119,7 @@ export default function LobbyPage({ params }: { params: { id: string } }) {
       {isHost ? (
         <button
           onClick={handleStartGame}
-          disabled={loading || players.length < 1}
+          disabled={loading || players.length < 1}  /* solo play allowed: min 1 */
           className="w-full bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white py-3 rounded-lg font-medium text-lg"
         >
           {loading ? "Starting..." : "Start Game"}
