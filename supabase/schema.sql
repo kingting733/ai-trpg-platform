@@ -128,8 +128,15 @@ CREATE POLICY "Anyone authenticated can view rooms" ON public.rooms
 CREATE POLICY "Authenticated users can create rooms" ON public.rooms
   FOR INSERT WITH CHECK (auth.uid() = host_id);
 
-CREATE POLICY "Only host can update room" ON public.rooms
-  FOR UPDATE USING (auth.uid() = host_id);
+-- Any room participant (not just host) can update room state so that
+-- turn advancement works when a non-host player acts first.
+CREATE POLICY "Room participants can update room state" ON public.rooms
+  FOR UPDATE USING (
+    auth.uid() = host_id
+    OR auth.uid() IN (
+      SELECT user_id FROM public.room_players WHERE room_id = rooms.id
+    )
+  );
 
 -- ============================================================
 -- ROOM PLAYERS
