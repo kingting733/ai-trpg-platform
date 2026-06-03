@@ -61,11 +61,14 @@ export default function HubPage() {
 
         const roomIds = (rpData ?? []).map((r: { room_id: string }) => r.room_id);
         if (roomIds.length > 0) {
+          // Only show rooms from the last 24 hours to avoid stale clutter
+          const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
           const { data: roomData } = await supabase
             .from("rooms")
             .select("id, name, room_code, status, scenarios(title, genre)")
             .in("id", roomIds)
             .in("status", ["waiting", "in_progress"])
+            .gte("created_at", cutoff)
             .order("created_at", { ascending: false });
           setActiveRooms((roomData as unknown as ActiveRoom[]) ?? []);
         }
