@@ -38,6 +38,6 @@ CREATE POLICY "Users can create their own character cards" ON public.character_c
 -- UPDATE allowed for name only (enforced by the /api/characters/[id]/rename route
 -- which explicitly only writes the name field).
 CREATE POLICY "Users can rename their own character cards" ON public.character_cards
-  FOR UPDATE USING (auth.uid() = user_id);
+  FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 -- No DELETE policy  -> cards cannot be deleted in the MVP.
