@@ -17,7 +17,12 @@ export default function PlayPage() {
     const supabase = createClient();
     const { data, error: authError } = await supabase.auth.signInAnonymously();
     if (authError || !data.user) {
-      setError(authError?.message ?? "Failed to sign in");
+      const msg = authError?.message ?? "Failed to sign in";
+      setError(
+        msg.toLowerCase().includes("anonymous")
+          ? "Anonymous sign-in is disabled. Go to Supabase → Authentication → Providers → Anonymous → enable it."
+          : msg
+      );
       setLoading(false);
       return;
     }
