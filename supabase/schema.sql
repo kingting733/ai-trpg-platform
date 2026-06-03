@@ -309,3 +309,8 @@ CREATE TRIGGER update_scenarios_updated_at
 CREATE TRIGGER update_rooms_updated_at
   BEFORE UPDATE ON public.rooms
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- Allow users (including anonymous) to insert their own profile
+CREATE POLICY "Users can insert own profile" ON public.users
+  FOR INSERT WITH CHECK (auth.uid() = id);
+
