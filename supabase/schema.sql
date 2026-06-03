@@ -154,6 +154,9 @@ CREATE POLICY "Authenticated users can view room players" ON public.room_players
 CREATE POLICY "Users can join rooms" ON public.room_players
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+CREATE POLICY "Players can update their own room player record" ON public.room_players
+  FOR UPDATE USING (auth.uid() = user_id);
+
 -- ============================================================
 -- CHARACTERS
 -- ============================================================
