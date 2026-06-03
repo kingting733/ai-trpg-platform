@@ -123,14 +123,6 @@ export async function POST(request: Request) {
     playerAction: actionText,
   };
 
-  // TEMP DEBUG: turn-lag investigation
-  console.log("[GM respond] room", roomId,
-    "| resolvedActor:", resolvedActor?.name,
-    "| nextActor:", nextActor?.name,
-    "| prev turn player:", room.current_turn_player_id,
-    "| new turn player:", nextPlayerId,
-    "| choices generated for:", nextActor?.name);
-
   try {
     const gmResponse = await generateGMResponse(input);
 
@@ -146,8 +138,6 @@ export async function POST(request: Request) {
       current_choices: gmResponse.choices,
       current_choices_for_player_id: nextPlayerId,
     }).eq("id", roomId);
-
-    console.log("[GM respond] saved choices for player", nextPlayerId, "->", JSON.stringify(gmResponse.choices));
 
     return NextResponse.json({
       response: gmResponse.narration,

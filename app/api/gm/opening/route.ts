@@ -156,11 +156,6 @@ export async function POST(request: Request) {
     int: c.int, cha: c.cha, luck: c.luck, san: c.san,
   }));
 
-  // TEMP DEBUG: log the real party roster + which player the opening choices target
-  console.log("[GM opening] room", roomId, "party roster:",
-    JSON.stringify(party.map((c) => ({ name: c.name, player: c.playerName, speed: c.speed }))),
-    "| choices generated for:", sortedChars[0]?.name, "(player", firstPlayerId + ")");
-
   const scenario = (room as any).scenarios;
   const opening = await generateOpening(
     scenario?.title ?? "Unknown Scenario",
