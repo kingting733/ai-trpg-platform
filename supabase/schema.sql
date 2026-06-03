@@ -186,7 +186,9 @@ CREATE POLICY "Players can create their own character" ON public.characters
   FOR INSERT WITH CHECK (
     auth.uid() = user_id AND
     EXISTS (
-      SELECT 1 FROM public.rooms r WHERE r.id = room_id AND r.status = 'waiting'
+      SELECT 1 FROM public.rooms r
+      WHERE r.id = room_id
+      AND r.status IN ('waiting', 'in_progress')
     )
   );
 
