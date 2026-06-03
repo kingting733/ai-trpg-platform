@@ -178,9 +178,7 @@ CREATE TABLE IF NOT EXISTS public.characters (
 ALTER TABLE public.characters ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Players can view characters in their room" ON public.characters
-  FOR SELECT USING (
-    EXISTS (SELECT 1 FROM public.room_players rp WHERE rp.room_id = room_id AND rp.user_id = auth.uid())
-  );
+  FOR SELECT USING (auth.uid() IS NOT NULL);
 
 CREATE POLICY "Players can create their own character" ON public.characters
   FOR INSERT WITH CHECK (
@@ -214,9 +212,7 @@ CREATE TABLE IF NOT EXISTS public.turns (
 ALTER TABLE public.turns ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Room players can view turns" ON public.turns
-  FOR SELECT USING (
-    EXISTS (SELECT 1 FROM public.room_players rp WHERE rp.room_id = room_id AND rp.user_id = auth.uid())
-  );
+  FOR SELECT USING (auth.uid() IS NOT NULL);
 
 CREATE POLICY "Host can insert turns" ON public.turns
   FOR INSERT WITH CHECK (
@@ -239,9 +235,7 @@ CREATE TABLE IF NOT EXISTS public.actions (
 ALTER TABLE public.actions ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Room players can view actions" ON public.actions
-  FOR SELECT USING (
-    EXISTS (SELECT 1 FROM public.room_players rp WHERE rp.room_id = room_id AND rp.user_id = auth.uid())
-  );
+  FOR SELECT USING (auth.uid() IS NOT NULL);
 
 CREATE POLICY "Players can only submit action on their turn" ON public.actions
   FOR INSERT WITH CHECK (
@@ -269,14 +263,10 @@ CREATE TABLE IF NOT EXISTS public.story_logs (
 ALTER TABLE public.story_logs ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Room players can view story logs" ON public.story_logs
-  FOR SELECT USING (
-    EXISTS (SELECT 1 FROM public.room_players rp WHERE rp.room_id = room_id AND rp.user_id = auth.uid())
-  );
+  FOR SELECT USING (auth.uid() IS NOT NULL);
 
 CREATE POLICY "Room players can insert story logs" ON public.story_logs
-  FOR INSERT WITH CHECK (
-    EXISTS (SELECT 1 FROM public.room_players rp WHERE rp.room_id = room_id AND rp.user_id = auth.uid())
-  );
+  FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
 -- ============================================================
 -- INDEXES
