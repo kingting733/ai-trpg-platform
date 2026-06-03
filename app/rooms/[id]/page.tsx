@@ -50,6 +50,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   const [initializing, setInitializing] = useState(false);
   const [gmThinking, setGmThinking] = useState(false);
   const [choices, setChoices] = useState<string[]>([]);
+  const [endingGame, setEndingGame] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
 
   const fetchAll = useCallback(async () => {
@@ -231,7 +232,50 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     setSubmitting(false);
   }
 
+  async function endGame() {
+    if (!room || !window.confirm("End this adventure? This cannot be undone.")) return;
+    setEndingGame(true);
+    const supabase = createClient();
+    await supabase.from("rooms").update({ status: "completed" }).eq("id", room.id);
+    await fetchAll();
+    setEndingGame(false);
+  }
+
   if (!room) return <div className="text-center text-slate-400 py-20">Loading room...</div>;
+
+  // Game over screen
+  if (room.status === "completed") {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[70vh] gap-6 text-center">
+        <div className="text-5xl">⚔</div>
+        <div>
+          <h1 className="text-3xl font-bold text-white mb-2">Adventure Complete</h1>
+          <p className="text-slate-400">The story of <span className="text-purple-400">{room.name}</span> has ended.</p>
+        </div>
+        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 w-full max-w-lg text-left">
+          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Story Summary</h3>
+          <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
+            {storyLog.filter(e => e.entry_type !== "system").map((entry) => (
+              <div key={entry.id} className="text-sm">
+                {entry.entry_type === "action" && (
+                  <p className="text-slate-400"><span className="text-purple-400">{entry.characters?.name ?? "Player"}:</span> {entry.content}</p>
+                )}
+                {entry.entry_type === "gm_response" && (
+                  <p className="text-slate-300 italic">{entry.content}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+        <button
+          onClick={() => router.push("/play/hub")}
+          className="bg-purple-600 hover:bg-purple-500 text-white px-8 py-3 rounded-lg font-medium"
+        >
+          Back to Hub
+        </button>
+      </div>
+    );
+  }
 
   const isMyTurn = room.current_turn_player_id === currentUserId;
   const sortedBySpeed = [...characters].sort((a, b) => b.speed - a.speed);
@@ -259,7 +303,18 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
               <span className="text-slate-500">Waiting to start...</span>
             )}
           </div>
-          <span className="text-xs text-slate-500 font-mono">{room.room_code}</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-slate-500 font-mono">{room.room_code}</span>
+            {room.host_id === currentUserId && hasStarted && (
+              <button
+                onClick={endGame}
+                disabled={endingGame}
+                className="text-xs text-red-400 hover:text-red-300 border border-red-900/50 hover:border-red-700 px-2 py-1 rounded transition-colors disabled:opacity-40"
+              >
+                End Game
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Story log */}
