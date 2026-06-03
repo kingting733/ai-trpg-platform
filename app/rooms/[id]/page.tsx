@@ -11,6 +11,20 @@ interface Character {
   int: number; cha: number; luck: number; speed: number;
 }
 
+interface RollResult {
+  requires_check: boolean;
+  stat_used: string | null;
+  stat_value: number | null;
+  modifier: number | null;
+  d20_roll: number | null;
+  dc: number | null;
+  total: number | null;
+  outcome: string | null;
+  hp_change: number;
+  san_change: number;
+  consequence_summary: string;
+}
+
 interface StoryLogEntry {
   id: string;
   entry_type: "system" | "action" | "gm_response";
@@ -19,6 +33,7 @@ interface StoryLogEntry {
   player_id: string | null;
   created_at: string;
   characters?: { name: string } | null;
+  roll_result?: RollResult | null;
 }
 
 interface Room {
@@ -213,7 +228,10 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     );
   }
 
-  const isMyTurn = room.current_turn_player_id === currentUserId;
+  const iAmDown = (myCharacter?.hp ?? 1) <= 0;
+  const iAmBroken = (myCharacter?.san ?? 1) <= 0;
+  // A downed character cannot act; the turn flow skips them server-side.
+  const isMyTurn = room.current_turn_player_id === currentUserId && !iAmDown;
   // Choices must belong to the current turn player — guards against stale one-turn-lag choices
   const choicesAreForMe = room.current_choices_for_player_id === currentUserId;
   const sortedBySpeed = [...characters].sort((a, b) => b.speed - a.speed);
@@ -268,9 +286,12 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                 <p className="text-slate-500 italic text-xs text-center">{entry.content}</p>
               )}
               {entry.entry_type === "action" && (
-                <div className="flex gap-2">
-                  <span className="text-purple-400 font-medium text-sm shrink-0">{entry.characters?.name ?? "Player"}:</span>
-                  <span className="text-slate-300 text-sm">{entry.content}</span>
+                <div className="flex flex-col gap-1">
+                  <div className="flex gap-2">
+                    <span className="text-purple-400 font-medium text-sm shrink-0">{entry.characters?.name ?? "Player"}:</span>
+                    <span className="text-slate-300 text-sm">{entry.content}</span>
+                  </div>
+                  {entry.roll_result?.requires_check && <DiceResult roll={entry.roll_result} />}
                 </div>
               )}
               {entry.entry_type === "gm_response" && (
@@ -318,8 +339,18 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           >
             {initializing ? "Starting..." : "Begin Adventure"}
           </button>
+        ) : hasStarted && iAmDown ? (
+          <div className="text-center text-red-300 text-sm py-3 shrink-0 border border-red-900/50 bg-red-900/20 rounded-xl">
+            {myCharacter?.name ?? "Your character"} has fallen in this room and can no longer act.
+          </div>
         ) : hasStarted ? (
-          <div className="flex gap-3 shrink-0">
+          <div className="flex flex-col gap-2 shrink-0">
+            {iAmBroken && (
+              <div className="text-center text-fuchsia-300 text-xs py-1.5 border border-fuchsia-900/50 bg-fuchsia-900/20 rounded-lg">
+                {myCharacter?.name ?? "Your character"}'s mind has broken — actions may be erratic.
+              </div>
+            )}
+          <div className="flex gap-3">
             <input
               value={actionText}
               onChange={(e) => setActionText(e.target.value)}
@@ -335,6 +366,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
             >
               {submitting ? "..." : "Submit"}
             </button>
+          </div>
           </div>
         ) : (
           <div className="text-center text-slate-500 text-sm py-3 shrink-0">
@@ -368,9 +400,15 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
 
         {sortedBySpeed.map((c) => {
           const isActive = c.user_id === room.current_turn_player_id && hasStarted;
+          const down = c.hp <= 0;
+          const broken = c.san <= 0;
           return (
-            <div key={c.id} className={`bg-slate-800/50 border rounded-xl p-4 shrink-0 ${isActive ? "border-purple-700" : "border-slate-700"}`}>
-              <h4 className="font-medium text-white text-sm mb-2 truncate">{c.name}</h4>
+            <div key={c.id} className={`bg-slate-800/50 border rounded-xl p-4 shrink-0 ${down ? "border-red-900/70 opacity-60" : isActive ? "border-purple-700" : "border-slate-700"}`}>
+              <div className="flex items-center justify-between mb-2 gap-2">
+                <h4 className="font-medium text-white text-sm truncate">{c.name}</h4>
+                {down && <span className="text-[10px] bg-red-900/60 text-red-300 border border-red-800 px-1.5 py-0.5 rounded shrink-0">DEAD</span>}
+                {!down && broken && <span className="text-[10px] bg-fuchsia-900/60 text-fuchsia-300 border border-fuchsia-800 px-1.5 py-0.5 rounded shrink-0">BROKEN</span>}
+              </div>
               <div className="grid grid-cols-2 gap-1">
                 {(["hp","san","str","agi","int","cha","luck","speed"] as const).map((k) => (
                   <div key={k} className="flex justify-between bg-slate-900/50 rounded px-2 py-0.5">
@@ -383,6 +421,37 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+const OUTCOME_STYLES: Record<string, { label: string; cls: string }> = {
+  critical_success: { label: "Critical Success", cls: "text-emerald-300 border-emerald-700 bg-emerald-900/30" },
+  success:          { label: "Success",          cls: "text-green-300 border-green-700 bg-green-900/30" },
+  partial_success:  { label: "Partial Success",  cls: "text-yellow-300 border-yellow-700 bg-yellow-900/30" },
+  failure:          { label: "Failure",          cls: "text-orange-300 border-orange-700 bg-orange-900/30" },
+  critical_failure: { label: "Critical Failure", cls: "text-red-300 border-red-700 bg-red-900/30" },
+};
+
+function DiceResult({ roll }: { roll: RollResult }) {
+  const style = roll.outcome ? OUTCOME_STYLES[roll.outcome] : null;
+  const mod = roll.modifier ?? 0;
+  return (
+    <div className={`ml-6 rounded-lg border px-3 py-2 text-xs ${style?.cls ?? "border-slate-700 bg-slate-900/40"}`}>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="font-bold uppercase tracking-wider">🎲 {roll.stat_used?.toUpperCase()} Check</span>
+        <span className="opacity-90">
+          d20({roll.d20_roll}) {mod >= 0 ? "+" : "−"} {Math.abs(mod)} = <b>{roll.total}</b> vs DC {roll.dc}
+        </span>
+        <span className="font-bold">→ {style?.label ?? roll.outcome}</span>
+      </div>
+      {(roll.hp_change !== 0 || roll.san_change !== 0 || roll.consequence_summary) && (
+        <div className="mt-1 opacity-90">
+          {roll.consequence_summary}
+          {roll.hp_change !== 0 && <span className="ml-1 font-semibold">HP {roll.hp_change}</span>}
+          {roll.san_change !== 0 && <span className="ml-1 font-semibold">SAN {roll.san_change}</span>}
+        </div>
+      )}
     </div>
   );
 }

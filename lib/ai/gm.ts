@@ -11,6 +11,21 @@ export interface GMAIInput {
   /** The character whose turn is now active — suggested choices are for THIS actor. */
   nextCharacterName: string;
   playerAction: string;
+  /** Resolved dice outcome the GM MUST follow (null when no check was needed). */
+  resolution?: {
+    requiresCheck: boolean;
+    statUsed: string | null;
+    d20: number | null;
+    modifier: number | null;
+    dc: number | null;
+    total: number | null;
+    outcome: string | null;
+    consequenceSummary: string;
+    hpChange: number;
+    sanChange: number;
+    actorDied: boolean;
+    actorBroke: boolean;
+  } | null;
 }
 
 export interface GMResponseWithChoices {
@@ -81,6 +96,7 @@ function buildSystemPrompt(input: GMAIInput): string {
   const names = input.characters.map((c) => c.name).join(", ");
 
   const recentLog = input.storyLogSoFar.slice(-10).join("\n");
+  const diceBlock = buildDiceDirective(input);
 
   return `You are an AI Game Master running a multiplayer TRPG text adventure called "${input.scenarioTitle}".
 ${input.scenarioBackground ? `\nBackground: ${input.scenarioBackground}` : ""}
@@ -98,7 +114,7 @@ NARRATION RULES:
 - ${input.actingCharacterName} just acted. Your narration must resolve and describe the outcome of ${input.actingCharacterName}'s action, acknowledging other roster members when relevant.
 - After narrating, it becomes ${input.nextCharacterName}'s turn. The 3 suggested next actions MUST be written for ${input.nextCharacterName} (the NEXT acting character), NOT for ${input.actingCharacterName}.
 - Write the suggested actions in third person for ${input.nextCharacterName} (e.g., "${input.nextCharacterName} searches the room" not "Search the room" or "You search the room").
-
+${diceBlock}
 Round ${input.currentRound}. Recent story log:
 ${recentLog || "(Adventure just started)"}
 
@@ -106,6 +122,27 @@ First, narrate the outcome of ${input.actingCharacterName}'s action (2-4 sentenc
 
 Respond ONLY with valid JSON, no markdown, no extra text:
 {"narration":"<2-4 sentence third-person narration of ${input.actingCharacterName}'s outcome>","choices":["<${input.nextCharacterName} action 1>","<${input.nextCharacterName} action 2>","<${input.nextCharacterName} action 3>"]}`;
+}
+
+function buildDiceDirective(input: GMAIInput): string {
+  const r = input.resolution;
+  if (!r) return "";
+  if (!r.requiresCheck) {
+    return `\nDICE SYSTEM: ${input.actingCharacterName}'s action was low-risk and needed no dice check. Narrate it naturally without inventing a dramatic success or failure.`;
+  }
+  const deathNote = r.actorDied
+    ? ` IMPORTANT: ${input.actingCharacterName}'s HP has dropped to 0 — ${input.actingCharacterName} DIES in this room as a result. Narrate this death clearly and somberly. ${input.actingCharacterName} can no longer act.`
+    : r.actorBroke
+    ? ` IMPORTANT: ${input.actingCharacterName}'s SAN has dropped to 0 — ${input.actingCharacterName}'s mind BREAKS and they lose control in this room. Narrate this clearly. ${input.actingCharacterName} can no longer act normally.`
+    : "";
+  return `
+DICE RESULT (THIS IS FINAL — YOU MUST OBEY IT):
+- ${input.actingCharacterName} attempted an action requiring a ${r.statUsed?.toUpperCase()} check.
+- Roll: d20(${r.d20}) + modifier(${(r.modifier ?? 0) >= 0 ? "+" : ""}${r.modifier}) = ${r.total} vs DC ${r.dc}
+- OUTCOME: ${r.outcome?.replace("_", " ").toUpperCase()}
+- Mechanical consequence: ${r.consequenceSummary}${r.hpChange ? ` HP ${r.hpChange}.` : ""}${r.sanChange ? ` SAN ${r.sanChange}.` : ""}${deathNote}
+
+STRICT DICE RULE: The dice result is final. Do NOT change a failure into a success. Do NOT rescue ${input.actingCharacterName} with a lucky coincidence unless the outcome itself is a success. Narrate exactly what the outcome dictates, and describe the consequences clearly and concretely. A failure must visibly cost ${input.actingCharacterName} something.`;
 }
 
 async function callOpenAICompatible(apiKey: string, model: string, system: string, user: string, baseUrl: string): Promise<string> {

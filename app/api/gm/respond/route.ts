@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { generateGMResponse, GMAIInput } from "@/lib/ai/gm";
 import { createClient } from "@/lib/supabase/server";
+import { resolveAction } from "@/lib/game/resolution";
 
 export async function POST(request: Request) {
   const supabase = createClient();
@@ -45,7 +46,29 @@ export async function POST(request: Request) {
   // resolvedActor = the character who just submitted the action (narration is about them)
   const resolvedActor = sortedBySpeed.find((c) => c.user_id === (actingUserId || user.id)) ?? null;
 
-  // Save action to story_logs
+  // === DICE RESOLUTION ===
+  // The SYSTEM decides the outcome; the GM only narrates it.
+  const roll = resolvedActor
+    ? resolveAction(actionText, resolvedActor)
+    : null;
+
+  let actorDied = false;
+  let actorBroke = false;
+  if (roll && resolvedActor && roll.requires_check && (roll.hp_change !== 0 || roll.san_change !== 0)) {
+    const newHp = Math.max(0, resolvedActor.hp + roll.hp_change);
+    const newSan = Math.max(0, resolvedActor.san + roll.san_change);
+    actorDied = newHp <= 0;
+    actorBroke = newSan <= 0;
+    // Apply consequence to the acting character's own row.
+    await supabase.from("characters")
+      .update({ hp: newHp, san: newSan })
+      .eq("id", resolvedActor.id);
+    // Reflect locally so turn-skipping below sees the updated state.
+    resolvedActor.hp = newHp;
+    resolvedActor.san = newSan;
+  }
+
+  // Save action to story_logs, with the dice result attached to the action entry.
   await supabase.from("story_logs").insert({
     room_id: roomId,
     round_number: room.current_round,
@@ -53,20 +76,27 @@ export async function POST(request: Request) {
     player_id: user.id,
     character_id: characterId,
     content: actionText,
+    roll_result: roll,
   });
 
-  // Advance turn — determine nextActor (the character whose turn is now active)
+  // Advance turn — skip characters who are down (HP<=0). nextActor = now-active character.
+  const isDown = (c: any) => c.hp <= 0;
   let nextRound = room.current_round;
   let nextPlayerId: string;
-  const nextIndex = currentIndex + 1;
-  if (currentIndex === -1 || nextIndex >= sortedBySpeed.length) {
-    // Last player in round — start new round from first player
-    nextRound = room.current_round + 1;
-    nextPlayerId = sortedBySpeed[0]?.user_id ?? user.id;
-  } else {
-    nextPlayerId = sortedBySpeed[nextIndex].user_id;
+  let nextActor = sortedBySpeed[0];
+  // Walk forward through the speed order, wrapping and incrementing round, to the next living actor.
+  for (let step = 1; step <= sortedBySpeed.length; step++) {
+    const idx = currentIndex + step;
+    if (idx >= sortedBySpeed.length && nextRound === room.current_round) {
+      nextRound = room.current_round + 1;
+    }
+    const candidate = sortedBySpeed[idx % sortedBySpeed.length];
+    if (!isDown(candidate) || step === sortedBySpeed.length) {
+      nextActor = candidate;
+      break;
+    }
   }
-  const nextActor = sortedBySpeed.find((c) => c.user_id === nextPlayerId) ?? sortedBySpeed[0];
+  nextPlayerId = nextActor?.user_id ?? user.id;
 
   // Clear old choices immediately so the previous player's suggestions never linger
   await supabase.from("rooms").update({
@@ -121,6 +151,22 @@ export async function POST(request: Request) {
     actingCharacterName: resolvedActor?.name ?? "Unknown",
     nextCharacterName: nextActor?.name ?? "Unknown",
     playerAction: actionText,
+    resolution: roll
+      ? {
+          requiresCheck: roll.requires_check,
+          statUsed: roll.stat_used,
+          d20: roll.d20_roll,
+          modifier: roll.modifier,
+          dc: roll.dc,
+          total: roll.total,
+          outcome: roll.outcome,
+          consequenceSummary: roll.consequence_summary,
+          hpChange: roll.hp_change,
+          sanChange: roll.san_change,
+          actorDied,
+          actorBroke,
+        }
+      : null,
   };
 
   try {

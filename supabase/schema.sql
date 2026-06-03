@@ -210,6 +210,14 @@ CREATE POLICY "Players can update character only when room is waiting" ON public
     EXISTS (SELECT 1 FROM public.rooms r WHERE r.id = room_id AND r.status = 'waiting')
   );
 
+-- Allow HP/SAN consequences to be applied to the acting player's own character
+-- during play (dice resolution system).
+CREATE POLICY "Players can update own character during play" ON public.characters
+  FOR UPDATE USING (
+    auth.uid() = user_id AND
+    EXISTS (SELECT 1 FROM public.rooms r WHERE r.id = room_id AND r.status = 'in_progress')
+  );
+
 -- ============================================================
 -- TURNS
 -- ============================================================
@@ -271,6 +279,7 @@ CREATE TABLE IF NOT EXISTS public.story_logs (
   player_id UUID REFERENCES public.users(id),
   character_id UUID REFERENCES public.characters(id),
   content TEXT NOT NULL,
+  roll_result JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
