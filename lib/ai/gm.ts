@@ -10,24 +10,46 @@ export interface GMAIInput {
   playerAction: string;
 }
 
-export async function generateGMResponse(input: GMAIInput): Promise<string> {
+export interface GMResponseWithChoices {
+  narration: string;
+  choices: [string, string, string];
+}
+
+export async function generateGMResponse(input: GMAIInput): Promise<GMResponseWithChoices> {
   const provider = process.env.AI_PROVIDER ?? "deepseek";
   const model = process.env.AI_MODEL ?? "deepseek-chat";
   const apiKey = process.env.AI_API_KEY;
 
-  if (!apiKey) return "[AI GM is not configured. Set AI_PROVIDER, AI_MODEL, and AI_API_KEY in .env.local]";
+  if (!apiKey) {
+    return {
+      narration: "[AI GM is not configured. Set AI_PROVIDER, AI_MODEL, and AI_API_KEY in your environment variables.]",
+      choices: ["Look around carefully", "Move forward cautiously", "Wait and listen"],
+    };
+  }
 
   const systemPrompt = buildSystemPrompt(input);
   const userMessage = `${input.actingCharacterName} declares: "${input.playerAction}"`;
 
-  if (provider === "anthropic") {
-    return callAnthropic(apiKey, model, systemPrompt, userMessage);
+  try {
+    let raw = "";
+    if (provider === "anthropic") {
+      raw = await callAnthropic(apiKey, model, systemPrompt, userMessage);
+    } else {
+      const baseUrl = provider === "deepseek" ? "https://api.deepseek.com" : "https://api.openai.com";
+      raw = await callOpenAICompatible(apiKey, model, systemPrompt, userMessage, baseUrl);
+    }
+    raw = raw.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
+    const parsed = JSON.parse(raw) as GMResponseWithChoices;
+    if (parsed.narration && Array.isArray(parsed.choices) && parsed.choices.length === 3) {
+      return parsed;
+    }
+    throw new Error("Invalid shape");
+  } catch {
+    return {
+      narration: "[GM response could not be parsed. Please try again.]",
+      choices: ["Look around carefully", "Move forward cautiously", "Wait and listen"],
+    };
   }
-  // Both deepseek and openai use OpenAI-compatible API
-  const baseUrl = provider === "deepseek"
-    ? "https://api.deepseek.com"
-    : "https://api.openai.com";
-  return callOpenAICompatible(apiKey, model, systemPrompt, userMessage, baseUrl);
 }
 
 function buildSystemPrompt(input: GMAIInput): string {
@@ -50,7 +72,10 @@ This is Round ${input.currentRound}.
 Recent story log:
 ${recentLog || "(Adventure just started)"}
 
-Your role: Respond to the player's action with vivid, concise narration (2-4 sentences). Acknowledge the action, describe what happens, and hint at consequences or what the party sees next. Stay in the world. Do not speak as the player. Do not break the fourth wall.`;
+Your role: Respond to the player's action with vivid narration (2-4 sentences), then suggest exactly 3 possible next actions.
+
+Respond ONLY with valid JSON, no markdown, no extra text:
+{"narration":"<your 2-4 sentence response here>","choices":["<action 1>","<action 2>","<action 3>"]}`;
 }
 
 async function callOpenAICompatible(apiKey: string, model: string, system: string, user: string, baseUrl: string): Promise<string> {
