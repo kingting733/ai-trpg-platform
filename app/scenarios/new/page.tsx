@@ -1,7 +1,8 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import type { ImportedScenario } from "@/lib/ai/import-scenario";
 
 const GENRES = ["Fantasy", "Cyberpunk", "Horror", "Sci-Fi", "Mystery", "Historical", "Other"];
 const DIFFICULTIES = ["Story", "Normal", "Hard", "Nightmare"] as const;
@@ -54,8 +55,74 @@ export default function NewScenarioPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  // AI Import
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importNote, setImportNote] = useState<string | null>(null);
+
   function parseLines(text: string): string[] {
     return text.split("\n").map((l) => l.trim()).filter(Boolean);
+  }
+
+  function applyImport(d: ImportedScenario) {
+    setTitle(d.title ?? "");
+    setGenre(d.genre ?? "");
+    setDifficulty((d.difficulty as Difficulty) ?? "Normal");
+    setDescription(d.description ?? "");
+    setObjective(d.objective ?? "");
+    setMaxPlayers(d.max_players ?? 4);
+    setEstimatedPlayTime(d.estimated_play_time ? String(d.estimated_play_time) : "");
+    setTags((d.tags ?? []).join(", "));
+    setOpeningScene(d.opening_scene ?? "");
+    setBackground(d.background ?? "");
+    setLocations((d.locations ?? []).join("\n"));
+    setNpcs((d.npcs ?? []).join("\n"));
+    setKeyItems((d.key_items ?? []).join("\n"));
+    setSecretRules(d.secret_rules ?? "");
+    setThreats((d.threats ?? []).join("\n"));
+    setTraps((d.traps ?? []).join("\n"));
+    setEndingConditions(d.ending_conditions ?? "");
+    setGmNotes(d.gm_notes ?? "");
+    setActiveTab("player");
+  }
+
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    // Allow re-selecting the same file later
+    e.target.value = "";
+    if (!file) return;
+
+    setImportError(null);
+    setImportNote(null);
+    setSuccess(null);
+    setError(null);
+
+    if (file.size > 2 * 1024 * 1024) {
+      setImportError("File too large. Maximum size is 2MB.");
+      return;
+    }
+
+    setImporting(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/scenarios/import", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok) {
+        setImportError(json?.error ?? "Import failed.");
+        return;
+      }
+      applyImport(json.scenario as ImportedScenario);
+      setImportNote(
+        `Imported from "${file.name}". The AI filled the fields below — review and edit everything, then Save as Draft or Publish.` +
+          (json.truncated ? " (The document was long, so only the beginning was analyzed.)" : "")
+      );
+    } catch {
+      setImportError("Import failed. Please try again.");
+    } finally {
+      setImporting(false);
+    }
   }
 
   async function handleSave(status: Status) {
@@ -126,7 +193,47 @@ export default function NewScenarioPage() {
   return (
     <div className="max-w-3xl mx-auto">
       <h1 className="text-3xl font-bold text-white mb-2">Create Scenario</h1>
-      <p className="text-slate-400 mb-8">Build a new TRPG adventure for players to explore.</p>
+      <p className="text-slate-400 mb-6">Build a new TRPG adventure — fill the form manually, or import a story document to get a head start.</p>
+
+      {/* AI Import */}
+      <div className="bg-gradient-to-r from-purple-900/30 to-slate-800/30 border border-purple-800/50 rounded-xl p-5 mb-6">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex-1 min-w-[220px]">
+            <h2 className="text-white font-semibold flex items-center gap-2">
+              <span>✨</span> Import from Story Document
+            </h2>
+            <p className="text-slate-400 text-sm mt-1">
+              Upload a <span className="text-slate-300">.txt</span>, <span className="text-slate-300">.md</span>, or{" "}
+              <span className="text-slate-300">.docx</span> (max 2MB). The AI reads it and pre-fills the form below.
+              Nothing is saved or published automatically — you review everything first.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+            className="bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white px-4 py-2 rounded-lg font-medium whitespace-nowrap"
+          >
+            {importing ? "Analyzing..." : "Upload Document"}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".txt,.md,.markdown,.docx"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+        </div>
+        {importing && (
+          <p className="text-purple-300 text-xs mt-3">Reading the document and asking the AI — this can take a few seconds.</p>
+        )}
+        {importError && (
+          <div className="mt-3 bg-red-900/30 border border-red-700 text-red-300 text-sm rounded-lg px-3 py-2">{importError}</div>
+        )}
+        {importNote && (
+          <div className="mt-3 bg-green-900/30 border border-green-700 text-green-300 text-sm rounded-lg px-3 py-2">{importNote}</div>
+        )}
+      </div>
 
       <div className="flex gap-1 mb-6 bg-slate-900 rounded-lg p-1">
         {tabs.map((tab) => (
