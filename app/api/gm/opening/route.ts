@@ -1,26 +1,32 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { buildPartyRoster, ROSTER_CONSTRAINT } from "@/lib/ai/gm";
 
 export interface OpeningScene {
   scene: string;
   choices: [string, string, string];
 }
 
+type PartyMember = {
+  name: string; playerName?: string | null; background: string | null;
+  speed: number; hp: number; str: number; agi: number;
+  int: number; cha: number; luck: number; san: number;
+};
+
 async function generateOpening(
   scenarioTitle: string,
   background: string | null,
   objective: string | null,
   rules: string | null,
-  characters: Array<{ name: string; background: string | null }>
+  characters: PartyMember[]
 ): Promise<OpeningScene> {
   const provider = process.env.AI_PROVIDER ?? "deepseek";
   const model = process.env.AI_MODEL ?? "deepseek-chat";
   const apiKey = process.env.AI_API_KEY;
 
   const partySize = characters.length;
-  const charList = characters
-    .map((c) => `- ${c.name}${c.background ? ` (${c.background})` : ""}`)
-    .join("\n");
+  const charList = buildPartyRoster(characters);
+  const names = characters.map((c) => c.name).join(", ");
   const firstCharName = characters[0]?.name ?? "the party";
 
   const systemPrompt = `You are an AI Game Master starting a multiplayer TRPG adventure called "${scenarioTitle}".
@@ -28,14 +34,15 @@ ${background ? `Background: ${background}` : ""}
 ${objective ? `Objective: ${objective}` : ""}
 ${rules ? `Special Rules: ${rules}` : ""}
 
-IMPORTANT NARRATION RULES:
-- This is a MULTIPLAYER game with ${partySize} player character${partySize > 1 ? "s" : ""}.
-- Narrate in THIRD PERSON from a neutral Game Master perspective.
-- NEVER use "you". Refer to each character by their name, or collectively as "the party" or "the group".
-- Introduce all characters in the scene naturally.
+${ROSTER_CONSTRAINT}
 
-Party:
+PARTY ROSTER (${partySize} character${partySize > 1 ? "s" : ""}) — the only valid character names are: ${names}
 ${charList}
+
+NARRATION RULES:
+- This is a MULTIPLAYER game. Narrate in THIRD PERSON as a neutral Game Master.
+- NEVER use "you". Refer to each character by their exact roster name, or collectively as "the party"/"the group".
+- Introduce all roster characters in the opening scene by name.
 
 Your task: Write the opening scene. Describe the environment vividly in 3-4 sentences, placing all party members in the world. Then suggest exactly 3 possible first actions written for ${firstCharName} in third person (e.g., "${firstCharName} examines the door" not "Examine the door").
 
@@ -124,10 +131,32 @@ export async function POST(request: Request) {
     .single();
   if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
 
+  // Fetch the real party from the database — characters + their player usernames
   const { data: characters } = await supabase
     .from("characters")
-    .select("name, background")
+    .select("*, users(username)")
     .eq("room_id", roomId);
+
+  if (!characters || characters.length === 0) {
+    return NextResponse.json(
+      { error: "No characters found in this room — cannot generate opening scene." },
+      { status: 400 }
+    );
+  }
+
+  const party: PartyMember[] = [...characters]
+    .sort((a: any, b: any) => b.speed - a.speed)
+    .map((c: any) => ({
+      name: c.name,
+      playerName: c.users?.username ?? null,
+      background: c.background ?? null,
+      speed: c.speed, hp: c.hp, str: c.str, agi: c.agi,
+      int: c.int, cha: c.cha, luck: c.luck, san: c.san,
+    }));
+
+  // TEMP DEBUG: log the real party roster sent to the AI GM
+  console.log("[GM opening] room", roomId, "party roster:",
+    JSON.stringify(party.map((c) => ({ name: c.name, player: c.playerName, speed: c.speed }))));
 
   const scenario = (room as any).scenarios;
   const opening = await generateOpening(
@@ -135,7 +164,7 @@ export async function POST(request: Request) {
     scenario?.background ?? null,
     scenario?.objective ?? null,
     scenario?.rules ?? null,
-    characters ?? []
+    party
   );
 
   await supabase.from("story_logs").insert({

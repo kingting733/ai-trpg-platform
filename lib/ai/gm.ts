@@ -3,7 +3,7 @@ export interface GMAIInput {
   scenarioBackground: string | null;
   scenarioObjective: string | null;
   scenarioRules: string | null;
-  characters: Array<{ name: string; background: string | null; speed: number; hp: number; str: number; agi: number; int: number; cha: number; luck: number; san: number }>;
+  characters: Array<{ name: string; playerName?: string | null; background: string | null; speed: number; hp: number; str: number; agi: number; int: number; cha: number; luck: number; san: number }>;
   storyLogSoFar: string[];
   currentRound: number;
   actingCharacterName: string;
@@ -52,14 +52,30 @@ export async function generateGMResponse(input: GMAIInput): Promise<GMResponseWi
   }
 }
 
-function buildSystemPrompt(input: GMAIInput): string {
-  const partySize = input.characters.length;
-  const charList = input.characters
+/** Builds the explicit party roster shared by opening and turn prompts. */
+export function buildPartyRoster(
+  characters: GMAIInput["characters"],
+  actingCharacterName?: string
+): string {
+  return characters
     .map((c) => {
-      const acting = c.name === input.actingCharacterName ? " ← ACTING THIS TURN" : "";
-      return `- ${c.name}${acting}: HP ${c.hp}, SAN ${c.san}, STR ${c.str}, AGI ${c.agi}, INT ${c.int}, CHA ${c.cha}, LUCK ${c.luck}, SPEED ${c.speed}${c.background ? ` | Background: ${c.background}` : ""}`;
+      const acting = actingCharacterName && c.name === actingCharacterName ? " ← ACTING THIS TURN" : "";
+      const player = c.playerName ? ` [player: ${c.playerName}]` : "";
+      return `- ${c.name}${player}${acting}: HP ${c.hp}, SAN ${c.san}, STR ${c.str}, AGI ${c.agi}, INT ${c.int}, CHA ${c.cha}, LUCK ${c.luck}, SPEED ${c.speed}${c.background ? ` | Background: ${c.background}` : ""}`;
     })
     .join("\n");
+}
+
+export const ROSTER_CONSTRAINT =
+  "STRICT ROSTER RULE: The party roster below is the COMPLETE and ONLY list of player characters. " +
+  "You MUST only use these exact character names. Do NOT invent, rename, or add any new protagonist, " +
+  "main character, hero, party member, companion, or player character. Do NOT use generic placeholders " +
+  'like "the adventurer" or "you". Every player character you mention must come from this roster.';
+
+function buildSystemPrompt(input: GMAIInput): string {
+  const partySize = input.characters.length;
+  const charList = buildPartyRoster(input.characters, input.actingCharacterName);
+  const names = input.characters.map((c) => c.name).join(", ");
 
   const recentLog = input.storyLogSoFar.slice(-10).join("\n");
 
@@ -68,15 +84,16 @@ ${input.scenarioBackground ? `\nBackground: ${input.scenarioBackground}` : ""}
 ${input.scenarioObjective ? `\nObjective: ${input.scenarioObjective}` : ""}
 ${input.scenarioRules ? `\nSpecial Rules: ${input.scenarioRules}` : ""}
 
-IMPORTANT NARRATION RULES:
-- This is a MULTIPLAYER game with ${partySize} player character${partySize > 1 ? "s" : ""}.
-- Narrate in THIRD PERSON from a neutral Game Master perspective.
-- NEVER use "you" to address a single player. Refer to every character by their name.
-- The acting character this turn is ${input.actingCharacterName}. Focus your narration on their action, but acknowledge other party members when relevant.
-- The 3 suggested next actions must be written for ${input.actingCharacterName} in third person (e.g., "${input.actingCharacterName} searches the room" not "Search the room" or "You search the room").
+${ROSTER_CONSTRAINT}
 
-Party (${partySize} character${partySize > 1 ? "s" : ""}), sorted by turn order:
+PARTY ROSTER (${partySize} character${partySize > 1 ? "s" : ""}) — the only valid character names are: ${names}
 ${charList}
+
+NARRATION RULES:
+- This is a MULTIPLAYER game. Narrate in THIRD PERSON as a neutral Game Master.
+- NEVER use "you". Refer to every character by their exact roster name.
+- The acting character this turn is ${input.actingCharacterName}. Focus on their action, but acknowledge other roster members when relevant.
+- The 3 suggested next actions must be written for ${input.actingCharacterName} in third person (e.g., "${input.actingCharacterName} searches the room" not "Search the room" or "You search the room").
 
 Round ${input.currentRound}. Recent story log:
 ${recentLog || "(Adventure just started)"}

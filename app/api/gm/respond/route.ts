@@ -26,13 +26,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not your turn" }, { status: 403 });
   }
 
-  // Fetch characters sorted by speed for turn order
+  // Fetch the real party from the database — characters + their player usernames
   const { data: characters } = await supabase
     .from("characters")
-    .select("*")
+    .select("*, users(username)")
     .eq("room_id", roomId);
 
-  const sortedBySpeed = (characters ?? []).sort((a, b) => b.speed - a.speed);
+  if (!characters || characters.length === 0) {
+    return NextResponse.json(
+      { error: "No characters found in this room — cannot generate GM response." },
+      { status: 400 }
+    );
+  }
+
+  const sortedBySpeed = [...characters].sort((a, b) => b.speed - a.speed);
   const currentIndex = sortedBySpeed.findIndex((c) => c.user_id === user.id);
 
   // Save action to story_logs
@@ -89,18 +96,31 @@ export async function POST(request: Request) {
       return l.content;
     });
 
+  const partyForAI = sortedBySpeed.map((c: any) => ({
+    name: c.name,
+    playerName: c.users?.username ?? null,
+    background: c.background ?? null,
+    speed: c.speed, hp: c.hp, str: c.str, agi: c.agi,
+    int: c.int, cha: c.cha, luck: c.luck, san: c.san,
+  }));
+
   const scenario = (room as any).scenarios;
   const input: GMAIInput = {
     scenarioTitle: scenario?.title ?? "Unknown Scenario",
     scenarioBackground: scenario?.background ?? null,
     scenarioObjective: scenario?.objective ?? null,
     scenarioRules: scenario?.rules ?? null,
-    characters: characters ?? [],
+    characters: partyForAI,
     storyLogSoFar,
     currentRound: room.current_round,
     actingCharacterName: myCharacter?.name ?? "Unknown",
     playerAction: actionText,
   };
+
+  // TEMP DEBUG: log the real party roster sent to the AI GM
+  console.log("[GM respond] room", roomId, "party roster:",
+    JSON.stringify(partyForAI.map((c) => ({ name: c.name, player: c.playerName, speed: c.speed }))),
+    "| acting:", input.actingCharacterName);
 
   try {
     const gmResponse = await generateGMResponse(input);
