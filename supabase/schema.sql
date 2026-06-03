@@ -146,11 +146,10 @@ CREATE TABLE IF NOT EXISTS public.room_players (
 
 ALTER TABLE public.room_players ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Players in room can view room members" ON public.room_players
-  FOR SELECT USING (
-    auth.uid() = user_id OR
-    EXISTS (SELECT 1 FROM public.room_players rp WHERE rp.room_id = room_id AND rp.user_id = auth.uid())
-  );
+-- Simple policy: any authenticated user can read room_players.
+-- The self-referencing EXISTS check caused infinite recursion and 0-row results.
+CREATE POLICY "Authenticated users can view room players" ON public.room_players
+  FOR SELECT USING (auth.uid() IS NOT NULL);
 
 CREATE POLICY "Users can join rooms" ON public.room_players
   FOR INSERT WITH CHECK (auth.uid() = user_id);
