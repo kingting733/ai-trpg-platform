@@ -19,12 +19,6 @@ function CreateRoomInner() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const FALLBACK_IDS = [
-    "00000000-0000-0000-0000-000000000001",
-    "00000000-0000-0000-0000-000000000002",
-    "00000000-0000-0000-0000-000000000003",
-  ];
-
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!roomName.trim()) return;
@@ -34,17 +28,7 @@ function CreateRoomInner() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push("/play"); return; }
 
-    // Validate that the scenario exists in the DB before inserting
-    if (FALLBACK_IDS.includes(scenarioId)) {
-      setError(
-        "This is a demo scenario and has not been saved to the database yet. " +
-        "Run the seed SQL in your Supabase SQL Editor first (see supabase/seeds.sql in the repo), " +
-        "or ask a creator to publish a real scenario."
-      );
-      setLoading(false);
-      return;
-    }
-
+    // Validate scenario exists in DB (catches both missing seeds and invalid IDs)
     const { data: scenarioCheck } = await supabase
       .from("scenarios")
       .select("id")

@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 interface Scenario {
@@ -16,6 +15,7 @@ interface Scenario {
   status: string;
 }
 
+// Used only when the scenario is not found in Supabase
 const FALLBACK_SCENARIOS: Record<string, Scenario> = {
   "00000000-0000-0000-0000-000000000001": {
     id: "00000000-0000-0000-0000-000000000001",
@@ -52,38 +52,39 @@ const FALLBACK_SCENARIOS: Record<string, Scenario> = {
   },
 };
 
-const FALLBACK_IDS = Object.keys(FALLBACK_SCENARIOS);
-
 export default function ScenarioDetailPage({ params }: { params: { id: string } }) {
-  const router = useRouter();
   const [scenario, setScenario] = useState<Scenario | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const isFallback = FALLBACK_IDS.includes(params.id);
+  const [isFallback, setIsFallback] = useState(false);
 
   useEffect(() => {
     async function load() {
-      // Check fallback first
-      if (FALLBACK_SCENARIOS[params.id]) {
-        setScenario(FALLBACK_SCENARIOS[params.id]);
+      // Always check Supabase first — seeds may have added these IDs to the DB
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("scenarios")
+        .select("id, title, genre, description, background, objective, rules, max_players, status")
+        .eq("id", params.id)
+        .single();
+
+      if (data) {
+        setScenario(data);
+        setIsFallback(false);
         setLoading(false);
         return;
       }
 
-      // Try Supabase
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("scenarios")
-        .select("id, title, genre, description, background, objective, rules, max_players, status")
-        .eq("id", params.id)
-        .eq("status", "published")
-        .single();
-
-      if (error || !data) {
-        setNotFound(true);
-      } else {
-        setScenario(data);
+      // Not in DB — try hardcoded fallback
+      const fallback = FALLBACK_SCENARIOS[params.id];
+      if (fallback) {
+        setScenario(fallback);
+        setIsFallback(true);
+        setLoading(false);
+        return;
       }
+
+      setNotFound(true);
       setLoading(false);
     }
     load();
@@ -118,7 +119,7 @@ export default function ScenarioDetailPage({ params }: { params: { id: string } 
         </Link>
       </div>
 
-      {/* Header card */}
+      {/* Header */}
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-8 mb-4">
         <div className="flex items-center gap-3 mb-4">
           <span className="text-xs bg-purple-900/50 text-purple-300 border border-purple-800 px-2 py-0.5 rounded">
@@ -154,12 +155,11 @@ export default function ScenarioDetailPage({ params }: { params: { id: string } 
         </div>
       )}
 
-      {/* Fallback warning */}
+      {/* Warning only shown if NOT in DB */}
       {isFallback && (
         <div className="bg-amber-900/20 border border-amber-700/50 rounded-xl p-4 mb-4 text-sm text-amber-300">
-          <span className="font-semibold">Demo scenario</span> — this scenario is not yet saved to your database.
-          To create a room, run <code className="bg-amber-900/40 px-1 rounded">supabase/seeds.sql</code> in your
-          Supabase SQL Editor first, or publish a real scenario from the{" "}
+          <span className="font-semibold">Demo scenario</span> — not yet saved to the database.
+          Run the seed SQL in Supabase or publish a real scenario from the{" "}
           <Link href="/dashboard" className="underline hover:text-amber-200">Creator Dashboard</Link>.
         </div>
       )}
@@ -167,13 +167,12 @@ export default function ScenarioDetailPage({ params }: { params: { id: string } 
       {/* CTA */}
       <div className="flex gap-4">
         <Link
-          href={createRoomHref}
+          href={isFallback ? "#" : createRoomHref}
           className={`flex-1 py-3 rounded-lg font-medium text-center transition-colors ${
             isFallback
               ? "bg-slate-700 text-slate-400 cursor-not-allowed pointer-events-none"
               : "bg-purple-600 hover:bg-purple-500 text-white"
           }`}
-          aria-disabled={isFallback}
         >
           {isFallback ? "Create Room (seed DB first)" : "Create Room"}
         </Link>
