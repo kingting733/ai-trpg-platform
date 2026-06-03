@@ -40,7 +40,7 @@ export default function LobbyPage({ params }: { params: { id: string } }) {
     setRoom(roomData);
 
     if (roomData.status === "in_progress") {
-      router.push(`/rooms/${params.id}/character`);
+      router.push(`/rooms/${params.id}/select-card`);
       return;
     }
 
@@ -95,7 +95,7 @@ export default function LobbyPage({ params }: { params: { id: string } }) {
       return;
     }
 
-    router.push(`/rooms/${room.id}/character`);
+    router.push(`/rooms/${room.id}/select-card`);
   }
 
   const isHost = room?.host_id === currentUserId;

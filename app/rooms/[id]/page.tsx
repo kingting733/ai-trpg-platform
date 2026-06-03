@@ -259,7 +259,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
         <div className="flex-1 bg-slate-900/50 border border-slate-700 rounded-xl p-4 overflow-y-auto min-h-0 flex flex-col gap-3">
           {storyLog.length === 0 && (
             <p className="text-slate-500 text-sm italic text-center mt-8">
-              {needsInit ? "Ready — click Begin Adventure below!" : "Waiting for all players to create characters..."}
+              {needsInit ? "Ready — click Begin Adventure below!" : "Waiting for all players to select their character cards..."}
             </p>
           )}
           {storyLog.map((entry) => (
@@ -338,7 +338,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           </div>
         ) : (
           <div className="text-center text-slate-500 text-sm py-3 shrink-0">
-            {allHaveChars ? "Waiting for host to begin..." : "Waiting for all players to create characters..."}
+            {allHaveChars ? "Waiting for host to begin..." : "Waiting for all players to select their character cards..."}
           </div>
         )}
       </div>

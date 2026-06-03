@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -28,14 +28,12 @@ const RARITY_STYLES: Record<CharacterCard["rarity"], { border: string; chip: str
 
 const STAT_KEYS = ["str", "agi", "int", "cha", "luck", "speed"] as const;
 
-function isSameUtcDay(iso: string): boolean {
+function isSameUtcDay(iso: string) {
   const d = new Date(iso);
   const now = new Date();
-  return (
-    d.getUTCFullYear() === now.getUTCFullYear() &&
-    d.getUTCMonth() === now.getUTCMonth() &&
-    d.getUTCDate() === now.getUTCDate()
-  );
+  return d.getUTCFullYear() === now.getUTCFullYear()
+    && d.getUTCMonth() === now.getUTCMonth()
+    && d.getUTCDate() === now.getUTCDate();
 }
 
 export default function CharactersPage() {
@@ -59,10 +57,7 @@ export default function CharactersPage() {
     setLoading(false);
   }
 
-  useEffect(() => {
-    loadCards();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useEffect(() => { loadCards(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openedToday = cards.some((c) => isSameUtcDay(c.created_at));
 
@@ -83,6 +78,11 @@ export default function CharactersPage() {
       setError("Network error — please try again.");
     }
     setOpening(false);
+  }
+
+  function handleNameSaved(id: string, newName: string) {
+    setCards((prev) => prev.map((c) => c.id === id ? { ...c, name: newName } : c));
+    if (revealed?.id === id) setRevealed((r) => r ? { ...r, name: newName } : r);
   }
 
   return (
@@ -113,7 +113,9 @@ export default function CharactersPage() {
       {revealed && (
         <div className="mb-8">
           <p className="text-xs text-purple-400 uppercase tracking-wider mb-2">New card unlocked!</p>
-          <CardView card={revealed} highlight />
+          <div className="max-w-xs">
+            <CardView card={revealed} highlight onNameSaved={handleNameSaved} />
+          </div>
         </div>
       )}
 
@@ -130,7 +132,7 @@ export default function CharactersPage() {
           <p className="text-sm text-slate-500 mb-3">{cards.length} card{cards.length !== 1 ? "s" : ""} in your collection</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {cards.map((card) => (
-              <CardView key={card.id} card={card} />
+              <CardView key={card.id} card={card} onNameSaved={handleNameSaved} />
             ))}
           </div>
         </>
@@ -139,16 +141,105 @@ export default function CharactersPage() {
   );
 }
 
-function CardView({ card, highlight }: { card: CharacterCard; highlight?: boolean }) {
+function CardView({
+  card,
+  highlight,
+  onNameSaved,
+}: {
+  card: CharacterCard;
+  highlight?: boolean;
+  onNameSaved?: (id: string, newName: string) => void;
+}) {
   const style = RARITY_STYLES[card.rarity];
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(card.name);
+  const [saving, setSaving] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function startEdit() {
+    setDraft(card.name);
+    setNameError(null);
+    setEditing(true);
+    setTimeout(() => inputRef.current?.select(), 0);
+  }
+
+  async function saveName() {
+    const trimmed = draft.trim();
+    if (!trimmed) { setNameError("Name cannot be empty."); return; }
+    if (trimmed === card.name) { setEditing(false); return; }
+    setSaving(true);
+    setNameError(null);
+    try {
+      const res = await fetch(`/api/characters/${card.id}/rename`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setNameError(data.error ?? "Failed to save.");
+      } else {
+        setEditing(false);
+        onNameSaved?.(card.id, data.card.name);
+      }
+    } catch {
+      setNameError("Network error.");
+    }
+    setSaving(false);
+  }
+
   return (
-    <div className={`bg-slate-800/50 border ${style.border} ${style.glow} rounded-xl p-4 ${highlight ? "ring-2 ring-purple-500" : ""}`}>
-      <div className="flex items-start justify-between mb-3">
-        <h3 className="text-white font-semibold">{card.name}</h3>
-        <span className={`text-xs px-2 py-0.5 rounded border ${style.chip}`}>{card.rarity}</span>
+    <div className={`bg-slate-800/50 border ${style.border} ${style.glow} rounded-xl p-4 flex flex-col gap-0 ${highlight ? "ring-2 ring-purple-500" : ""}`}>
+      <div className="flex items-start justify-between mb-3 gap-2">
+        <div className="flex-1 min-w-0">
+          {editing ? (
+            <div className="flex flex-col gap-1">
+              <input
+                ref={inputRef}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveName();
+                  if (e.key === "Escape") setEditing(false);
+                }}
+                maxLength={40}
+                className="w-full bg-slate-900 border border-purple-500 rounded px-2 py-1 text-white text-sm focus:outline-none"
+              />
+              {nameError && <span className="text-red-400 text-xs">{nameError}</span>}
+              <div className="flex gap-2 mt-0.5">
+                <button
+                  onClick={saveName}
+                  disabled={saving}
+                  className="text-xs bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white px-2 py-0.5 rounded"
+                >
+                  {saving ? "Saving…" : "Save"}
+                </button>
+                <button
+                  onClick={() => setEditing(false)}
+                  className="text-xs text-slate-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 min-w-0">
+              <h3 className="text-white font-semibold truncate">{card.name}</h3>
+              <button
+                onClick={startEdit}
+                title="Rename card"
+                className="text-slate-500 hover:text-slate-300 shrink-0 text-xs leading-none"
+              >
+                ✎
+              </button>
+            </div>
+          )}
+        </div>
+        <span className={`text-xs px-2 py-0.5 rounded border ${style.chip} shrink-0`}>{card.rarity}</span>
       </div>
 
-      <div className="grid grid-cols-2 gap-1.5 mb-3">
+      <div className="grid grid-cols-2 gap-1.5 mb-2">
         <StatBox label="HP" value={card.hp} />
         <StatBox label="SAN" value={card.san} />
       </div>
@@ -167,14 +258,6 @@ function CardView({ card, highlight }: { card: CharacterCard; highlight?: boolea
           {new Date(card.created_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
         </span>
       </div>
-
-      <button
-        disabled
-        title="Playing with cards in rooms is coming soon"
-        className="w-full mt-3 bg-slate-700/60 text-slate-400 text-sm py-2 rounded-lg cursor-not-allowed"
-      >
-        Play with this card (coming soon)
-      </button>
     </div>
   );
 }

@@ -353,5 +353,8 @@ CREATE POLICY "Users can view their own character cards" ON public.character_car
 
 CREATE POLICY "Users can create their own character cards" ON public.character_cards
   FOR INSERT WITH CHECK (auth.uid() = user_id);
--- No UPDATE policy -> stats are locked after creation. No DELETE policy in MVP.
+-- UPDATE: name editing is allowed; the rename API route only touches the name field.
+CREATE POLICY "Users can rename their own character cards" ON public.character_cards
+  FOR UPDATE USING (auth.uid() = user_id);
+-- No DELETE policy in MVP.
 
