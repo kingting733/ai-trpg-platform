@@ -337,6 +337,7 @@ CREATE TABLE IF NOT EXISTS public.character_cards (
   speed INTEGER NOT NULL,
   total_stats INTEGER NOT NULL,
   rarity TEXT NOT NULL CHECK (rarity IN ('Common', 'Rare', 'Epic', 'Legendary')),
+  roll_details JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

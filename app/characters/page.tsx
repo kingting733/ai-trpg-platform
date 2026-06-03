@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { CardRollReveal, RevealCard } from "@/components/CardRollReveal";
 
 interface CharacterCard {
   id: string;
@@ -16,6 +17,7 @@ interface CharacterCard {
   speed: number;
   total_stats: number;
   rarity: "Common" | "Rare" | "Epic" | "Legendary";
+  roll_details: RevealCard["roll_details"];
   created_at: string;
 }
 
@@ -43,6 +45,7 @@ export default function CharactersPage() {
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [revealed, setRevealed] = useState<CharacterCard | null>(null);
+  const [rolling, setRolling] = useState<CharacterCard | null>(null);
 
   async function loadCards() {
     const supabase = createClient();
@@ -71,13 +74,20 @@ export default function CharactersPage() {
       if (!res.ok) {
         setError(data.error ?? "Could not open a card right now.");
       } else {
-        setRevealed(data.card as CharacterCard);
-        await loadCards();
+        // Show the step-by-step dice reveal first; card is persisted server-side already.
+        setRolling(data.card as CharacterCard);
       }
     } catch {
       setError("Network error — please try again.");
     }
     setOpening(false);
+  }
+
+  async function finishReveal() {
+    const card = rolling;
+    setRolling(null);
+    if (card) setRevealed(card);
+    await loadCards();
   }
 
   function handleNameSaved(id: string, newName: string) {
@@ -87,6 +97,9 @@ export default function CharactersPage() {
 
   return (
     <div className="max-w-5xl mx-auto">
+      {rolling && (
+        <CardRollReveal card={rolling as unknown as RevealCard} onDone={finishReveal} />
+      )}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white">My Character Cards</h1>
