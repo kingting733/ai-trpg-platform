@@ -213,15 +213,19 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
       });
     }
 
-    // GM responds (non-blocking — refresh after)
+    // GM responds
     setGmThinking(true);
     await fetchAll();
     try {
-      await fetch("/api/gm/respond", {
+      const gmRes = await fetch("/api/gm/respond", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roomId: room.id, actionText: finalText }),
       });
+      const gmData = await gmRes.json();
+      if (Array.isArray(gmData.choices) && gmData.choices.length === 3) {
+        setChoices(gmData.choices);
+      }
     } catch {
       // non-blocking
     }

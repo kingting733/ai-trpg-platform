@@ -62,15 +62,14 @@ export async function POST(request: Request) {
   try {
     const gmResponse = await generateGMResponse(input);
 
-    // Save GM response to story_logs
     await supabase.from("story_logs").insert({
       room_id: roomId,
       round_number: room.current_round,
       entry_type: "gm_response",
-      content: gmResponse,
+      content: gmResponse.narration,
     });
 
-    return NextResponse.json({ response: gmResponse });
+    return NextResponse.json({ response: gmResponse.narration, choices: gmResponse.choices });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
