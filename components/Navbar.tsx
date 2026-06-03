@@ -25,6 +25,9 @@ export async function Navbar() {
         <div className="flex items-center gap-4 text-sm">
           <Link href="/scenarios" className="text-slate-300 hover:text-white">Scenarios</Link>
           {user && (
+            <Link href="/characters" className="text-slate-300 hover:text-white">Cards</Link>
+          )}
+          {user && (
             <Link href="/dashboard" className="text-slate-300 hover:text-white">Dashboard</Link>
           )}
           <NavbarClient user={user ? { username } : null} />
