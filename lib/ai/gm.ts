@@ -53,29 +53,38 @@ export async function generateGMResponse(input: GMAIInput): Promise<GMResponseWi
 }
 
 function buildSystemPrompt(input: GMAIInput): string {
+  const partySize = input.characters.length;
   const charList = input.characters
-    .map((c) => `- ${c.name}: HP ${c.hp}, STR ${c.str}, AGI ${c.agi}, INT ${c.int}, CHA ${c.cha}, LUCK ${c.luck}, SPEED ${c.speed}, SAN ${c.san}${c.background ? ` (${c.background})` : ""}`)
+    .map((c) => {
+      const acting = c.name === input.actingCharacterName ? " ← ACTING THIS TURN" : "";
+      return `- ${c.name}${acting}: HP ${c.hp}, SAN ${c.san}, STR ${c.str}, AGI ${c.agi}, INT ${c.int}, CHA ${c.cha}, LUCK ${c.luck}, SPEED ${c.speed}${c.background ? ` | Background: ${c.background}` : ""}`;
+    })
     .join("\n");
 
   const recentLog = input.storyLogSoFar.slice(-10).join("\n");
 
-  return `You are an AI Game Master for a TRPG text adventure called "${input.scenarioTitle}".
+  return `You are an AI Game Master running a multiplayer TRPG text adventure called "${input.scenarioTitle}".
 ${input.scenarioBackground ? `\nBackground: ${input.scenarioBackground}` : ""}
 ${input.scenarioObjective ? `\nObjective: ${input.scenarioObjective}` : ""}
 ${input.scenarioRules ? `\nSpecial Rules: ${input.scenarioRules}` : ""}
 
-Characters in this adventure:
+IMPORTANT NARRATION RULES:
+- This is a MULTIPLAYER game with ${partySize} player character${partySize > 1 ? "s" : ""}.
+- Narrate in THIRD PERSON from a neutral Game Master perspective.
+- NEVER use "you" to address a single player. Refer to every character by their name.
+- The acting character this turn is ${input.actingCharacterName}. Focus your narration on their action, but acknowledge other party members when relevant.
+- The 3 suggested next actions must be written for ${input.actingCharacterName} in third person (e.g., "${input.actingCharacterName} searches the room" not "Search the room" or "You search the room").
+
+Party (${partySize} character${partySize > 1 ? "s" : ""}), sorted by turn order:
 ${charList}
 
-This is Round ${input.currentRound}.
-
-Recent story log:
+Round ${input.currentRound}. Recent story log:
 ${recentLog || "(Adventure just started)"}
 
-Your role: Respond to the player's action with vivid narration (2-4 sentences), then suggest exactly 3 possible next actions.
+Respond to ${input.actingCharacterName}'s action with vivid third-person narration (2-4 sentences), then suggest 3 possible next actions for ${input.actingCharacterName}.
 
 Respond ONLY with valid JSON, no markdown, no extra text:
-{"narration":"<your 2-4 sentence response here>","choices":["<action 1>","<action 2>","<action 3>"]}`;
+{"narration":"<2-4 sentence third-person narration>","choices":["<${input.actingCharacterName} action 1>","<${input.actingCharacterName} action 2>","<${input.actingCharacterName} action 3>"]}`;
 }
 
 async function callOpenAICompatible(apiKey: string, model: string, system: string, user: string, baseUrl: string): Promise<string> {
@@ -85,7 +94,7 @@ async function callOpenAICompatible(apiKey: string, model: string, system: strin
     body: JSON.stringify({
       model,
       messages: [{ role: "system", content: system }, { role: "user", content: user }],
-      max_tokens: 300,
+      max_tokens: 500,
       temperature: 0.8,
     }),
   });
@@ -109,7 +118,7 @@ async function callAnthropic(apiKey: string, model: string, system: string, user
       model,
       system,
       messages: [{ role: "user", content: user }],
-      max_tokens: 300,
+      max_tokens: 500,
     }),
   });
   if (!res.ok) {

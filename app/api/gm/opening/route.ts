@@ -17,28 +17,40 @@ async function generateOpening(
   const model = process.env.AI_MODEL ?? "deepseek-chat";
   const apiKey = process.env.AI_API_KEY;
 
-  const charNames = characters.map((c) => c.name).join(", ");
+  const partySize = characters.length;
+  const charList = characters
+    .map((c) => `- ${c.name}${c.background ? ` (${c.background})` : ""}`)
+    .join("\n");
+  const firstCharName = characters[0]?.name ?? "the party";
 
-  const systemPrompt = `You are an AI Game Master starting a TRPG adventure called "${scenarioTitle}".
+  const systemPrompt = `You are an AI Game Master starting a multiplayer TRPG adventure called "${scenarioTitle}".
 ${background ? `Background: ${background}` : ""}
 ${objective ? `Objective: ${objective}` : ""}
 ${rules ? `Special Rules: ${rules}` : ""}
-Players: ${charNames}
 
-Your task: Write the opening scene of the adventure. Describe the environment vividly in 3-4 sentences, setting the mood and placing the players in the world. Then suggest exactly 3 possible first actions the players could take.
+IMPORTANT NARRATION RULES:
+- This is a MULTIPLAYER game with ${partySize} player character${partySize > 1 ? "s" : ""}.
+- Narrate in THIRD PERSON from a neutral Game Master perspective.
+- NEVER use "you". Refer to each character by their name, or collectively as "the party" or "the group".
+- Introduce all characters in the scene naturally.
+
+Party:
+${charList}
+
+Your task: Write the opening scene. Describe the environment vividly in 3-4 sentences, placing all party members in the world. Then suggest exactly 3 possible first actions written for ${firstCharName} in third person (e.g., "${firstCharName} examines the door" not "Examine the door").
 
 Respond ONLY with valid JSON in this exact format (no markdown, no extra text):
-{"scene":"<opening narration here>","choices":["<action 1>","<action 2>","<action 3>"]}`;
+{"scene":"<opening narration here>","choices":["<${firstCharName} action 1>","<${firstCharName} action 2>","<${firstCharName} action 3>"]}`;
 
   const userMessage = "Begin the adventure.";
 
   if (!apiKey) {
     return {
-      scene: `The adventure begins. ${background ?? `You stand at the entrance of your quest for ${scenarioTitle}.`} The air is thick with anticipation.`,
+      scene: `The adventure begins. ${background ?? `The party stands at the threshold of their quest — ${scenarioTitle}.`} The air is thick with anticipation.`,
       choices: [
-        "Look around carefully and assess the surroundings",
-        "Move forward cautiously",
-        "Check your equipment and prepare for what lies ahead",
+        `${firstCharName} looks around carefully and assesses the surroundings`,
+        `${firstCharName} moves forward cautiously`,
+        `${firstCharName} checks their equipment and addresses the group`,
       ],
     };
   }
@@ -88,11 +100,11 @@ Respond ONLY with valid JSON in this exact format (no markdown, no extra text):
   } catch {
     // Fallback if AI fails or returns bad JSON
     return {
-      scene: `The adventure begins. ${background ?? ""} The world around you feels alive with danger and possibility.`.trim(),
+      scene: `The adventure begins. ${background ?? ""} The world feels alive with danger and possibility.`.trim(),
       choices: [
-        "Look around carefully and assess the surroundings",
-        "Move forward cautiously, staying alert",
-        "Speak up — address your companions or call out into the unknown",
+        `${firstCharName} looks around carefully, assessing the surroundings`,
+        `${firstCharName} moves forward cautiously, staying alert`,
+        `${firstCharName} speaks up, addressing the group`,
       ],
     };
   }
