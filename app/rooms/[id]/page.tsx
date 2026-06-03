@@ -219,7 +219,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
       await fetch("/api/gm/respond", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomId: room.id, actionText: finalText }),
+        body: JSON.stringify({ roomId: room.id, actionText: finalText, actingUserId: currentUserId }),
       });
     } catch {
       // non-blocking

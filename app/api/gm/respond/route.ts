@@ -7,10 +7,11 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await request.json() as { roomId: string; actionText: string };
-  const { roomId, actionText } = body;
+  const body = await request.json() as { roomId: string; actionText: string; actingUserId: string };
+  const { roomId, actionText, actingUserId } = body;
 
-  // Fetch room + scenario
+  // actingUserId is the player who just acted — the turn may have already advanced
+  // so we verify the caller is a room participant, not that it's currently their turn
   const { data: room } = await supabase
     .from("rooms")
     .select("*, scenarios(title, background, objective, rules)")
@@ -18,10 +19,13 @@ export async function POST(request: Request) {
     .single();
   if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
 
-  // Verify it's the current player's turn
-  if (room.current_turn_player_id !== user.id) {
-    return NextResponse.json({ error: "Not your turn" }, { status: 403 });
-  }
+  const { data: participant } = await supabase
+    .from("room_players")
+    .select("user_id")
+    .eq("room_id", roomId)
+    .eq("user_id", user.id)
+    .single();
+  if (!participant) return NextResponse.json({ error: "Not a participant" }, { status: 403 });
 
   // Fetch characters
   const { data: characters } = await supabase
@@ -37,7 +41,7 @@ export async function POST(request: Request) {
     .order("created_at", { ascending: false })
     .limit(15);
 
-  const myCharacter = (characters ?? []).find((c) => c.user_id === user.id);
+  const myCharacter = (characters ?? []).find((c) => c.user_id === (actingUserId || user.id));
   const storyLogSoFar = (logs ?? [])
     .reverse()
     .map((l: any) => {
