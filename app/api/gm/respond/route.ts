@@ -7,33 +7,72 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await request.json() as { roomId: string; actionText: string; actingUserId: string };
-  const { roomId, actionText, actingUserId } = body;
+  const body = await request.json() as {
+    roomId: string;
+    actionText: string;
+    actingUserId: string;
+    characterId: string;
+  };
+  const { roomId, actionText, actingUserId, characterId } = body;
 
-  // actingUserId is the player who just acted — the turn may have already advanced
-  // so we verify the caller is a room participant, not that it's currently their turn
+  // Verify caller is a room participant and it's actually their turn
   const { data: room } = await supabase
     .from("rooms")
     .select("*, scenarios(title, background, objective, rules)")
     .eq("id", roomId)
     .single();
   if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
+  if (room.current_turn_player_id !== user.id) {
+    return NextResponse.json({ error: "Not your turn" }, { status: 403 });
+  }
 
-  const { data: participant } = await supabase
-    .from("room_players")
-    .select("user_id")
-    .eq("room_id", roomId)
-    .eq("user_id", user.id)
-    .single();
-  if (!participant) return NextResponse.json({ error: "Not a participant" }, { status: 403 });
-
-  // Fetch characters
+  // Fetch characters sorted by speed for turn order
   const { data: characters } = await supabase
     .from("characters")
     .select("*")
     .eq("room_id", roomId);
 
-  // Fetch recent story log
+  const sortedBySpeed = (characters ?? []).sort((a, b) => b.speed - a.speed);
+  const currentIndex = sortedBySpeed.findIndex((c) => c.user_id === user.id);
+
+  // Save action to story_logs
+  await supabase.from("story_logs").insert({
+    room_id: roomId,
+    round_number: room.current_round,
+    entry_type: "action",
+    player_id: user.id,
+    character_id: characterId,
+    content: actionText,
+  });
+
+  // Advance turn
+  let nextRound = room.current_round;
+  let nextPlayerId: string;
+  const nextIndex = currentIndex + 1;
+  if (currentIndex === -1 || nextIndex >= sortedBySpeed.length) {
+    // Last player in round — start new round from first player
+    nextRound = room.current_round + 1;
+    nextPlayerId = sortedBySpeed[0]?.user_id ?? user.id;
+    await supabase.from("rooms").update({
+      current_turn_player_id: nextPlayerId,
+      current_round: nextRound,
+      current_choices: [],
+    }).eq("id", roomId);
+    await supabase.from("story_logs").insert({
+      room_id: roomId,
+      round_number: nextRound,
+      entry_type: "system",
+      content: `--- Round ${nextRound} begins ---`,
+    });
+  } else {
+    nextPlayerId = sortedBySpeed[nextIndex].user_id;
+    await supabase.from("rooms").update({
+      current_turn_player_id: nextPlayerId,
+      current_choices: [],
+    }).eq("id", roomId);
+  }
+
+  // Fetch recent story log for GM context
   const { data: logs } = await supabase
     .from("story_logs")
     .select("entry_type, content, characters(name)")
@@ -41,7 +80,7 @@ export async function POST(request: Request) {
     .order("created_at", { ascending: false })
     .limit(15);
 
-  const myCharacter = (characters ?? []).find((c) => c.user_id === (actingUserId || user.id));
+  const myCharacter = sortedBySpeed.find((c) => c.user_id === (actingUserId || user.id));
   const storyLogSoFar = (logs ?? [])
     .reverse()
     .map((l: any) => {

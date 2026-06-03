@@ -143,90 +143,26 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     const finalText = (text ?? actionText).trim();
     if (!finalText || !room || !myCharacter || !currentUserId) return;
     setSubmitting(true);
-    const supabase = createClient();
-    // Clear choices immediately so other players don't act on stale suggestions
-    await supabase.from("rooms").update({ current_choices: [] }).eq("id", room.id);
+    setActionText("");
 
-    const sortedBySpeed = [...characters].sort((a, b) => b.speed - a.speed);
-    const currentIndex = sortedBySpeed.findIndex((c) => c.user_id === room.current_turn_player_id);
-
-    await supabase.from("story_logs").insert({
-      room_id: room.id,
-      round_number: room.current_round,
-      entry_type: "action",
-      player_id: currentUserId,
-      character_id: myCharacter.id,
-      content: finalText,
-    });
-
-    const { data: turnData } = await supabase
-      .from("turns")
-      .select("id")
-      .eq("room_id", room.id)
-      .eq("round_number", room.current_round)
-      .eq("player_id", currentUserId)
-      .eq("status", "pending")
-      .single();
-
-    let turnId = turnData?.id;
-    if (!turnId) {
-      const { data: newTurn } = await supabase.from("turns").insert({
-        room_id: room.id,
-        round_number: room.current_round,
-        player_id: currentUserId,
-        turn_order: currentIndex + 1,
-        status: "pending",
-      }).select("id").single();
-      turnId = newTurn?.id;
-    }
-
-    if (turnId) {
-      await supabase.from("actions").insert({
-        turn_id: turnId,
-        room_id: room.id,
-        player_id: currentUserId,
-        character_id: myCharacter.id,
-        action_text: finalText,
-      });
-      await supabase.from("turns").update({ status: "completed" }).eq("id", turnId);
-    }
-
-    // Advance turn first so next player can act
-    const nextIndex = currentIndex + 1;
-    if (nextIndex < sortedBySpeed.length) {
-      await supabase
-        .from("rooms")
-        .update({ current_turn_player_id: sortedBySpeed[nextIndex].user_id })
-        .eq("id", room.id);
-    } else {
-      const newRound = room.current_round + 1;
-      await supabase
-        .from("rooms")
-        .update({ current_turn_player_id: sortedBySpeed[0].user_id, current_round: newRound })
-        .eq("id", room.id);
-      await supabase.from("story_logs").insert({
-        room_id: room.id,
-        round_number: newRound,
-        entry_type: "system",
-        content: `--- Round ${newRound} begins ---`,
-      });
-    }
-
-    // GM responds
+    // All game state changes (action save, turn advance, GM response) happen server-side
     setGmThinking(true);
-    await fetchAll();
     try {
       await fetch("/api/gm/respond", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomId: room.id, actionText: finalText, actingUserId: currentUserId }),
+        body: JSON.stringify({
+          roomId: room.id,
+          actionText: finalText,
+          actingUserId: currentUserId,
+          characterId: myCharacter.id,
+        }),
       });
     } catch {
       // non-blocking
     }
     setGmThinking(false);
 
-    setActionText("");
     await fetchAll();
     setSubmitting(false);
   }
