@@ -1,6 +1,21 @@
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import { NavbarClient } from "./NavbarClient";
 
-export function Navbar() {
+export async function Navbar() {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  let username: string | null = null;
+  if (user) {
+    const { data } = await supabase
+      .from("users")
+      .select("username")
+      .eq("id", user.id)
+      .single();
+    username = data?.username ?? user.email ?? null;
+  }
+
   return (
     <nav className="border-b border-slate-800 bg-[#0f0f1a]/95 backdrop-blur sticky top-0 z-50">
       <div className="container mx-auto px-4 max-w-6xl flex items-center justify-between h-14">
@@ -9,10 +24,10 @@ export function Navbar() {
         </Link>
         <div className="flex items-center gap-4 text-sm">
           <Link href="/scenarios" className="text-slate-300 hover:text-white">Scenarios</Link>
-          <Link href="/dashboard" className="text-slate-300 hover:text-white">Dashboard</Link>
-          <Link href="/auth" className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded-md">
-            Login
-          </Link>
+          {user && (
+            <Link href="/dashboard" className="text-slate-300 hover:text-white">Dashboard</Link>
+          )}
+          <NavbarClient user={user ? { username } : null} />
         </div>
       </div>
     </nav>
