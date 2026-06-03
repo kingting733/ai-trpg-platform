@@ -48,6 +48,8 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   const [actionText, setActionText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [initializing, setInitializing] = useState(false);
+  const [gmThinking, setGmThinking] = useState(false);
+  const [choices, setChoices] = useState<string[]>([]);
   const logEndRef = useRef<HTMLDivElement>(null);
 
   const fetchAll = useCallback(async () => {
@@ -67,7 +69,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     const sortedChars = (chars ?? []).sort((a, b) => b.speed - a.speed);
     setCharacters(sortedChars);
 
-    const myChar = (chars ?? []).find((c) => c.user_id === user.id);
+    const myChar = (chars ?? []).find((c: Character) => c.user_id === user.id);
     setMyCharacter(myChar ?? null);
 
     const { data: logs } = await supabase
@@ -86,19 +88,16 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [storyLog]);
+  }, [storyLog, gmThinking]);
 
-  // Initialize turn order when room starts and all players have characters
   async function initializeTurns() {
     if (!room || initializing) return;
     setInitializing(true);
     const supabase = createClient();
 
-    // Sort players by speed
     const sorted = [...characters].sort((a, b) => b.speed - a.speed);
     if (sorted.length === 0) { setInitializing(false); return; }
 
-    // Update room_players with turn_order
     for (let i = 0; i < sorted.length; i++) {
       await supabase
         .from("room_players")
@@ -107,45 +106,59 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
         .eq("user_id", sorted[i].user_id);
     }
 
-    // Set first player's turn and round 1
     const firstPlayer = sorted[0];
     await supabase
       .from("rooms")
       .update({ current_turn_player_id: firstPlayer.user_id, current_round: 1 })
       .eq("id", room.id);
 
-    // Insert opening story log
     await supabase.from("story_logs").insert({
       room_id: room.id,
       round_number: 1,
       entry_type: "system",
-      content: `The adventure begins! Turn order determined by SPEED: ${sorted.map((c) => c.name).join(" → ")}`,
+      content: `Turn order: ${sorted.map((c) => `${c.name} (SPD ${c.speed})`).join(" → ")}`,
     });
+
+    await fetchAll();
+
+    // GM generates the opening scene
+    setGmThinking(true);
+    try {
+      const res = await fetch("/api/gm/opening", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roomId: room.id }),
+      });
+      const data = await res.json();
+      if (data.choices) setChoices(data.choices);
+    } catch {
+      // non-blocking
+    }
+    setGmThinking(false);
 
     await fetchAll();
     setInitializing(false);
   }
 
-  async function submitAction() {
-    if (!actionText.trim() || !room || !myCharacter || !currentUserId) return;
+  async function submitAction(text?: string) {
+    const finalText = (text ?? actionText).trim();
+    if (!finalText || !room || !myCharacter || !currentUserId) return;
     setSubmitting(true);
+    setChoices([]); // hide choices after first action
     const supabase = createClient();
 
-    // Get current turn info
     const sortedBySpeed = [...characters].sort((a, b) => b.speed - a.speed);
     const currentIndex = sortedBySpeed.findIndex((c) => c.user_id === room.current_turn_player_id);
 
-    // Insert action into story log
     await supabase.from("story_logs").insert({
       room_id: room.id,
       round_number: room.current_round,
       entry_type: "action",
       player_id: currentUserId,
       character_id: myCharacter.id,
-      content: actionText.trim(),
+      content: finalText,
     });
 
-    // Also save to actions table — first get/create a turn record
     const { data: turnData } = await supabase
       .from("turns")
       .select("id")
@@ -173,32 +186,19 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
         room_id: room.id,
         player_id: currentUserId,
         character_id: myCharacter.id,
-        action_text: actionText.trim(),
+        action_text: finalText,
       });
       await supabase.from("turns").update({ status: "completed" }).eq("id", turnId);
     }
 
-    // Call AI GM
-    try {
-      await fetch("/api/gm/respond", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomId: room.id, actionText: actionText.trim() }),
-      });
-    } catch {
-      // GM response failure is non-blocking
-    }
-
-    // Advance to next player
+    // Advance turn first so next player can act
     const nextIndex = currentIndex + 1;
     if (nextIndex < sortedBySpeed.length) {
-      // Next player in this round
       await supabase
         .from("rooms")
         .update({ current_turn_player_id: sortedBySpeed[nextIndex].user_id })
         .eq("id", room.id);
     } else {
-      // New round
       const newRound = room.current_round + 1;
       await supabase
         .from("rooms")
@@ -212,6 +212,20 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
       });
     }
 
+    // GM responds (non-blocking — refresh after)
+    setGmThinking(true);
+    await fetchAll();
+    try {
+      await fetch("/api/gm/respond", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roomId: room.id, actionText: finalText }),
+      });
+    } catch {
+      // non-blocking
+    }
+    setGmThinking(false);
+
     setActionText("");
     await fetchAll();
     setSubmitting(false);
@@ -224,6 +238,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   const currentTurnChar = sortedBySpeed.find((c) => c.user_id === room.current_turn_player_id);
   const allHaveChars = roomPlayers.length > 0 && roomPlayers.every((p) => p.character_id);
   const needsInit = room.status === "in_progress" && room.current_round === 0 && allHaveChars;
+  const hasStarted = room.current_round > 0;
 
   return (
     <div className="grid grid-cols-[1fr_280px] gap-4 h-[calc(100vh-7rem)]">
@@ -251,7 +266,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
         <div className="flex-1 bg-slate-900/50 border border-slate-700 rounded-xl p-4 overflow-y-auto min-h-0 flex flex-col gap-3">
           {storyLog.length === 0 && (
             <p className="text-slate-500 text-sm italic text-center mt-8">
-              {needsInit ? "Ready to start — click the button below!" : "Waiting for all players to create characters..."}
+              {needsInit ? "Ready — click Begin Adventure below!" : "Waiting for all players to create characters..."}
             </p>
           )}
           {storyLog.map((entry) => (
@@ -273,30 +288,55 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
               )}
             </div>
           ))}
+          {gmThinking && (
+            <div className="bg-slate-800 border border-amber-900/30 rounded-lg p-3">
+              <span className="text-xs text-amber-500/60 font-medium uppercase tracking-wider block mb-1">GM</span>
+              <span className="text-slate-500 text-sm italic">thinking...</span>
+            </div>
+          )}
           <div ref={logEndRef} />
         </div>
 
-        {/* Initialize button or action input */}
+        {/* Suggested choices (shown after GM opening, cleared after first action) */}
+        {isMyTurn && choices.length === 3 && hasStarted && (
+          <div className="flex flex-col gap-2 shrink-0">
+            <p className="text-xs text-slate-500 uppercase tracking-wider">Suggested actions — or type your own below</p>
+            <div className="grid grid-cols-1 gap-2">
+              {choices.map((c, i) => (
+                <button
+                  key={i}
+                  onClick={() => submitAction(c)}
+                  disabled={submitting}
+                  className="text-left bg-slate-800 hover:bg-slate-700 border border-slate-600 hover:border-purple-500 text-slate-300 hover:text-white text-sm px-4 py-2.5 rounded-lg transition-colors disabled:opacity-40"
+                >
+                  <span className="text-purple-400 font-bold mr-2">{i + 1}.</span>{c}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Action input */}
         {needsInit && room.host_id === currentUserId ? (
           <button
             onClick={initializeTurns}
             disabled={initializing}
             className="w-full bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white py-3 rounded-xl font-medium shrink-0"
           >
-            {initializing ? "Starting..." : "Begin Adventure (set turn order by SPEED)"}
+            {initializing ? "Starting..." : "Begin Adventure"}
           </button>
-        ) : room.current_round > 0 ? (
+        ) : hasStarted ? (
           <div className="flex gap-3 shrink-0">
             <input
               value={actionText}
               onChange={(e) => setActionText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && isMyTurn) { e.preventDefault(); submitAction(); } }}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && isMyTurn && !submitting) { e.preventDefault(); submitAction(); } }}
               placeholder={isMyTurn ? "Describe your action..." : `Waiting for ${currentTurnChar?.name ?? "..."} to act...`}
               disabled={!isMyTurn || submitting}
               className="flex-1 bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 disabled:opacity-50"
             />
             <button
-              onClick={submitAction}
+              onClick={() => submitAction()}
               disabled={!isMyTurn || !actionText.trim() || submitting}
               className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-6 py-3 rounded-xl font-medium shrink-0"
             >
@@ -305,20 +345,19 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           </div>
         ) : (
           <div className="text-center text-slate-500 text-sm py-3 shrink-0">
-            {allHaveChars ? (needsInit ? "" : "Waiting for host to start...") : "Waiting for all players to create characters..."}
+            {allHaveChars ? "Waiting for host to begin..." : "Waiting for all players to create characters..."}
           </div>
         )}
       </div>
 
       {/* Sidebar */}
       <div className="flex flex-col gap-3 overflow-y-auto">
-        {/* Turn order */}
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 shrink-0">
           <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Turn Order</h3>
           <div className="flex flex-col gap-1.5">
             {sortedBySpeed.length === 0 && <p className="text-slate-500 text-xs">No characters yet</p>}
             {sortedBySpeed.map((c, i) => {
-              const isActive = c.user_id === room.current_turn_player_id && room.current_round > 0;
+              const isActive = c.user_id === room.current_turn_player_id && hasStarted;
               return (
                 <div
                   key={c.id}
@@ -334,9 +373,8 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           </div>
         </div>
 
-        {/* Character cards */}
         {sortedBySpeed.map((c) => {
-          const isActive = c.user_id === room.current_turn_player_id && room.current_round > 0;
+          const isActive = c.user_id === room.current_turn_player_id && hasStarted;
           return (
             <div key={c.id} className={`bg-slate-800/50 border rounded-xl p-4 shrink-0 ${isActive ? "border-purple-700" : "border-slate-700"}`}>
               <h4 className="font-medium text-white text-sm mb-2 truncate">{c.name}</h4>
