@@ -29,6 +29,7 @@ interface Room {
   current_round: number;
   current_turn_player_id: string | null;
   host_id: string;
+  current_choices: string[] | null;
 }
 
 interface RoomPlayer {
@@ -49,7 +50,6 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   const [submitting, setSubmitting] = useState(false);
   const [initializing, setInitializing] = useState(false);
   const [gmThinking, setGmThinking] = useState(false);
-  const [choices, setChoices] = useState<string[]>([]);
   const [endingGame, setEndingGame] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
 
@@ -130,8 +130,6 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roomId: room.id }),
       });
-      const data = await res.json();
-      if (data.choices) setChoices(data.choices);
     } catch {
       // non-blocking
     }
@@ -145,8 +143,9 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     const finalText = (text ?? actionText).trim();
     if (!finalText || !room || !myCharacter || !currentUserId) return;
     setSubmitting(true);
-    setChoices([]); // hide choices after first action
     const supabase = createClient();
+    // Clear choices immediately so other players don't act on stale suggestions
+    await supabase.from("rooms").update({ current_choices: [] }).eq("id", room.id);
 
     const sortedBySpeed = [...characters].sort((a, b) => b.speed - a.speed);
     const currentIndex = sortedBySpeed.findIndex((c) => c.user_id === room.current_turn_player_id);
@@ -217,15 +216,11 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     setGmThinking(true);
     await fetchAll();
     try {
-      const gmRes = await fetch("/api/gm/respond", {
+      await fetch("/api/gm/respond", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roomId: room.id, actionText: finalText }),
       });
-      const gmData = await gmRes.json();
-      if (Array.isArray(gmData.choices) && gmData.choices.length === 3) {
-        setChoices(gmData.choices);
-      }
     } catch {
       // non-blocking
     }
@@ -356,12 +351,12 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           <div ref={logEndRef} />
         </div>
 
-        {/* Suggested choices (shown after GM opening, cleared after first action) */}
-        {isMyTurn && choices.length === 3 && hasStarted && (
+        {/* Suggested choices — stored in DB so all players see them on their turn */}
+        {isMyTurn && (room.current_choices?.length ?? 0) === 3 && hasStarted && (
           <div className="flex flex-col gap-2 shrink-0">
             <p className="text-xs text-slate-500 uppercase tracking-wider">Suggested actions — or type your own below</p>
             <div className="grid grid-cols-1 gap-2">
-              {choices.map((c, i) => (
+              {room.current_choices!.map((c, i) => (
                 <button
                   key={i}
                   onClick={() => submitAction(c)}

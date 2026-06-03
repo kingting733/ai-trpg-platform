@@ -69,6 +69,8 @@ export async function POST(request: Request) {
       content: gmResponse.narration,
     });
 
+    await supabase.from("rooms").update({ current_choices: gmResponse.choices }).eq("id", roomId);
+
     return NextResponse.json({ response: gmResponse.narration, choices: gmResponse.choices });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

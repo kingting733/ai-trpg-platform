@@ -126,13 +126,14 @@ export async function POST(request: Request) {
     characters ?? []
   );
 
-  // Save scene to story_logs as gm_response
   await supabase.from("story_logs").insert({
     room_id: roomId,
     round_number: 1,
     entry_type: "gm_response",
     content: opening.scene,
   });
+
+  await supabase.from("rooms").update({ current_choices: opening.choices }).eq("id", roomId);
 
   return NextResponse.json(opening);
 }
