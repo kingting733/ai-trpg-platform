@@ -133,8 +133,10 @@ CREATE POLICY "Authenticated users can create rooms" ON public.rooms
 CREATE POLICY "Room participants can update room state" ON public.rooms
   FOR UPDATE USING (
     auth.uid() = host_id
-    OR auth.uid() IN (
-      SELECT user_id FROM public.room_players WHERE room_id = rooms.id
+    OR EXISTS (
+      SELECT 1 FROM public.room_players rp
+      WHERE rp.room_id = rooms.id
+        AND rp.user_id = auth.uid()
     )
   );
 
