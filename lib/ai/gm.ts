@@ -1,8 +1,21 @@
+export interface ScenarioGMContext {
+  openingScene: string | null;
+  secretRules: string | null;
+  locations: string[];
+  npcs: string[];
+  threats: string[];
+  traps: string[];
+  keyItems: string[];
+  endingConditions: string | null;
+  gmNotes: string | null;
+}
+
 export interface GMAIInput {
   scenarioTitle: string;
   scenarioBackground: string | null;
   scenarioObjective: string | null;
   scenarioRules: string | null;
+  scenarioGMContext?: ScenarioGMContext | null;
   characters: Array<{ name: string; playerName?: string | null; background: string | null; speed: number; hp: number; str: number; agi: number; int: number; cha: number; luck: number; san: number }>;
   storyLogSoFar: string[];
   currentRound: number;
@@ -90,6 +103,21 @@ export const ROSTER_CONSTRAINT =
   "main character, hero, party member, companion, or player character. Do NOT use generic placeholders " +
   'like "the adventurer" or "you". Every player character you mention must come from this roster.';
 
+function buildGMContextBlock(ctx: ScenarioGMContext): string {
+  const parts: string[] = [];
+  if (ctx.openingScene) parts.push(`Opening Scene Context:\n${ctx.openingScene}`);
+  if (ctx.locations.length) parts.push(`Key Locations:\n${ctx.locations.map((l) => `  - ${l}`).join("\n")}`);
+  if (ctx.npcs.length) parts.push(`NPCs:\n${ctx.npcs.map((n) => `  - ${n}`).join("\n")}`);
+  if (ctx.threats.length) parts.push(`Threats & Enemies:\n${ctx.threats.map((t) => `  - ${t}`).join("\n")}`);
+  if (ctx.traps.length) parts.push(`Traps & Hazards:\n${ctx.traps.map((t) => `  - ${t}`).join("\n")}`);
+  if (ctx.keyItems.length) parts.push(`Key Items:\n${ctx.keyItems.map((i) => `  - ${i}`).join("\n")}`);
+  if (ctx.secretRules) parts.push(`GM Rules & Pacing:\n${ctx.secretRules}`);
+  if (ctx.endingConditions) parts.push(`Victory/Failure Conditions:\n${ctx.endingConditions}`);
+  if (ctx.gmNotes) parts.push(`Additional GM Notes:\n${ctx.gmNotes}`);
+  if (!parts.length) return "";
+  return `\nGM WORLD CONTEXT (never share this with players directly):\n${parts.join("\n\n")}`;
+}
+
 function buildSystemPrompt(input: GMAIInput): string {
   const partySize = input.characters.length;
   const charList = buildPartyRoster(input.characters, input.actingCharacterName);
@@ -97,11 +125,13 @@ function buildSystemPrompt(input: GMAIInput): string {
 
   const recentLog = input.storyLogSoFar.slice(-10).join("\n");
   const diceBlock = buildDiceDirective(input);
+  const gmCtxBlock = input.scenarioGMContext ? buildGMContextBlock(input.scenarioGMContext) : "";
 
   return `You are an AI Game Master running a multiplayer TRPG text adventure called "${input.scenarioTitle}".
 ${input.scenarioBackground ? `\nBackground: ${input.scenarioBackground}` : ""}
 ${input.scenarioObjective ? `\nObjective: ${input.scenarioObjective}` : ""}
 ${input.scenarioRules ? `\nSpecial Rules: ${input.scenarioRules}` : ""}
+${gmCtxBlock}
 
 ${ROSTER_CONSTRAINT}
 

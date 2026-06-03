@@ -9,8 +9,10 @@ interface Scenario {
   title: string;
   genre: string;
   description: string;
-  status: "draft" | "published" | "archived";
+  status: "draft" | "published";
   max_players: number;
+  difficulty: string | null;
+  estimated_play_time: number | null;
   created_at: string;
 }
 
@@ -18,24 +20,43 @@ export default function DashboardPage() {
   const router = useRouter();
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [loading, setLoading] = useState(true);
+  const [toggling, setToggling] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function load() {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/auth"); return; }
-      const { data } = await supabase
-        .from("scenarios")
-        .select("*")
-        .eq("creator_id", user.id)
-        .order("created_at", { ascending: false });
-      setScenarios(data ?? []);
-      setLoading(false);
+  async function load() {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { router.push("/auth"); return; }
+    const { data } = await supabase
+      .from("scenarios")
+      .select("id, title, genre, description, status, max_players, difficulty, estimated_play_time, created_at")
+      .eq("creator_id", user.id)
+      .order("created_at", { ascending: false });
+    setScenarios(data ?? []);
+    setLoading(false);
+  }
+
+  useEffect(() => { load(); }, [router]);
+
+  async function togglePublish(scenario: Scenario) {
+    setToggling(scenario.id);
+    const supabase = createClient();
+    const newStatus = scenario.status === "published" ? "draft" : "published";
+    const { error } = await supabase
+      .from("scenarios")
+      .update({ status: newStatus })
+      .eq("id", scenario.id);
+    if (!error) {
+      setScenarios((prev) => prev.map((s) => s.id === scenario.id ? { ...s, status: newStatus } : s));
     }
-    load();
-  }, [router]);
+    setToggling(null);
+  }
 
   const published = scenarios.filter((s) => s.status === "published").length;
+
+  const playTime = (min: number | null) => {
+    if (!min) return null;
+    return min >= 60 ? `${Math.round(min / 60 * 10) / 10}h` : `${min}min`;
+  };
 
   return (
     <div>
@@ -72,24 +93,52 @@ export default function DashboardPage() {
           <div className="p-12 text-center text-slate-500">
             <div className="text-4xl mb-3">📖</div>
             <p>No scenarios yet. Create your first one!</p>
-            <Link href="/scenarios/new" className="text-purple-400 hover:text-purple-300 text-sm mt-2 inline-block">Create Scenario →</Link>
+            <Link href="/scenarios/new" className="text-purple-400 hover:text-purple-300 text-sm mt-2 inline-block">
+              Create Scenario →
+            </Link>
           </div>
         ) : (
           <div className="divide-y divide-slate-700">
             {scenarios.map((s) => (
-              <div key={s.id} className="p-5 flex items-center gap-4">
+              <div key={s.id} className="p-5 flex items-start gap-4">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
                     <span className="font-medium text-white truncate">{s.title}</span>
                     <span className={`text-xs px-2 py-0.5 rounded border shrink-0 ${
                       s.status === "published"
                         ? "bg-green-900/40 text-green-300 border-green-800"
                         : "bg-slate-700 text-slate-400 border-slate-600"
-                    }`}>{s.status}</span>
+                    }`}>
+                      {s.status}
+                    </span>
                   </div>
-                  <p className="text-slate-400 text-sm truncate">{s.description}</p>
+                  <div className="flex flex-wrap gap-3 text-xs text-slate-500 mb-1">
+                    <span>{s.genre}</span>
+                    {s.difficulty && <span>{s.difficulty}</span>}
+                    <span>up to {s.max_players} players</span>
+                    {s.estimated_play_time && <span>{playTime(s.estimated_play_time)}</span>}
+                  </div>
+                  <p className="text-slate-400 text-sm line-clamp-1">{s.description}</p>
                 </div>
-                <span className="text-xs text-slate-500 shrink-0">{s.genre}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Link
+                    href={`/scenarios/${s.id}/edit`}
+                    className="text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    Edit
+                  </Link>
+                  <button
+                    onClick={() => togglePublish(s)}
+                    disabled={toggling === s.id}
+                    className={`text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 ${
+                      s.status === "published"
+                        ? "bg-slate-700 hover:bg-red-900/40 text-slate-300 hover:text-red-300"
+                        : "bg-purple-700 hover:bg-purple-600 text-white"
+                    }`}
+                  >
+                    {toggling === s.id ? "..." : s.status === "published" ? "Unpublish" : "Publish"}
+                  </button>
+                </div>
               </div>
             ))}
           </div>

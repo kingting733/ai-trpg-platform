@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateGMResponse, GMAIInput } from "@/lib/ai/gm";
+import { generateGMResponse, GMAIInput, ScenarioGMContext } from "@/lib/ai/gm";
 import { createClient } from "@/lib/supabase/server";
 import { resolveAction } from "@/lib/game/resolution";
 
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   // Verify caller is a room participant and it's actually their turn
   const { data: room } = await supabase
     .from("rooms")
-    .select("*, scenarios(title, background, objective, rules)")
+    .select("*, scenarios(title, background, objective, rules, opening_scene, secret_rules, locations, npcs, threats, traps, key_items, ending_conditions, gm_notes)")
     .eq("id", roomId)
     .single();
   if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -140,11 +140,24 @@ export async function POST(request: Request) {
   }));
 
   const scenario = (room as any).scenarios;
+  const gmContext: ScenarioGMContext | null = scenario ? {
+    openingScene: scenario.opening_scene ?? null,
+    secretRules: scenario.secret_rules ?? null,
+    locations: Array.isArray(scenario.locations) ? scenario.locations : [],
+    npcs: Array.isArray(scenario.npcs) ? scenario.npcs : [],
+    threats: Array.isArray(scenario.threats) ? scenario.threats : [],
+    traps: Array.isArray(scenario.traps) ? scenario.traps : [],
+    keyItems: Array.isArray(scenario.key_items) ? scenario.key_items : [],
+    endingConditions: scenario.ending_conditions ?? null,
+    gmNotes: scenario.gm_notes ?? null,
+  } : null;
+
   const input: GMAIInput = {
     scenarioTitle: scenario?.title ?? "Unknown Scenario",
     scenarioBackground: scenario?.background ?? null,
     scenarioObjective: scenario?.objective ?? null,
     scenarioRules: scenario?.rules ?? null,
+    scenarioGMContext: gmContext,
     characters: partyForAI,
     storyLogSoFar,
     currentRound: room.current_round,
