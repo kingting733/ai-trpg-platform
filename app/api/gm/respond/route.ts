@@ -3,6 +3,14 @@ import { generateGMResponse, GMAIInput, ScenarioGMContext } from "@/lib/ai/gm";
 import { createClient } from "@/lib/supabase/server";
 import { resolveAction } from "@/lib/game/resolution";
 import { detectEnding } from "@/lib/ai/detect-ending";
+import {
+  decomposeObjectives,
+  checkObjectiveProgress,
+  allRequiredDone,
+  generateVictoryNarration,
+  Objective,
+  ObjectiveProgress,
+} from "@/lib/ai/objectives";
 
 export async function POST(request: Request) {
   const supabase = createClient();
@@ -192,30 +200,93 @@ export async function POST(request: Request) {
     });
 
     // === ENDING DETECTION ===
-    // Check 1: all party members dead → forced failure ending
+    // Check 1: all party members dead → forced failure ending (pure code).
     const allDead = sortedBySpeed.every((c: any) => c.hp <= 0);
 
-    // Check 2: AI-based story ending (only if scenario has ending_conditions)
-    const tpdTitle = scenario?.language === "zh-TW" || scenario?.language === "zh-CN"
-      ? "全員陣亡" : "Total Party Defeat";
-    const tpdSummary = scenario?.language === "zh-TW" || scenario?.language === "zh-CN"
+    const isZh = scenario?.language === "zh-TW" || scenario?.language === "zh-CN";
+    const tpdTitle = isZh ? "全員陣亡" : "Total Party Defeat";
+    const tpdSummary = isZh
       ? "所有人都已倒下。黑暗取得了最終的勝利，冒險就此以失敗告終。"
       : "The entire party has fallen. The darkness claims its victory and the adventure ends in defeat.";
 
-    let ending = allDead
-      ? {
-          triggered: true as const,
-          type: "failure" as const,
-          title: tpdTitle,
-          summary: tpdSummary,
+    type EndingShape = { triggered: boolean; type: any; title: string | null; summary: string | null };
+    let ending: EndingShape = { triggered: false, type: null, title: null, summary: null };
+    const actingName = resolvedActor?.name ?? "Unknown";
+
+    if (allDead) {
+      ending = { triggered: true, type: "failure", title: tpdTitle, summary: tpdSummary };
+    } else if (scenario?.ending_conditions) {
+      // === DETERMINISTIC OBJECTIVE TRACKER ===
+      // Progress is stored as PERMANENT FLAGS on the room — the AI never has to
+      // remember earlier turns. It only classifies the current action against
+      // the still-incomplete objectives; whether the game ends is pure code.
+
+      // 1. Ensure the room has a decomposed objective checklist (build once).
+      let objectives: Objective[] = Array.isArray(room.objectives) ? room.objectives : [];
+      if (objectives.length === 0) {
+        objectives = await decomposeObjectives(scenario.ending_conditions, scenario?.language ?? null);
+        if (objectives.length > 0) {
+          await supabase.from("rooms").update({ objectives }).eq("id", roomId);
         }
-      : await detectEnding(
-          scenario?.ending_conditions ?? "",
+      }
+
+      if (objectives.length > 0) {
+        const progress: ObjectiveProgress =
+          room.objective_progress && typeof room.objective_progress === "object"
+            ? { ...room.objective_progress }
+            : {};
+
+        // 2. Only ask the AI about objectives not already flagged done.
+        const incomplete = objectives.filter((o) => progress[o.id]?.done !== true);
+        const newlyDone = await checkObjectiveProgress(
+          incomplete,
+          storyLogSoFar,
+          actionText,
+          actingName,
+          gmResponse.narration
+        );
+
+        // 3. Persist newly-completed objectives as PERMANENT flags.
+        if (newlyDone.length > 0) {
+          for (const id of newlyDone) {
+            progress[id] = { done: true, round: room.current_round, character: actingName };
+          }
+          await supabase.from("rooms").update({ objective_progress: progress }).eq("id", roomId);
+
+          // Visible feedback in the story log for each completed objective.
+          for (const id of newlyDone) {
+            const obj = objectives.find((o) => o.id === id);
+            if (!obj) continue;
+            await supabase.from("story_logs").insert({
+              room_id: roomId,
+              round_number: room.current_round,
+              entry_type: "system",
+              content: isZh ? `✓ 目標達成：${obj.text}` : `✓ Objective complete: ${obj.text}`,
+            });
+          }
+        }
+
+        // 4. Pure-code ending decision: all REQUIRED objectives flagged done.
+        if (allRequiredDone(objectives, progress)) {
+          const victory = await generateVictoryNarration(
+            scenario?.title ?? "the adventure",
+            objectives,
+            storyLogSoFar,
+            scenario?.language ?? null
+          );
+          ending = { triggered: true, type: victory.type, title: victory.title, summary: victory.summary };
+        }
+      } else {
+        // No checklist could be built — fall back to legacy free-text detection.
+        ending = await detectEnding(
+          scenario.ending_conditions,
           storyLogSoFar,
           actionText,
           gmResponse.narration,
           scenario?.language ?? null
         );
+      }
+    }
 
     if (ending.triggered) {
       // Log the ending as a system entry visible in the story

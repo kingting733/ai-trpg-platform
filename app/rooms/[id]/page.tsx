@@ -49,6 +49,8 @@ interface Room {
   ending_type: string | null;
   ending_title: string | null;
   ending_summary: string | null;
+  objectives: { id: string; text: string; required: boolean }[] | null;
+  objective_progress: Record<string, { done: boolean; round: number; character: string | null }> | null;
 }
 
 interface RoomPlayer {
@@ -365,6 +367,29 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
 
       {/* Sidebar */}
       <div className="flex flex-col gap-3 overflow-y-auto">
+        {/* Objective checklist — deterministic progress, persisted as flags */}
+        {hasStarted && (room.objectives?.length ?? 0) > 0 && (
+          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 shrink-0">
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">任務目標</h3>
+            <div className="flex flex-col gap-1.5">
+              {room.objectives!.map((o) => {
+                const done = room.objective_progress?.[o.id]?.done === true;
+                return (
+                  <div key={o.id} className="flex items-start gap-2 text-xs">
+                    <span className={`shrink-0 mt-0.5 ${done ? "text-green-400" : "text-slate-600"}`}>
+                      {done ? "✓" : "○"}
+                    </span>
+                    <span className={`flex-1 ${done ? "text-green-300" : "text-slate-300"}`}>
+                      {o.text}
+                      {!o.required && <span className="text-slate-500 ml-1">（選填）</span>}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 shrink-0">
           <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">行動順序</h3>
           <div className="flex flex-col gap-1.5">
