@@ -121,8 +121,13 @@ export default function NewScenarioPage() {
         `已從「${file.name}」匯入。AI 已預填以下欄位 — 請逐一檢閱並編輯，然後選擇儲存為草稿或發佈。` +
           (json.truncated ? "（文件過長，僅分析了前段內容。）" : "")
       );
-    } catch {
-      setImportError("Import failed. Please try again.");
+    } catch (e: any) {
+      const msg = e?.message ?? "";
+      setImportError(
+        msg.includes("fetch") || msg === "" || msg.includes("Failed to fetch") || msg.includes("network")
+          ? "匯入逾時或網路錯誤。文件過長時分析需較多時間，請再試一次。"
+          : `匯入失敗：${msg}`
+      );
     } finally {
       setImporting(false);
     }

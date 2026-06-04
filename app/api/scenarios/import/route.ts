@@ -4,7 +4,7 @@ import { analyzeScenarioDocument } from "@/lib/ai/import-scenario";
 
 // File parsing (mammoth) needs the Node runtime, not edge.
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const MAX_BYTES = 2 * 1024 * 1024; // 2MB
 
