@@ -59,8 +59,8 @@ async function generateOpening(
   const langBlock = buildLanguageInstruction(language);
 
   const openingInstruction = gmContext?.openingScene
-    ? `Use the "Opening Scene to narrate" above as the basis for your opening narration — expand it into a vivid 3-4 sentence scene that introduces all party members.`
-    : `Write the opening scene. Describe the environment vividly in 3-4 sentences, placing all party members in the world.`;
+    ? `Use the "Opening Scene to narrate" above as the basis for your opening narration — expand it into a vivid 6-8 sentence scene, rich in atmosphere and sensory detail, that introduces all party members.`
+    : `Write the opening scene. Describe the environment vividly in 6-8 sentences, rich in atmosphere and sensory detail, placing all party members in the world.`;
 
   const systemPrompt = `You are an AI Game Master starting a multiplayer TRPG adventure called "${scenarioTitle}".
 ${langBlock}${background ? `Background: ${background}` : ""}
@@ -77,6 +77,8 @@ NARRATION RULES:
 - This is a MULTIPLAYER game. Narrate in THIRD PERSON as a neutral Game Master.
 - NEVER use "you". Refer to each character by their exact roster name, or collectively as "the party"/"the group".
 - Introduce all roster characters in the opening scene by name.
+- TONE & ATMOSPHERE: Match the mood of the genre and setting, using sensory detail to make the world vivid and immersive.
+- INFORMATION GATING: Set the scene and hook the players, but do NOT reveal the plot, clues, secrets, or twists up front — those are uncovered through play.
 
 ${openingInstruction} Then suggest exactly 3 possible first actions written for ${firstCharName} in third person (e.g., "${firstCharName} examines the door" not "Examine the door").
 
@@ -110,7 +112,7 @@ Respond ONLY with valid JSON in this exact format (no markdown, no extra text):
           model,
           system: systemPrompt,
           messages: [{ role: "user", content: userMessage }],
-          max_tokens: 500,
+          max_tokens: 900,
         }),
       });
       const data = await res.json();
@@ -123,7 +125,7 @@ Respond ONLY with valid JSON in this exact format (no markdown, no extra text):
         body: JSON.stringify({
           model,
           messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userMessage }],
-          max_tokens: 500,
+          max_tokens: 900,
           temperature: 0.85,
         }),
       });
