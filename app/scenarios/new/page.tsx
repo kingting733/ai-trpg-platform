@@ -140,7 +140,7 @@ export default function NewScenarioPage() {
 
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push("/auth"); return; }
+    if (!user) { router.push("/login"); return; }
 
     const tagList = tags.split(",").map((t) => t.trim()).filter(Boolean);
     const ept = estimatedPlayTime ? parseInt(estimatedPlayTime) : null;

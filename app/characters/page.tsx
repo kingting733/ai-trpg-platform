@@ -50,7 +50,7 @@ export default function CharactersPage() {
   async function loadCards() {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push("/auth"); return; }
+    if (!user) { router.push("/login"); return; }
     const { data } = await supabase
       .from("character_cards")
       .select("*")

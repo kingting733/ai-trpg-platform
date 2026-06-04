@@ -35,15 +35,22 @@ export default function HubPage() {
   const [activeRooms, setActiveRooms] = useState<ActiveRoom[]>([]);
 
   useEffect(() => {
-    const name = localStorage.getItem("trpg_username");
-    if (!name) { router.push("/play"); return; }
-    setUsername(name);
-
     async function loadData() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
 
-      // Load scenarios
+      // Middleware handles redirect, but belt-and-suspenders:
+      if (!user) { router.push("/login?next=/play/hub"); return; }
+
+      // Get username from public.users (no localStorage dependency)
+      const { data: profile } = await supabase
+        .from("users")
+        .select("username")
+        .eq("id", user.id)
+        .maybeSingle();
+      setUsername(profile?.username ?? user.email?.split("@")[0] ?? "Adventurer");
+
+      // Load published scenarios
       const { data: scenarioData } = await supabase
         .from("scenarios")
         .select("id, title, genre, description, max_players")
@@ -53,25 +60,22 @@ export default function HubPage() {
       setLoadingScenarios(false);
 
       // Load active rooms the user is in
-      if (user) {
-        const { data: rpData } = await supabase
-          .from("room_players")
-          .select("room_id")
-          .eq("user_id", user.id);
+      const { data: rpData } = await supabase
+        .from("room_players")
+        .select("room_id")
+        .eq("user_id", user.id);
 
-        const roomIds = (rpData ?? []).map((r: { room_id: string }) => r.room_id);
-        if (roomIds.length > 0) {
-          // Only show rooms from the last 24 hours to avoid stale clutter
-          const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-          const { data: roomData } = await supabase
-            .from("rooms")
-            .select("id, name, room_code, status, scenarios(title, genre)")
-            .in("id", roomIds)
-            .in("status", ["waiting", "in_progress"])
-            .gte("created_at", cutoff)
-            .order("created_at", { ascending: false });
-          setActiveRooms((roomData as unknown as ActiveRoom[]) ?? []);
-        }
+      const roomIds = (rpData ?? []).map((r: { room_id: string }) => r.room_id);
+      if (roomIds.length > 0) {
+        const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const { data: roomData } = await supabase
+          .from("rooms")
+          .select("id, name, room_code, status, scenarios(title, genre)")
+          .in("id", roomIds)
+          .in("status", ["waiting", "in_progress"])
+          .gte("created_at", cutoff)
+          .order("created_at", { ascending: false });
+        setActiveRooms((roomData as unknown as ActiveRoom[]) ?? []);
       }
     }
     loadData();
@@ -84,7 +88,7 @@ export default function HubPage() {
         <h1 className="text-3xl font-bold text-white">{username || "..."}</h1>
       </div>
 
-      {/* Active rooms — shown prominently if player has one */}
+      {/* Active rooms */}
       {activeRooms.length > 0 && (
         <div className="mb-8">
           <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">

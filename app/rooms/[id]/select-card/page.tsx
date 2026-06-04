@@ -40,7 +40,7 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
     async function load() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/play"); return; }
+      if (!user) { router.push("/login"); return; }
 
       // If this player already has a character in this room, skip straight to game
       const { data: existing } = await supabase
@@ -70,7 +70,7 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
     const card = cards.find((c) => c.id === selectedId)!;
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push("/play"); return; }
+    if (!user) { router.push("/login"); return; }
 
     // Insert the card's stats as a character in this room
     const { data: newChar, error: insertErr } = await supabase

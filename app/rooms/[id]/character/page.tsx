@@ -42,7 +42,7 @@ export default function CharacterCreationPage({ params }: { params: { id: string
     async function check() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/play"); return; }
+      if (!user) { router.push("/login"); return; }
       // If character already exists for this room, go straight to game
       const { data } = await supabase
         .from("characters")
@@ -78,7 +78,7 @@ export default function CharacterCreationPage({ params }: { params: { id: string
 
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push("/play"); return; }
+    if (!user) { router.push("/login"); return; }
 
     const { error: insertError } = await supabase.from("characters").insert({
       user_id: user.id,

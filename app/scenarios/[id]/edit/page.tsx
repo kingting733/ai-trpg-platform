@@ -56,7 +56,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
     async function load() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/auth"); return; }
+      if (!user) { router.push("/login"); return; }
 
       const { data } = await supabase
         .from("scenarios")
@@ -109,7 +109,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
 
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push("/auth"); return; }
+    if (!user) { router.push("/login"); return; }
 
     const tagList = tags.split(",").map((t) => t.trim()).filter(Boolean);
     const ept = estimatedPlayTime ? parseInt(estimatedPlayTime) : null;

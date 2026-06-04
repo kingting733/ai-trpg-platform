@@ -20,7 +20,7 @@ export default function HomePage() {
           Browse Scenarios
         </Link>
         <Link
-          href="/auth"
+          href="/login"
           className="border border-slate-600 hover:border-slate-400 text-slate-300 hover:text-white px-6 py-3 rounded-lg font-medium text-lg"
         >
           Get Started

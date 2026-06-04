@@ -28,7 +28,7 @@ export default function LobbyPage({ params }: { params: { id: string } }) {
   const fetchData = useCallback(async () => {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push("/play"); return; }
+    if (!user) { router.push("/login"); return; }
     setCurrentUserId(user.id);
 
     const { data: roomData } = await supabase

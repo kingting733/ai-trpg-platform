@@ -75,7 +75,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   const fetchAll = useCallback(async () => {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push("/play"); return; }
+    if (!user) { router.push("/login"); return; }
     setCurrentUserId(user.id);
 
     const { data: roomData } = await supabase.from("rooms").select("*").eq("id", params.id).single();

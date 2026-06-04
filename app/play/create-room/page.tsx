@@ -26,7 +26,7 @@ function CreateRoomInner() {
     setError(null);
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push("/play"); return; }
+    if (!user) { router.push("/login"); return; }
 
     // Validate scenario exists in DB (catches both missing seeds and invalid IDs)
     const { data: scenarioCheck } = await supabase

@@ -25,7 +25,7 @@ export default function DashboardPage() {
   async function load() {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push("/auth"); return; }
+    if (!user) { router.push("/login"); return; }
     const { data } = await supabase
       .from("scenarios")
       .select("id, title, genre, description, status, max_players, difficulty, estimated_play_time, created_at")
