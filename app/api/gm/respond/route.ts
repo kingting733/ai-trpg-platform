@@ -119,7 +119,7 @@ export async function POST(request: Request) {
     .select("entry_type, content, characters(name)")
     .eq("room_id", roomId)
     .order("created_at", { ascending: false })
-    .limit(15);
+    .limit(20);
 
   const storyLogSoFar = (logs ?? [])
     .reverse()

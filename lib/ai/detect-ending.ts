@@ -61,9 +61,9 @@ async function callAI(system: string, user: string): Promise<string> {
 }
 
 /**
- * Ask the AI whether the most recent action + GM narration satisfies a
- * defined ending condition. Returns NULL_RESULT on any error so the game
- * never crashes if the detection call fails.
+ * Ask the AI whether the cumulative story so far satisfies a defined ending
+ * condition. Evaluates the full recent history, not just the latest action.
+ * Returns NULL_RESULT on any error so the game never crashes.
  *
  * Skip calling this if endingConditions is blank — saves a round-trip.
  */
@@ -94,30 +94,36 @@ ${langRule}
 SCENARIO ENDING CONDITIONS (defined by the creator):
 ${endingConditions}
 
-Determine if the latest player action and GM narration have ACTUALLY completed one of the ending conditions.
+Review the full story history below and determine whether ALL required conditions for an ending have been CUMULATIVELY satisfied — across all players and all turns shown, not just the most recent action.
 
 Rules:
-- Be CONSERVATIVE. Only return triggered=true if the ending is clearly and unmistakably achieved.
+- Endings in multiplayer games are often achieved across multiple turns by different players. Check whether the COMBINED actions in the story history satisfy the condition, not only the last action.
+- Only trigger if the condition is clearly and unmistakably satisfied based on the story shown.
 - Do NOT trigger on partial progress, foreshadowing, near-misses, or the GM merely mentioning a related concept.
 - A failure ending (party wiped, quest failed, time ran out) is also a valid trigger.
-- If the action is unrelated to any ending condition, return triggered=false.
+- If the conditions are NOT fully met yet, return triggered=false even if players are close.
 
 Return ONLY valid JSON, no markdown, no extra text:
 {"triggered":boolean,"type":"best"|"normal"|"bad"|"failure"|null,"title":string|null,"summary":string|null}
 
 Field rules:
-- triggered: true only if an ending condition is clearly met
+- triggered: true only if ALL required ending conditions are clearly met by the cumulative story
 - type: "best" = perfect/ideal win, "normal" = standard success, "bad" = pyrrhic/bittersweet success, "failure" = defeat/death/quest failed
 - title: 4-7 word ending title written in the scenario language — null if not triggered
 - summary: 2-3 sentences describing how the adventure concluded, written in the scenario language for a closing screen — null if not triggered`;
 
-  const user = `RECENT STORY:
-${recentLog.slice(-6).join("\n")}
+  // Send up to 12 lines of history (increased from 6 to avoid dropping earlier key actions).
+  // The current action is already inside recentLog (saved before this call), so we do NOT
+  // add it again as a separate field — that was causing the AI to treat only the current
+  // action as relevant and ignore cumulative completion.
+  const historyLines = recentLog.slice(-12).join("\n");
+  const user = `STORY HISTORY (most recent at the bottom):
+${historyLines}
 
-LATEST PLAYER ACTION: ${playerAction}
-LATEST GM NARRATION: ${gmNarration}
+LATEST GM NARRATION (responding to the last player action):
+${gmNarration}
 
-Has an ending condition been met?`;
+Have the ending conditions been cumulatively met?`;
 
   try {
     let raw = await callAI(system, user);
