@@ -4,6 +4,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 // Routes that require a logged-in user.
 // Middleware redirects to /login?next=<original-path> when unauthenticated.
 const PROTECTED_PREFIXES = [
+  "/admin",
   "/characters",
   "/dashboard",
   "/scenarios/new",
