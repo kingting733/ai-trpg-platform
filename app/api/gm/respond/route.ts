@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { generateGMResponse, GMAIInput, ScenarioGMContext } from "@/lib/ai/gm";
 import { createClient } from "@/lib/supabase/server";
 import { resolveAction } from "@/lib/game/resolution";
+import { detectEnding } from "@/lib/ai/detect-ending";
 
 export async function POST(request: Request) {
   const supabase = createClient();
@@ -59,11 +60,9 @@ export async function POST(request: Request) {
     const newSan = Math.max(0, resolvedActor.san + roll.san_change);
     actorDied = newHp <= 0;
     actorBroke = newSan <= 0;
-    // Apply consequence to the acting character's own row.
     await supabase.from("characters")
       .update({ hp: newHp, san: newSan })
       .eq("id", resolvedActor.id);
-    // Reflect locally so turn-skipping below sees the updated state.
     resolvedActor.hp = newHp;
     resolvedActor.san = newSan;
   }
@@ -84,7 +83,6 @@ export async function POST(request: Request) {
   let nextRound = room.current_round;
   let nextPlayerId: string;
   let nextActor = sortedBySpeed[0];
-  // Walk forward through the speed order, wrapping and incrementing round, to the next living actor.
   for (let step = 1; step <= sortedBySpeed.length; step++) {
     const idx = currentIndex + step;
     if (idx >= sortedBySpeed.length && nextRound === room.current_round) {
@@ -98,7 +96,7 @@ export async function POST(request: Request) {
   }
   nextPlayerId = nextActor?.user_id ?? user.id;
 
-  // Clear old choices immediately so the previous player's suggestions never linger
+  // Clear old choices immediately
   await supabase.from("rooms").update({
     current_turn_player_id: nextPlayerId,
     current_round: nextRound,
@@ -192,7 +190,54 @@ export async function POST(request: Request) {
       content: gmResponse.narration,
     });
 
-    // Choices belong to the NEXT acting player — tag them so the UI can verify
+    // === ENDING DETECTION ===
+    // Check 1: all party members dead → forced failure ending
+    const allDead = sortedBySpeed.every((c: any) => c.hp <= 0);
+
+    // Check 2: AI-based story ending (only if scenario has ending_conditions)
+    let ending = allDead
+      ? {
+          triggered: true as const,
+          type: "failure" as const,
+          title: "Total Party Defeat",
+          summary: "The entire party has fallen. The darkness claims its victory and the adventure ends in defeat.",
+        }
+      : await detectEnding(
+          scenario?.ending_conditions ?? "",
+          storyLogSoFar,
+          actionText,
+          gmResponse.narration
+        );
+
+    if (ending.triggered) {
+      // Log the ending as a system entry visible in the story
+      await supabase.from("story_logs").insert({
+        room_id: roomId,
+        round_number: room.current_round,
+        entry_type: "system",
+        content: `⚑ THE END — ${ending.title ?? "Adventure Complete"}`,
+      });
+
+      // Mark room as completed with ending metadata
+      await supabase.from("rooms").update({
+        status: "completed",
+        ending_type: ending.type,
+        ending_title: ending.title,
+        ending_summary: ending.summary,
+      }).eq("id", roomId);
+
+      return NextResponse.json({
+        response: gmResponse.narration,
+        gameEnded: true,
+        ending: {
+          type: ending.type,
+          title: ending.title,
+          summary: ending.summary,
+        },
+      });
+    }
+
+    // No ending triggered — update choices for next player as normal
     await supabase.from("rooms").update({
       current_choices: gmResponse.choices,
       current_choices_for_player_id: nextPlayerId,
@@ -202,6 +247,7 @@ export async function POST(request: Request) {
       response: gmResponse.narration,
       choices: gmResponse.choices,
       choicesForPlayerId: nextPlayerId,
+      gameEnded: false,
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

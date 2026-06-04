@@ -46,6 +46,9 @@ interface Room {
   host_id: string;
   current_choices: string[] | null;
   current_choices_for_player_id: string | null;
+  ending_type: string | null;
+  ending_title: string | null;
+  ending_summary: string | null;
 }
 
 interface RoomPlayer {
@@ -194,38 +197,9 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
 
   if (!room) return <div className="text-center text-slate-400 py-20">Loading room...</div>;
 
-  // Game over screen
+  // Ending screen
   if (room.status === "completed") {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[70vh] gap-6 text-center">
-        <div className="text-5xl">⚔</div>
-        <div>
-          <h1 className="text-3xl font-bold text-white mb-2">Adventure Complete</h1>
-          <p className="text-slate-400">The story of <span className="text-purple-400">{room.name}</span> has ended.</p>
-        </div>
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 w-full max-w-lg text-left">
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Story Summary</h3>
-          <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
-            {storyLog.filter(e => e.entry_type !== "system").map((entry) => (
-              <div key={entry.id} className="text-sm">
-                {entry.entry_type === "action" && (
-                  <p className="text-slate-400"><span className="text-purple-400">{entry.characters?.name ?? "Player"}:</span> {entry.content}</p>
-                )}
-                {entry.entry_type === "gm_response" && (
-                  <p className="text-slate-300 italic">{entry.content}</p>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-        <button
-          onClick={() => router.push("/play/hub")}
-          className="bg-purple-600 hover:bg-purple-500 text-white px-8 py-3 rounded-lg font-medium"
-        >
-          Back to Hub
-        </button>
-      </div>
-    );
+    return <EndingScreen room={room} storyLog={storyLog} onHub={() => router.push("/play/hub")} onScenarios={() => router.push("/scenarios")} onDashboard={() => router.push("/dashboard")} />;
   }
 
   const iAmDown = (myCharacter?.hp ?? 1) <= 0;
@@ -424,6 +398,108 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     </div>
   );
 }
+
+// ─── Ending Screen ────────────────────────────────────────────────────────────
+
+const ENDING_META: Record<string, { icon: string; badge: string; badgeCls: string; borderCls: string }> = {
+  best:    { icon: "✦", badge: "Best Ending",    badgeCls: "bg-amber-900/60 text-amber-300 border-amber-700",    borderCls: "border-amber-700/60" },
+  normal:  { icon: "✔", badge: "Victory",        badgeCls: "bg-green-900/60 text-green-300 border-green-700",    borderCls: "border-green-700/60" },
+  bad:     { icon: "↗", badge: "Bittersweet End", badgeCls: "bg-orange-900/60 text-orange-300 border-orange-700", borderCls: "border-orange-700/60" },
+  failure: { icon: "✕", badge: "Defeat",         badgeCls: "bg-red-900/60 text-red-300 border-red-700",         borderCls: "border-red-700/60" },
+};
+
+function EndingScreen({
+  room, storyLog, onHub, onScenarios, onDashboard,
+}: {
+  room: Room;
+  storyLog: StoryLogEntry[];
+  onHub: () => void;
+  onScenarios: () => void;
+  onDashboard: () => void;
+}) {
+  const hasEnding = !!room.ending_title;
+  const meta = ENDING_META[room.ending_type ?? ""] ?? ENDING_META.normal;
+
+  return (
+    <div className="flex flex-col items-center justify-start min-h-[70vh] gap-6 py-10 max-w-2xl mx-auto">
+      {/* Icon + type badge */}
+      <div className="flex flex-col items-center gap-3">
+        <div className={`w-16 h-16 rounded-full flex items-center justify-center text-3xl border-2 ${hasEnding ? meta.borderCls : "border-slate-600"} bg-slate-800`}>
+          {hasEnding ? meta.icon : "⚔"}
+        </div>
+        {hasEnding && (
+          <span className={`text-xs px-3 py-1 rounded-full border font-semibold uppercase tracking-wider ${meta.badgeCls}`}>
+            {meta.badge}
+          </span>
+        )}
+      </div>
+
+      {/* Title + room name */}
+      <div className="text-center">
+        <h1 className="text-3xl font-bold text-white mb-1">
+          {hasEnding ? room.ending_title : "Adventure Complete"}
+        </h1>
+        <p className="text-slate-400 text-sm">
+          The story of <span className="text-purple-400">{room.name}</span> has ended.
+        </p>
+      </div>
+
+      {/* Ending summary */}
+      {room.ending_summary && (
+        <div className={`w-full bg-slate-800/60 border rounded-xl p-5 ${meta.borderCls}`}>
+          <p className="text-slate-200 leading-relaxed text-sm">{room.ending_summary}</p>
+        </div>
+      )}
+
+      {/* Story log (last 10 non-system entries) */}
+      <div className="w-full bg-slate-900/50 border border-slate-700 rounded-xl p-5">
+        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Story Recap</h3>
+        <div className="flex flex-col gap-2 max-h-56 overflow-y-auto">
+          {storyLog
+            .filter((e) => e.entry_type !== "system")
+            .slice(-10)
+            .map((entry) => (
+              <div key={entry.id} className="text-sm">
+                {entry.entry_type === "action" && (
+                  <p className="text-slate-400">
+                    <span className="text-purple-400">{entry.characters?.name ?? "Player"}:</span>{" "}
+                    {entry.content}
+                  </p>
+                )}
+                {entry.entry_type === "gm_response" && (
+                  <p className="text-slate-300 italic">{entry.content}</p>
+                )}
+              </div>
+            ))}
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex gap-3 w-full">
+        <button
+          onClick={onScenarios}
+          className="flex-1 bg-purple-600 hover:bg-purple-500 text-white py-3 rounded-lg font-medium transition-colors"
+        >
+          Browse Scenarios
+        </button>
+        <button
+          onClick={onHub}
+          className="flex-1 border border-slate-600 hover:border-slate-400 text-slate-300 hover:text-white py-3 rounded-lg font-medium transition-colors"
+        >
+          Play Hub
+        </button>
+        <button
+          onClick={onDashboard}
+          className="flex-1 border border-slate-600 hover:border-slate-400 text-slate-300 hover:text-white py-3 rounded-lg font-medium transition-colors"
+        >
+          Dashboard
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Dice Result ─────────────────────────────────────────────────────────────
 
 const OUTCOME_STYLES: Record<string, { label: string; cls: string }> = {
   critical_success: { label: "Critical Success", cls: "text-emerald-300 border-emerald-700 bg-emerald-900/30" },
