@@ -11,7 +11,6 @@ AS $$
 DECLARE
   _username TEXT;
 BEGIN
-  -- Prefer the username supplied at signup time; fall back to email prefix + id fragment.
   _username := COALESCE(
     NULLIF(TRIM((NEW.raw_user_meta_data->>'username')::TEXT), ''),
     LEFT(SPLIT_PART(NEW.email, '@', 1), 20) || '_' || LEFT(NEW.id::TEXT, 4)
@@ -25,7 +24,6 @@ BEGIN
 END;
 $$;
 
--- Drop old trigger if it exists (idempotent)
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 
 CREATE TRIGGER on_auth_user_created
@@ -34,27 +32,24 @@ CREATE TRIGGER on_auth_user_created
 
 
 -- ----------------------------------------------------------------
--- RLS verification: ensure policies cover public.users
+-- RLS policies for public.users
 -- ----------------------------------------------------------------
 
--- Users can read their own row
+-- Users can read any row (usernames are displayed publicly in game rooms)
 DROP POLICY IF EXISTS "users_select_own" ON public.users;
 CREATE POLICY "users_select_own"
   ON public.users FOR SELECT
-  USING (auth.uid() = id);
+  USING (true);
 
--- Users can update only their own row (username only — email is managed by auth)
+-- Users can only insert their own row (fallback for auth/callback)
+DROP POLICY IF EXISTS "users_insert_own" ON public.users;
+CREATE POLICY "users_insert_own"
+  ON public.users FOR INSERT
+  WITH CHECK (auth.uid() = id);
+
+-- Users can only update their own row
 DROP POLICY IF EXISTS "users_update_own" ON public.users;
 CREATE POLICY "users_update_own"
   ON public.users FOR UPDATE
   USING (auth.uid() = id)
   WITH CHECK (auth.uid() = id);
-
--- INSERT is handled by the trigger (SECURITY DEFINER), so no INSERT policy needed
--- for normal users. If you want to allow the client to insert as a fallback, add:
--- DROP POLICY IF EXISTS "users_insert_own" ON public.users;
--- CREATE POLICY "users_insert_own"
---   ON public.users FOR INSERT
---   WITH CHECK (auth.uid() = id);
-
--- Allow the trigger function's service role to insert (no policy needed for SECURITY DEFINER)
