@@ -46,7 +46,7 @@ export default async function AdminPage() {
   // All rooms, with the scenario title, host name and player count.
   const { data: roomRows } = await supabase
     .from("rooms")
-    .select("id, name, room_code, status, current_round, created_at, scenarios(title), host:users!host_id(username), room_players(count)")
+    .select("id, name, room_code, status, current_round, created_at, updated_at, scenarios(title), host:users!host_id(username), room_players(count)")
     .order("created_at", { ascending: false });
 
   const rooms: AdminRoom[] = (roomRows ?? []).map((r: any) => ({
@@ -56,6 +56,7 @@ export default async function AdminPage() {
     status: r.status,
     round: r.current_round,
     created_at: r.created_at,
+    updated_at: r.updated_at,
     scenarioTitle: r.scenarios?.title ?? "（已刪除）",
     hostName: r.host?.username ?? "（未知）",
     playerCount: Array.isArray(r.room_players) ? (r.room_players[0]?.count ?? 0) : 0,
