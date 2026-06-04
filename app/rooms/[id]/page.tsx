@@ -343,8 +343,22 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           </div>
           </div>
         ) : (
-          <div className="text-center text-slate-500 text-sm py-3 shrink-0">
-            {allHaveChars ? "等待主持人開始..." : "等待所有玩家選擇角色卡..."}
+          <div className="text-center text-sm py-3 shrink-0">
+            {(() => {
+              const myPlayer = roomPlayers.find((p) => p.user_id === currentUserId);
+              const iNeedCard = myPlayer && !myPlayer.character_id;
+              if (iNeedCard) {
+                return (
+                  <button
+                    onClick={() => router.push(`/rooms/${params.id}/select-card`)}
+                    className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-2.5 rounded-lg font-medium"
+                  >
+                    選擇角色卡以繼續 →
+                  </button>
+                );
+              }
+              return <span className="text-slate-500">{allHaveChars ? "等待主持人開始..." : "等待所有玩家選擇角色卡..."}</span>;
+            })()}
           </div>
         )}
       </div>
