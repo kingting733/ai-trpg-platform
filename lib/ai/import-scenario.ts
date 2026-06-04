@@ -143,7 +143,10 @@ Notes:
 
 async function callAI(system: string, user: string): Promise<string> {
   const provider = process.env.AI_PROVIDER ?? "deepseek";
-  const model = process.env.AI_MODEL ?? "deepseek-chat";
+  // AI_IMPORT_MODEL overrides the default model for scenario imports only.
+  // Use this to point imports at a more capable (pro/full) model while keeping
+  // the rest of the game on a faster/cheaper flash model.
+  const model = process.env.AI_IMPORT_MODEL ?? process.env.AI_MODEL ?? "deepseek-chat";
   const apiKey = process.env.AI_API_KEY;
 
   if (!apiKey) {
@@ -162,7 +165,7 @@ async function callAI(system: string, user: string): Promise<string> {
         model,
         system,
         messages: [{ role: "user", content: user }],
-        max_tokens: 2000,
+        max_tokens: 3500,
       }),
     });
     if (!res.ok) throw new Error(`AI request failed (${res.status}).`);
@@ -177,7 +180,7 @@ async function callAI(system: string, user: string): Promise<string> {
     body: JSON.stringify({
       model,
       messages: [{ role: "system", content: system }, { role: "user", content: user }],
-      max_tokens: 2000,
+      max_tokens: 3500,
       temperature: 0.4,
     }),
   });
