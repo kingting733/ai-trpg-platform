@@ -60,7 +60,7 @@ export async function generateGMResponse(input: GMAIInput): Promise<GMResponseWi
   }
 
   const systemPrompt = buildSystemPrompt(input);
-  const userMessage = `${input.actingCharacterName} declares: "${input.playerAction}"`;
+  const userMessage = buildTurnMessage(input);
 
   try {
     let raw = "";
@@ -94,6 +94,37 @@ export function buildPartyRoster(
       const acting = actingCharacterName && c.name === actingCharacterName ? " ← ACTING THIS TURN" : "";
       const player = c.playerName ? ` [player: ${c.playerName}]` : "";
       return `- ${c.name}${player}${acting}: HP ${c.hp}, SAN ${c.san}, STR ${c.str}, AGI ${c.agi}, INT ${c.int}, CHA ${c.cha}, LUCK ${c.luck}, SPEED ${c.speed}${c.background ? ` | Background: ${c.background}` : ""}`;
+    })
+    .join("\n");
+}
+
+/**
+ * STATIC roster line — identity + immutable base attributes only (no HP/SAN,
+ * no per-turn acting marker). Lives in the cacheable system prefix because it
+ * never changes during a room's session.
+ */
+export function buildStaticRoster(characters: GMAIInput["characters"]): string {
+  return characters
+    .map((c) => {
+      const player = c.playerName ? ` [player: ${c.playerName}]` : "";
+      return `- ${c.name}${player}: STR ${c.str}, AGI ${c.agi}, INT ${c.int}, CHA ${c.cha}, LUCK ${c.luck}, SPEED ${c.speed}${c.background ? ` | Background: ${c.background}` : ""}`;
+    })
+    .join("\n");
+}
+
+/**
+ * DYNAMIC per-turn status — the values that change every turn (HP/SAN, downed
+ * state, who is acting). Lives in the user message, AFTER the cached prefix.
+ */
+export function buildLiveStatus(
+  characters: GMAIInput["characters"],
+  actingCharacterName?: string
+): string {
+  return characters
+    .map((c) => {
+      const acting = actingCharacterName && c.name === actingCharacterName ? " ← ACTING THIS TURN" : "";
+      const down = c.hp <= 0 ? " (DOWN)" : "";
+      return `- ${c.name}: HP ${c.hp}, SAN ${c.san}${down}${acting}`;
     })
     .join("\n");
 }
@@ -133,13 +164,18 @@ function buildGMContextBlock(ctx: ScenarioGMContext): string {
   return `\nGM WORLD CONTEXT (never share this with players directly):\n${parts.join("\n\n")}`;
 }
 
+/**
+ * STATIC system prompt — identical for every turn of a given room, so providers
+ * with automatic prefix caching (DeepSeek, OpenAI) and Anthropic's explicit
+ * cache_control can reuse it. Contains NOTHING that changes per turn: no HP/SAN,
+ * no acting/next names, no dice result, no round number, no story log. All of
+ * that dynamic content lives in the user message (see buildTurnMessage).
+ */
 function buildSystemPrompt(input: GMAIInput): string {
   const partySize = input.characters.length;
-  const charList = buildPartyRoster(input.characters, input.actingCharacterName);
+  const roster = buildStaticRoster(input.characters);
   const names = input.characters.map((c) => c.name).join(", ");
 
-  const recentLog = input.storyLogSoFar.slice(-10).join("\n");
-  const diceBlock = buildDiceDirective(input);
   const gmCtxBlock = input.scenarioGMContext ? buildGMContextBlock(input.scenarioGMContext) : "";
   const langBlock = buildLanguageInstruction(input.scenarioLanguage);
 
@@ -152,29 +188,51 @@ ${gmCtxBlock}
 ${ROSTER_CONSTRAINT}
 
 PARTY ROSTER (${partySize} character${partySize > 1 ? "s" : ""}) — the only valid character names are: ${names}
-${charList}
+${roster}
 
 NARRATION RULES:
 - This is a MULTIPLAYER game. Narrate in THIRD PERSON as a neutral Game Master.
 - NEVER use "you". Refer to every character by their exact roster name.
-- ${input.actingCharacterName} just acted. Your narration must resolve and describe the outcome of ${input.actingCharacterName}'s action, acknowledging other roster members when relevant.
-- After narrating, it becomes ${input.nextCharacterName}'s turn. The 3 suggested next actions MUST be written for ${input.nextCharacterName} (the NEXT acting character), NOT for ${input.actingCharacterName}.
-- Write the suggested actions in third person for ${input.nextCharacterName} (e.g., "${input.nextCharacterName} searches the room" not "Search the room" or "You search the room").
+- Each turn, ONE character acts. Your narration must resolve and describe the outcome of THAT acting character's action, acknowledging other roster members when relevant.
+- After narrating, it becomes the NEXT character's turn. The 3 suggested next actions MUST be written for the NEXT acting character, NOT the character who just acted.
+- Write the suggested actions in third person for the next character (e.g., "<Name> searches the room" not "Search the room" or "You search the room").
+
+DICE SYSTEM:
+- Each turn may include a resolved dice result. When one is provided, it is FINAL — you MUST obey it. Do NOT change a failure into a success, and do NOT rescue the actor with a lucky coincidence unless the outcome itself is a success. A failure must visibly cost the actor something.
+- When a turn states no dice check was needed, narrate the action naturally without inventing a dramatic success or failure.
+
+OUTPUT FORMAT — Respond ONLY with valid JSON, no markdown, no extra text:
+{"narration":"<2-4 sentence third-person narration of the acting character's outcome>","choices":["<next character action 1>","<next character action 2>","<next character action 3>"]}`;
+}
+
+/**
+ * DYNAMIC per-turn user message — everything that changes each turn. Placed
+ * AFTER the cached static system prefix so the cacheable portion stays stable.
+ */
+export function buildTurnMessage(input: GMAIInput): string {
+  const liveStatus = buildLiveStatus(input.characters, input.actingCharacterName);
+  const diceBlock = buildDiceDirective(input);
+  const recentLog = input.storyLogSoFar.slice(-10).join("\n");
+
+  return `CURRENT PARTY STATUS (Round ${input.currentRound}):
+${liveStatus}
+
+ACTING THIS TURN: ${input.actingCharacterName}
+NEXT TO ACT: ${input.nextCharacterName}
 ${diceBlock}
-Round ${input.currentRound}. Recent story log:
+RECENT STORY LOG:
 ${recentLog || "(Adventure just started)"}
 
-First, narrate the outcome of ${input.actingCharacterName}'s action (2-4 sentences, third person). Then suggest 3 possible next actions for ${input.nextCharacterName}, whose turn is now active.
+${input.actingCharacterName} declares: "${input.playerAction}"
 
-Respond ONLY with valid JSON, no markdown, no extra text:
-{"narration":"<2-4 sentence third-person narration of ${input.actingCharacterName}'s outcome>","choices":["<${input.nextCharacterName} action 1>","<${input.nextCharacterName} action 2>","<${input.nextCharacterName} action 3>"]}`;
+Narrate the outcome of ${input.actingCharacterName}'s action (2-4 sentences, third person), then suggest 3 next actions for ${input.nextCharacterName} (whose turn is now active). Respond ONLY with the JSON object described in the system instructions.`;
 }
 
 function buildDiceDirective(input: GMAIInput): string {
   const r = input.resolution;
   if (!r) return "";
   if (!r.requiresCheck) {
-    return `\nDICE SYSTEM: ${input.actingCharacterName}'s action was low-risk and needed no dice check. Narrate it naturally without inventing a dramatic success or failure.`;
+    return `\nDICE RESULT: ${input.actingCharacterName}'s action was low-risk and needed no dice check. Narrate it naturally without inventing a dramatic success or failure.\n`;
   }
   const deathNote = r.actorDied
     ? ` IMPORTANT: ${input.actingCharacterName}'s HP has dropped to 0 — ${input.actingCharacterName} DIES in this room as a result. Narrate this death clearly and somberly. ${input.actingCharacterName} can no longer act.`
@@ -188,10 +246,15 @@ DICE RESULT (THIS IS FINAL — YOU MUST OBEY IT):
 - OUTCOME: ${r.outcome?.replace("_", " ").toUpperCase()}
 - Mechanical consequence: ${r.consequenceSummary}${r.hpChange ? ` HP ${r.hpChange}.` : ""}${r.sanChange ? ` SAN ${r.sanChange}.` : ""}${deathNote}
 
-STRICT DICE RULE: The dice result is final. Do NOT change a failure into a success. Do NOT rescue ${input.actingCharacterName} with a lucky coincidence unless the outcome itself is a success. Narrate exactly what the outcome dictates, and describe the consequences clearly and concretely. A failure must visibly cost ${input.actingCharacterName} something.`;
+STRICT DICE RULE: The dice result is final. Do NOT change a failure into a success. Do NOT rescue ${input.actingCharacterName} with a lucky coincidence unless the outcome itself is a success. Narrate exactly what the outcome dictates, and describe the consequences clearly and concretely. A failure must visibly cost ${input.actingCharacterName} something.
+`;
 }
 
 async function callOpenAICompatible(apiKey: string, model: string, system: string, user: string, baseUrl: string): Promise<string> {
+  // DeepSeek and OpenAI both perform AUTOMATIC prompt caching on the longest
+  // repeated prefix — no explicit markers needed. Because `system` is now fully
+  // static per room (all dynamic content moved into `user`), the system prefix
+  // is reused across every turn and billed at the cheaper cache-hit rate.
   const res = await fetch(`${baseUrl}/v1/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
@@ -220,7 +283,10 @@ async function callAnthropic(apiKey: string, model: string, system: string, user
     },
     body: JSON.stringify({
       model,
-      system,
+      // Mark the static system prefix as cacheable. Anthropic caches up to this
+      // breakpoint, so repeated turns within a room reuse the cached prefix
+      // (the dynamic per-turn content is sent separately in `messages`).
+      system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: user }],
       max_tokens: 500,
     }),
