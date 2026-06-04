@@ -9,6 +9,8 @@ export interface ScenarioGMContext {
   traps: string[];
   keyItems: string[];
   winningTargets: string | null;
+  eachPlayerTargets: string | null;
+  failureConditions: string | null;
   endingConditions: string | null;
   gmNotes: string | null;
   /** Full raw story module — the GM's complete reference, injected into the cached prefix. */
@@ -165,8 +167,10 @@ function buildGMContextBlock(ctx: ScenarioGMContext): string {
   if (ctx.traps.length) parts.push(`Traps & Hazards:\n${ctx.traps.map((t) => `  - ${t}`).join("\n")}`);
   if (ctx.keyItems.length) parts.push(`Key Items:\n${ctx.keyItems.map((i) => `  - ${i}`).join("\n")}`);
   if (ctx.secretRules) parts.push(`GM Rules & Pacing:\n${ctx.secretRules}`);
-  if (ctx.winningTargets) parts.push(`Winning Targets (deterministic — game ends when ALL are achieved):\n${ctx.winningTargets}`);
-  if (ctx.endingConditions) parts.push(`Victory/Failure Conditions (all branches):\n${ctx.endingConditions}`);
+  if (ctx.winningTargets) parts.push(`Winning Targets — any ONE player completing each satisfies it (game ends when all required ones are met):\n${ctx.winningTargets}`);
+  if (ctx.eachPlayerTargets) parts.push(`Per-Player Targets — EVERY surviving player must personally complete each of these:\n${ctx.eachPlayerTargets}`);
+  if (ctx.failureConditions) parts.push(`Failure Conditions — if any of these occurs, the adventure ends in defeat. Steer outcomes honestly; do not contrive to avoid them:\n${ctx.failureConditions}`);
+  if (ctx.endingConditions) parts.push(`Additional Ending Notes:\n${ctx.endingConditions}`);
   if (ctx.gmNotes) parts.push(`Additional GM Notes:\n${ctx.gmNotes}`);
   // Full source module LAST: the curated fields above are your quick-reference
   // spine; this is the complete text to consult for any detail not summarized.

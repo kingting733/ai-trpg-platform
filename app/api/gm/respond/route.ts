@@ -5,7 +5,10 @@ import { resolveAction } from "@/lib/game/resolution";
 import { detectEnding } from "@/lib/ai/detect-ending";
 import {
   decomposeObjectives,
+  decomposeStructuredObjectives,
   checkObjectiveProgress,
+  checkFailureTriggered,
+  generateFailureNarration,
   incompleteForActor,
   applyCompletions,
   allRequiredDone,
@@ -30,7 +33,7 @@ export async function POST(request: Request) {
   // Verify caller is a room participant and it's actually their turn
   const { data: room } = await supabase
     .from("rooms")
-    .select("*, scenarios(title, background, objective, rules, opening_scene, scene_flow, secret_rules, locations, npcs, clues, threats, traps, key_items, winning_targets, ending_conditions, gm_notes, source_document, language)")
+    .select("*, scenarios(title, background, objective, rules, opening_scene, scene_flow, secret_rules, locations, npcs, clues, threats, traps, key_items, winning_targets, each_player_targets, failure_conditions, ending_conditions, gm_notes, source_document, language)")
     .eq("id", roomId)
     .single();
   if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -159,6 +162,8 @@ export async function POST(request: Request) {
     traps: Array.isArray(scenario.traps) ? scenario.traps : [],
     keyItems: Array.isArray(scenario.key_items) ? scenario.key_items : [],
     winningTargets: scenario.winning_targets ?? null,
+    eachPlayerTargets: scenario.each_player_targets ?? null,
+    failureConditions: scenario.failure_conditions ?? null,
     endingConditions: scenario.ending_conditions ?? null,
     gmNotes: scenario.gm_notes ?? null,
     sourceDocument: scenario.source_document ?? null,
@@ -221,20 +226,29 @@ export async function POST(request: Request) {
 
     if (allDead) {
       ending = { triggered: true, type: "failure", title: tpdTitle, summary: tpdSummary };
-    } else if (scenario?.winning_targets || scenario?.ending_conditions) {
+    } else if (
+      scenario?.winning_targets ||
+      scenario?.each_player_targets ||
+      scenario?.ending_conditions
+    ) {
       // === DETERMINISTIC OBJECTIVE TRACKER ===
       // Progress is stored as PERMANENT FLAGS on the room — the AI never has to
       // remember earlier turns. It only classifies the current action against
       // the still-incomplete objectives; whether the game ends is pure code.
 
-      // winning_targets is the primary source (creator-written, explicit).
-      // Fall back to ending_conditions when winning_targets is absent.
-      const objectiveSource = scenario.winning_targets?.trim() || scenario.ending_conditions;
+      const partyText = scenario.winning_targets?.trim() ?? "";
+      const eachPlayerText = scenario.each_player_targets?.trim() ?? "";
 
       // 1. Ensure the room has a decomposed objective checklist (build once).
+      //    Prefer the creator's STRUCTURED boxes (scope is unambiguous); only
+      //    fall back to the legacy free-text ending_conditions for old scenarios
+      //    that have neither structured box filled.
       let objectives: Objective[] = Array.isArray(room.objectives) ? room.objectives : [];
       if (objectives.length === 0) {
-        objectives = await decomposeObjectives(objectiveSource, scenario?.language ?? null);
+        objectives =
+          partyText || eachPlayerText
+            ? await decomposeStructuredObjectives(partyText, eachPlayerText, scenario?.language ?? null)
+            : await decomposeObjectives(scenario.ending_conditions, scenario?.language ?? null);
         if (objectives.length > 0) {
           await supabase.from("rooms").update({ objectives }).eq("id", roomId);
         }
@@ -314,6 +328,29 @@ export async function POST(request: Request) {
           gmResponse.narration,
           scenario?.language ?? null
         );
+      }
+    }
+
+    // === FAILURE CONDITIONS — auto-trigger a failure ending ===
+    // Checked every turn (unless the game already ended this turn or the party
+    // is wiped). A strict per-turn judge confirms the failure event actually
+    // happened; if so, the game ends in defeat.
+    if (!ending.triggered && !allDead && scenario?.failure_conditions) {
+      const failed = await checkFailureTriggered(
+        scenario.failure_conditions,
+        storyLogSoFar,
+        actionText,
+        actingName,
+        gmResponse.narration
+      );
+      if (failed) {
+        const fail = await generateFailureNarration(
+          scenario?.title ?? "the adventure",
+          failed,
+          storyLogSoFar,
+          scenario?.language ?? null
+        );
+        ending = { triggered: true, type: fail.type, title: fail.title, summary: fail.summary };
       }
     }
 

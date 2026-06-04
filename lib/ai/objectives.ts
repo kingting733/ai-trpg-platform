@@ -237,6 +237,76 @@ Return ONLY valid JSON, no markdown:
 }
 
 /**
+ * Decompose ONE free-text box into objectives with a FORCED scope. Because the
+ * creator already put these lines under "anyone can do it" (party) or "every
+ * player must do it" (each_player), we don't let the AI guess the scope — we
+ * just split the text into discrete, checkable lines and stamp the scope.
+ */
+async function decomposeWithScope(
+  text: string,
+  scope: ObjectiveScope,
+  language?: string | null
+): Promise<Array<{ text: string; required: boolean }>> {
+  if (!text.trim()) return [];
+  const label = langLabel(language);
+  const langRule = label ? `\nWrite each objective's "text" in ${label}.` : "";
+
+  const system = `You split a tabletop RPG scenario's victory goals into a checklist of discrete, independently-checkable objectives.${langRule}
+
+Each objective must be a single concrete, observable accomplishment judgeable true/false from the story.
+- Split compound goals ("do X and Y") into SEPARATE objectives.
+- Default EVERY objective to "required": true. Only mark "required": false when the text EXPLICITLY says optional/bonus/secondary.
+- Produce 1-6 objectives, each one short sentence. Do NOT invent goals not implied by the text.
+
+Return ONLY valid JSON, no markdown:
+{"objectives":[{"text":"...","required":true}]}`;
+
+  const user = `VICTORY GOALS:\n${text}\n\nSplit these into a checklist.`;
+  const raw = await callAI(system, user, 600);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(extractJSON(raw));
+    const list = Array.isArray(parsed?.objectives) ? parsed.objectives : [];
+    return list
+      .map((o: any) => {
+        const t = typeof o?.text === "string" ? o.text.trim() : "";
+        if (!t) return null;
+        return { text: t.slice(0, 200), required: o?.required !== false };
+      })
+      .filter((o: any): o is { text: string; required: boolean } => o !== null);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Build the objective checklist from the creator's STRUCTURED boxes. Each box
+ * has an unambiguous scope, so completion tracking is reliable:
+ *   partyText      → "party"       (any one player completing it satisfies all)
+ *   eachPlayerText → "each_player" (EVERY surviving player must do it personally)
+ * Called ONCE per room. Returns [] if both boxes are blank.
+ */
+export async function decomposeStructuredObjectives(
+  partyText: string,
+  eachPlayerText: string,
+  language?: string | null
+): Promise<Objective[]> {
+  const [party, each] = await Promise.all([
+    decomposeWithScope(partyText, "party", language),
+    decomposeWithScope(eachPlayerText, "each_player", language),
+  ]);
+
+  const combined: Objective[] = [
+    ...party.map((o) => ({ ...o, scope: "party" as ObjectiveScope })),
+    ...each.map((o) => ({ ...o, scope: "each_player" as ObjectiveScope })),
+  ]
+    .slice(0, 8)
+    .map((o, i) => ({ id: `obj_${i + 1}`, text: o.text, required: o.required, scope: o.scope }));
+
+  return combined;
+}
+
+/**
  * Given the objectives that are STILL INCOMPLETE, decide which ones the latest
  * action + GM narration just satisfied. Returns the list of newly-completed
  * objective ids. The caller persists these as permanent flags.
@@ -363,6 +433,112 @@ Write the victory closing screen.`;
     const type = parsed?.type === "best" || parsed?.type === "bad" ? parsed.type : "normal";
     return {
       type,
+      title: typeof parsed?.title === "string" && parsed.title.trim() ? parsed.title.trim().slice(0, 80) : fallback.title,
+      summary: typeof parsed?.summary === "string" && parsed.summary.trim() ? parsed.summary.trim().slice(0, 600) : fallback.summary,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * Each turn, decide whether the latest action + narration just TRIGGERED one of
+ * the creator's failure conditions. Like checkObjectiveProgress, this is a
+ * strict, per-turn classification — its default answer is "no failure".
+ * Returns the matched failure description, or null when nothing triggered.
+ */
+export async function checkFailureTriggered(
+  failureConditions: string,
+  recentLog: string[],
+  playerAction: string,
+  actingCharacter: string,
+  gmNarration: string
+): Promise<string | null> {
+  if (!failureConditions.trim()) return null;
+
+  const system = `You are a STRICT failure-condition judge for a multiplayer RPG. Your default answer is that NO failure has occurred. Only report a failure when the evidence is unambiguous.
+
+You are given the scenario's FAILURE CONDITIONS, plus ${actingCharacter}'s most recent action and the GM's narration of its outcome. Decide whether any failure condition has JUST and ACTUALLY been triggered THIS turn.
+
+REPORT A FAILURE ONLY IF:
+1. The GM NARRATION explicitly confirms an event matching a failure condition actually happened this turn.
+2. It is the real, concrete event — not a threat, foreshadowing, near-miss, plan, or worry about it.
+
+DO NOT report failure for: tension, danger approaching, a failed dice roll that did not itself cause the failure event, or merely discussing the risk.
+It is normal and expected for NO failure to occur on a turn. When unsure, report none.
+
+Return ONLY valid JSON, no markdown:
+{"failed":false,"condition":null}  // or {"failed":true,"condition":"<the failure condition that triggered>"}`;
+
+  const user = `FAILURE CONDITIONS:
+${failureConditions}
+
+RECENT STORY (context only):
+${recentLog.slice(-6).join("\n")}
+
+THIS TURN —
+${actingCharacter}'s ACTION: ${playerAction}
+GM NARRATION OF OUTCOME: ${gmNarration}
+
+Did a failure condition ACTUALLY trigger this turn? Be strict.`;
+
+  const raw = await callAI(system, user, 150);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(extractJSON(raw));
+    if (parsed?.failed === true) {
+      const c = typeof parsed?.condition === "string" ? parsed.condition.trim() : "";
+      return c || "A failure condition was met.";
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Generate the closing screen for a FAILURE ending. Safe fallback so the ending
+ * always fires even if the AI call fails.
+ */
+export async function generateFailureNarration(
+  scenarioTitle: string,
+  failedCondition: string,
+  recentLog: string[],
+  language?: string | null
+): Promise<{ type: "failure"; title: string; summary: string }> {
+  const isZh = language === "zh-TW" || language === "zh-CN";
+  const fallback = {
+    type: "failure" as const,
+    title: isZh ? "任務失敗" : "The Quest Fails",
+    summary: isZh
+      ? "局勢急轉直下，無法挽回的結局降臨，這場冒險就此以失敗告終。"
+      : "Events spiral beyond saving, and the adventure ends in failure.",
+  };
+
+  const label = langLabel(language);
+  const langRule = label ? `\nWrite "title" and "summary" in ${label}.` : "";
+
+  const system = `You write the closing screen for a FAILED multiplayer RPG adventure. A failure condition has just been triggered, ending the game in defeat.${langRule}
+
+Return ONLY valid JSON, no markdown:
+{"title":string,"summary":string}
+- title: 4-7 word failure ending title.
+- summary: 2-3 sentences describing how the adventure ended in failure.`;
+
+  const user = `ADVENTURE: ${scenarioTitle}
+FAILURE THAT TRIGGERED: ${failedCondition}
+
+RECENT STORY:
+${recentLog.slice(-6).join("\n")}
+
+Write the failure closing screen.`;
+
+  const raw = await callAI(system, user, 300);
+  if (!raw) return fallback;
+  try {
+    const parsed = JSON.parse(extractJSON(raw));
+    return {
+      type: "failure",
       title: typeof parsed?.title === "string" && parsed.title.trim() ? parsed.title.trim().slice(0, 80) : fallback.title,
       summary: typeof parsed?.summary === "string" && parsed.summary.trim() ? parsed.summary.trim().slice(0, 600) : fallback.summary,
     };
