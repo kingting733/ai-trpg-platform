@@ -216,13 +216,16 @@ NARRATION RULES:
 - Each turn, ONE character acts. Your narration must resolve and describe the outcome of THAT acting character's action, acknowledging other roster members when relevant.
 - After narrating, it becomes the NEXT character's turn. The 3 suggested next actions MUST be written for the NEXT acting character, NOT the character who just acted.
 - Write the suggested actions in third person for the next character (e.g., "<Name> searches the room" not "Search the room" or "You search the room").
+- TONE & ATMOSPHERE: Match the mood of the genre and setting at all times (e.g. dread and tension for horror, wonder for fantasy, grit for cyberpunk). Use sensory detail to keep the world vivid and immersive.
+- INFORMATION GATING: Do NOT dump the whole plot, every clue, or hidden secrets at once. Reveal information only when a character actively investigates the right place or takes the right action. Keep secrets, twists, and GM-only context hidden until earned.
+- NO RAILROADING: Let players solve problems their own way. React fairly to creative or unexpected actions instead of forcing them back onto a scripted path. Never override player choices to make the "intended" plot happen; advance scenes only as their triggers are genuinely met.
 
 DICE SYSTEM:
 - Each turn may include a resolved dice result. When one is provided, it is FINAL — you MUST obey it. Do NOT change a failure into a success, and do NOT rescue the actor with a lucky coincidence unless the outcome itself is a success. A failure must visibly cost the actor something.
 - When a turn states no dice check was needed, narrate the action naturally without inventing a dramatic success or failure.
 
 OUTPUT FORMAT — Respond ONLY with valid JSON, no markdown, no extra text:
-{"narration":"<2-4 sentence third-person narration of the acting character's outcome>","choices":["<next character action 1>","<next character action 2>","<next character action 3>"]}`;
+{"narration":"<6-8 sentence third-person narration of the acting character's outcome, rich in sensory and atmospheric detail>","choices":["<next character action 1>","<next character action 2>","<next character action 3>"]}`;
 }
 
 /**
@@ -245,7 +248,7 @@ ${recentLog || "(Adventure just started)"}
 
 ${input.actingCharacterName} declares: "${input.playerAction}"
 
-Narrate the outcome of ${input.actingCharacterName}'s action (2-4 sentences, third person), then suggest 3 next actions for ${input.nextCharacterName} (whose turn is now active). Respond ONLY with the JSON object described in the system instructions.`;
+Narrate the outcome of ${input.actingCharacterName}'s action (6-8 sentences, third person, rich in atmosphere and sensory detail; reveal information only as it is actively uncovered), then suggest 3 next actions for ${input.nextCharacterName} (whose turn is now active). Respond ONLY with the JSON object described in the system instructions.`;
 }
 
 function buildDiceDirective(input: GMAIInput): string {
@@ -281,7 +284,7 @@ async function callOpenAICompatible(apiKey: string, model: string, system: strin
     body: JSON.stringify({
       model,
       messages: [{ role: "system", content: system }, { role: "user", content: user }],
-      max_tokens: 500,
+      max_tokens: 900,
       temperature: 0.8,
     }),
   });
@@ -308,7 +311,7 @@ async function callAnthropic(apiKey: string, model: string, system: string, user
       // (the dynamic per-turn content is sent separately in `messages`).
       system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: user }],
-      max_tokens: 500,
+      max_tokens: 900,
     }),
   });
   if (!res.ok) {
