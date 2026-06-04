@@ -38,10 +38,12 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
   const [tags, setTags] = useState("");
   const [openingScene, setOpeningScene] = useState("");
   const [background, setBackground] = useState("");
+  const [sceneFlow, setSceneFlow] = useState("");
   const [locations, setLocations] = useState("");
   const [npcs, setNpcs] = useState("");
   const [keyItems, setKeyItems] = useState("");
   const [secretRules, setSecretRules] = useState("");
+  const [clues, setClues] = useState("");
   const [threats, setThreats] = useState("");
   const [traps, setTraps] = useState("");
   const [endingConditions, setEndingConditions] = useState("");
@@ -78,10 +80,12 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
       setTags(Array.isArray(data.tags) ? data.tags.join(", ") : "");
       setOpeningScene(data.opening_scene ?? "");
       setBackground(data.background ?? "");
+      setSceneFlow(data.scene_flow ?? "");
       setLocations(Array.isArray(data.locations) ? data.locations.join("\n") : "");
       setNpcs(Array.isArray(data.npcs) ? data.npcs.join("\n") : "");
       setKeyItems(Array.isArray(data.key_items) ? data.key_items.join("\n") : "");
       setSecretRules(data.secret_rules ?? "");
+      setClues(Array.isArray(data.clues) ? data.clues.join("\n") : "");
       setThreats(Array.isArray(data.threats) ? data.threats.join("\n") : "");
       setTraps(Array.isArray(data.traps) ? data.traps.join("\n") : "");
       setEndingConditions(data.ending_conditions ?? "");
@@ -129,10 +133,12 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
         tags: tagList,
         opening_scene: openingScene.trim() || null,
         background: background.trim() || null,
+        scene_flow: sceneFlow.trim() || null,
         locations: parseLines(locations),
         npcs: parseLines(npcs),
         key_items: parseLines(keyItems),
         secret_rules: secretRules.trim() || null,
+        clues: parseLines(clues),
         threats: parseLines(threats),
         traps: parseLines(traps),
         ending_conditions: endingConditions.trim() || null,
@@ -270,6 +276,9 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
             <Field label="世界背景" hint="AI 主持人需要了解的歷史、背景知識與情境。">
               <textarea value={background} onChange={(e) => setBackground(e.target.value)} rows={5} className={taCls} />
             </Field>
+            <Field label="場景流程 / 劇情推進" hint="冒險的場景順序與推進邏輯 — 每一幕玩家會遇到什麼、需要做什麼、以及觸發下一幕的條件。這是 AI 主持人依循的主線。">
+              <textarea value={sceneFlow} onChange={(e) => setSceneFlow(e.target.value)} rows={6} className={taCls} />
+            </Field>
             <Field label="重要地點（每行一個）">
               <textarea value={locations} onChange={(e) => setLocations(e.target.value)} rows={4} className={taCls} />
             </Field>
@@ -287,6 +296,9 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
             {gmBanner}
             <Field label="隱藏規則" hint="給 AI 主持人的節奏、語氣與機制指示。">
               <textarea value={secretRules} onChange={(e) => setSecretRules(e.target.value)} rows={4} className={taCls} />
+            </Field>
+            <Field label="線索（每行一個）" hint="可被玩家調查發現的資訊 — 內容、在何處／如何取得、以及揭示或解鎖什麼。">
+              <textarea value={clues} onChange={(e) => setClues(e.target.value)} rows={4} className={taCls} />
             </Field>
             <Field label="威脅與敵人（每行一個）">
               <textarea value={threats} onChange={(e) => setThreats(e.target.value)} rows={3} className={taCls} />

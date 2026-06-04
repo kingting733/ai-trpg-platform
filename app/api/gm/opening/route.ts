@@ -16,8 +16,10 @@ type PartyMember = {
 function buildGMContextBlock(ctx: ScenarioGMContext): string {
   const parts: string[] = [];
   if (ctx.openingScene) parts.push(`Opening Scene to narrate:\n${ctx.openingScene}`);
+  if (ctx.sceneFlow) parts.push(`Scene Flow & Progression (the adventure's spine):\n${ctx.sceneFlow}`);
   if (ctx.locations.length) parts.push(`Key Locations:\n${ctx.locations.map((l) => `  - ${l}`).join("\n")}`);
   if (ctx.npcs.length) parts.push(`NPCs:\n${ctx.npcs.map((n) => `  - ${n}`).join("\n")}`);
+  if (ctx.clues.length) parts.push(`Clues:\n${ctx.clues.map((c) => `  - ${c}`).join("\n")}`);
   if (ctx.threats.length) parts.push(`Threats & Enemies:\n${ctx.threats.map((t) => `  - ${t}`).join("\n")}`);
   if (ctx.traps.length) parts.push(`Traps & Hazards:\n${ctx.traps.map((t) => `  - ${t}`).join("\n")}`);
   if (ctx.keyItems.length) parts.push(`Key Items:\n${ctx.keyItems.map((i) => `  - ${i}`).join("\n")}`);
@@ -148,7 +150,7 @@ export async function POST(request: Request) {
 
   const { data: room } = await supabase
     .from("rooms")
-    .select("*, scenarios(title, background, objective, rules, opening_scene, secret_rules, locations, npcs, threats, traps, key_items, ending_conditions, gm_notes, language)")
+    .select("*, scenarios(title, background, objective, rules, opening_scene, scene_flow, secret_rules, locations, npcs, clues, threats, traps, key_items, ending_conditions, gm_notes, language)")
     .eq("id", roomId)
     .single();
   if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -179,9 +181,11 @@ export async function POST(request: Request) {
   const scenario = (room as any).scenarios;
   const gmContext: ScenarioGMContext | null = scenario ? {
     openingScene: scenario.opening_scene ?? null,
+    sceneFlow: scenario.scene_flow ?? null,
     secretRules: scenario.secret_rules ?? null,
     locations: Array.isArray(scenario.locations) ? scenario.locations : [],
     npcs: Array.isArray(scenario.npcs) ? scenario.npcs : [],
+    clues: Array.isArray(scenario.clues) ? scenario.clues : [],
     threats: Array.isArray(scenario.threats) ? scenario.threats : [],
     traps: Array.isArray(scenario.traps) ? scenario.traps : [],
     keyItems: Array.isArray(scenario.key_items) ? scenario.key_items : [],

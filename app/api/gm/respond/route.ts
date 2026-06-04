@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   // Verify caller is a room participant and it's actually their turn
   const { data: room } = await supabase
     .from("rooms")
-    .select("*, scenarios(title, background, objective, rules, opening_scene, secret_rules, locations, npcs, threats, traps, key_items, ending_conditions, gm_notes, language)")
+    .select("*, scenarios(title, background, objective, rules, opening_scene, scene_flow, secret_rules, locations, npcs, clues, threats, traps, key_items, ending_conditions, gm_notes, language)")
     .eq("id", roomId)
     .single();
   if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -150,9 +150,11 @@ export async function POST(request: Request) {
   const scenario = (room as any).scenarios;
   const gmContext: ScenarioGMContext | null = scenario ? {
     openingScene: scenario.opening_scene ?? null,
+    sceneFlow: scenario.scene_flow ?? null,
     secretRules: scenario.secret_rules ?? null,
     locations: Array.isArray(scenario.locations) ? scenario.locations : [],
     npcs: Array.isArray(scenario.npcs) ? scenario.npcs : [],
+    clues: Array.isArray(scenario.clues) ? scenario.clues : [],
     threats: Array.isArray(scenario.threats) ? scenario.threats : [],
     traps: Array.isArray(scenario.traps) ? scenario.traps : [],
     keyItems: Array.isArray(scenario.key_items) ? scenario.key_items : [],

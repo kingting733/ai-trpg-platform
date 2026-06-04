@@ -1,8 +1,10 @@
 export interface ScenarioGMContext {
   openingScene: string | null;
+  sceneFlow: string | null;
   secretRules: string | null;
   locations: string[];
   npcs: string[];
+  clues: string[];
   threats: string[];
   traps: string[];
   keyItems: string[];
@@ -152,13 +154,15 @@ export const ROSTER_CONSTRAINT =
 function buildGMContextBlock(ctx: ScenarioGMContext): string {
   const parts: string[] = [];
   if (ctx.openingScene) parts.push(`Opening Scene Context:\n${ctx.openingScene}`);
+  if (ctx.sceneFlow) parts.push(`Scene Flow & Progression (follow this spine; advance scenes as their triggers are met):\n${ctx.sceneFlow}`);
   if (ctx.locations.length) parts.push(`Key Locations:\n${ctx.locations.map((l) => `  - ${l}`).join("\n")}`);
-  if (ctx.npcs.length) parts.push(`NPCs:\n${ctx.npcs.map((n) => `  - ${n}`).join("\n")}`);
+  if (ctx.npcs.length) parts.push(`NPCs (play them per their goals, knowledge, and reactions):\n${ctx.npcs.map((n) => `  - ${n}`).join("\n")}`);
+  if (ctx.clues.length) parts.push(`Clues (reveal when players investigate the right place/way):\n${ctx.clues.map((c) => `  - ${c}`).join("\n")}`);
   if (ctx.threats.length) parts.push(`Threats & Enemies:\n${ctx.threats.map((t) => `  - ${t}`).join("\n")}`);
   if (ctx.traps.length) parts.push(`Traps & Hazards:\n${ctx.traps.map((t) => `  - ${t}`).join("\n")}`);
   if (ctx.keyItems.length) parts.push(`Key Items:\n${ctx.keyItems.map((i) => `  - ${i}`).join("\n")}`);
   if (ctx.secretRules) parts.push(`GM Rules & Pacing:\n${ctx.secretRules}`);
-  if (ctx.endingConditions) parts.push(`Victory/Failure Conditions:\n${ctx.endingConditions}`);
+  if (ctx.endingConditions) parts.push(`Victory/Failure Conditions (all branches):\n${ctx.endingConditions}`);
   if (ctx.gmNotes) parts.push(`Additional GM Notes:\n${ctx.gmNotes}`);
   if (!parts.length) return "";
   return `\nGM WORLD CONTEXT (never share this with players directly):\n${parts.join("\n\n")}`;

@@ -40,12 +40,14 @@ export default function NewScenarioPage() {
   // GM-only: World & Story
   const [openingScene, setOpeningScene] = useState("");
   const [background, setBackground] = useState("");
+  const [sceneFlow, setSceneFlow] = useState("");
   const [locations, setLocations] = useState("");
   const [npcs, setNpcs] = useState("");
   const [keyItems, setKeyItems] = useState("");
 
   // GM-only: GM Toolkit
   const [secretRules, setSecretRules] = useState("");
+  const [clues, setClues] = useState("");
   const [threats, setThreats] = useState("");
   const [traps, setTraps] = useState("");
   const [endingConditions, setEndingConditions] = useState("");
@@ -78,10 +80,12 @@ export default function NewScenarioPage() {
     setTags((d.tags ?? []).join(", "));
     setOpeningScene(d.opening_scene ?? "");
     setBackground(d.background ?? "");
+    setSceneFlow(d.scene_flow ?? "");
     setLocations((d.locations ?? []).join("\n"));
     setNpcs((d.npcs ?? []).join("\n"));
     setKeyItems((d.key_items ?? []).join("\n"));
     setSecretRules(d.secret_rules ?? "");
+    setClues((d.clues ?? []).join("\n"));
     setThreats((d.threats ?? []).join("\n"));
     setTraps((d.traps ?? []).join("\n"));
     setEndingConditions(d.ending_conditions ?? "");
@@ -167,10 +171,12 @@ export default function NewScenarioPage() {
         tags: tagList,
         opening_scene: openingScene.trim() || null,
         background: background.trim() || null,
+        scene_flow: sceneFlow.trim() || null,
         locations: parseLines(locations),
         npcs: parseLines(npcs),
         key_items: parseLines(keyItems),
         secret_rules: secretRules.trim() || null,
+        clues: parseLines(clues),
         threats: parseLines(threats),
         traps: parseLines(traps),
         ending_conditions: endingConditions.trim() || null,
@@ -323,6 +329,11 @@ export default function NewScenarioPage() {
                 placeholder="在叢林深處，一座被遺忘已久的神廟重見天日。傳說那裡珍藏著永恆碎片..."
                 className={taCls} />
             </Field>
+            <Field label="場景流程 / 劇情推進" hint="冒險的場景順序與推進邏輯 — 每一幕玩家會遇到什麼、需要做什麼、以及觸發下一幕的條件。這是 AI 主持人依循的主線。">
+              <textarea value={sceneFlow} onChange={(e) => setSceneFlow(e.target.value)} rows={6}
+                placeholder={"第一幕：抵達神廟入口。隊伍需找到開啟石門的方法（解開雕像謎題）。解開後 → 進入大廳。\n第二幕：大廳。守衛巡邏，玩家可潛行或戰鬥。找到地圖後 → 前往圖書館。\n第三幕：圖書館。蒐集三條線索揭示碎片位置。集齊後 → 最終對決。\n最終幕：王座室。擊敗守護者並在神廟崩塌前取回碎片。"}
+                className={taCls} />
+            </Field>
             <Field label="關鍵地點（每行一個）" hint="AI 主持人可在冒險中描述和引用的地點。">
               <textarea value={locations} onChange={(e) => setLocations(e.target.value)} rows={4}
                 placeholder={"入口大廳 — 第一個房間，有火坑和雕像\n王座室 — 最終對決\n圖書館 — 古老書卷和線索"}
@@ -347,6 +358,11 @@ export default function NewScenarioPage() {
             <Field label="秘密規則" hint="AI 主持人的節奏、基調和機制指導。">
               <textarea value={secretRules} onChange={(e) => setSecretRules(e.target.value)} rows={4}
                 placeholder={"這是恐怖劇本 — 緩慢建立緊張感，起初不要直接展示怪物。\n玩家目睹超自然事件時觸發 SAN 檢定。\n幸運檢定決定隨機遭遇的時機。"}
+                className={taCls} />
+            </Field>
+            <Field label="線索（每行一個）" hint="可被玩家調查發現的資訊 — 內容、在何處／如何取得、以及揭示或解鎖什麼。調查類劇本特別依賴線索。">
+              <textarea value={clues} onChange={(e) => setClues(e.target.value)} rows={4}
+                placeholder={"血跡 — 在大廳地板，往北延伸 → 指向圖書館密門\n撕碎的日記 — 圖書館書架，搜查 INT DC 12 → 揭示碎片藏在王座後\n生鏽鑰匙 — 衛兵屍體上 → 開啟金庫"}
                 className={taCls} />
             </Field>
             <Field label="威脅與敵人（每行一個）" hint="AI 主持人可部署的敵人和危險。">
