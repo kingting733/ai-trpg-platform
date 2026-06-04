@@ -26,8 +26,12 @@ export interface ImportedScenario {
   secret_rules: string | null;
   threats: string[];
   traps: string[];
-  /** Explicit, player-completable victory conditions — numbered list for objective tracking. */
+  /** Explicit victory conditions any ONE player can complete — numbered list. */
   winning_targets: string | null;
+  /** Goals EVERY surviving player must complete individually — numbered list. */
+  each_player_targets: string | null;
+  /** Events that should END the game in failure — numbered list. */
+  failure_conditions: string | null;
   ending_conditions: string | null;
   gm_notes: string | null;
   /** BCP-47 language tag auto-detected from the source document. */
@@ -117,6 +121,8 @@ export function normalizeImported(raw: any): ImportedScenario {
     threats: asStringArray(raw?.threats),
     traps: asStringArray(raw?.traps),
     winning_targets: asNullableString(raw?.winning_targets),
+    each_player_targets: asNullableString(raw?.each_player_targets),
+    failure_conditions: asNullableString(raw?.failure_conditions),
     ending_conditions: asNullableString(raw?.ending_conditions),
     gm_notes: asNullableString(raw?.gm_notes),
     language: normalizeLanguage(raw?.language),
@@ -139,8 +145,10 @@ DEPTH REQUIREMENTS — the most important part. For these fields, PRESERVE the s
 - threats: for each enemy/danger, give its behavior, abilities or stats, and weaknesses.
 - locations: for each, give a vivid description, what is found there, what happens there, and how it connects to other locations.
 - key_items: for each, give where it is found, what it does, and what it unlocks.
-- winning_targets: extract the EXPLICIT player-completable VICTORY conditions as a numbered list (e.g. "1. 取回聖石並逃出神廟\n2. 消滅守門者"). These are the discrete checkboxes a player must tick to WIN. Do NOT include failure conditions here. If the document has no explicit win conditions, set null.
-- ending_conditions: ALL outcomes — every victory, failure, and partial/branch ending — and the EXACT condition that triggers each one. Never collapse multiple endings into a single line.
+- winning_targets: VICTORY goals that any ONE player completing satisfies for the whole party, as a numbered list (e.g. "1. 取回聖石並逃出神廟\n2. 消滅守門者"). Do NOT include failure conditions here. null if none.
+- each_player_targets: victory goals that EVERY surviving player must complete individually (signalled by "each player", "everyone must", "both must"), as a numbered list. null if none.
+- failure_conditions: events that should END the adventure in DEFEAT (e.g. "聖石被敵人奪走", "神廟在隊伍逃出前坍塌"), as a numbered list. null if none.
+- ending_conditions: any remaining ending nuance/branch notes not captured above, or null.
 - secret_rules: pacing, tone, and special mechanics the GM must enforce.
 - gm_notes: anything else needed to run it well (foreshadowing, optional content, scaling, adjudication tips).
 
@@ -164,8 +172,10 @@ Required JSON keys:
 - secret_rules: GM pacing / tone / mechanics or null
 - threats: array of detailed threat entries
 - traps: array of detailed trap entries
-- winning_targets: numbered list of explicit player-completable victory conditions, or null
-- ending_conditions: every ending and its trigger, or null
+- winning_targets: numbered list of party victory goals (any one player can complete), or null
+- each_player_targets: numbered list of goals every surviving player must do individually, or null
+- failure_conditions: numbered list of events that end the game in defeat, or null
+- ending_conditions: remaining ending notes, or null
 - gm_notes: extra GM guidance or null
 
 Notes:

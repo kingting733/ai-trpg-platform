@@ -47,6 +47,8 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
   const [clues, setClues] = useState("");
   const [threats, setThreats] = useState("");
   const [traps, setTraps] = useState("");
+  const [eachPlayerTargets, setEachPlayerTargets] = useState("");
+  const [failureConditions, setFailureConditions] = useState("");
   const [endingConditions, setEndingConditions] = useState("");
   const [gmNotes, setGmNotes] = useState("");
   const [sourceDocument, setSourceDocument] = useState("");
@@ -91,6 +93,8 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
       setThreats(Array.isArray(data.threats) ? data.threats.join("\n") : "");
       setTraps(Array.isArray(data.traps) ? data.traps.join("\n") : "");
       setWinningTargets(data.winning_targets ?? "");
+      setEachPlayerTargets(data.each_player_targets ?? "");
+      setFailureConditions(data.failure_conditions ?? "");
       setEndingConditions(data.ending_conditions ?? "");
       setGmNotes(data.gm_notes ?? "");
       setSourceDocument(data.source_document ?? "");
@@ -146,6 +150,8 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
         threats: parseLines(threats),
         traps: parseLines(traps),
         winning_targets: winningTargets.trim() || null,
+        each_player_targets: eachPlayerTargets.trim() || null,
+        failure_conditions: failureConditions.trim() || null,
         ending_conditions: endingConditions.trim() || null,
         gm_notes: gmNotes.trim() || null,
         source_document: sourceDocument.trim() || null,
@@ -312,13 +318,20 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
             <Field label="陷阱與危機（每行一個）">
               <textarea value={traps} onChange={(e) => setTraps(e.target.value)} rows={3} className={taCls} />
             </Field>
-            <Field label="通關條件 / Winning Targets" hint="玩家必須完成的明確勝利目標——每行一項。這是系統判定遊戲結束的主要依據。留空則改用下方「結局條件」。">
+            <Field label="通關條件（任一名玩家完成即可）" hint="達成遊戲勝利的目標——每行一項。只要隊伍中任何一人完成即算達成。這是系統判定獲勝的主要依據。">
               <textarea value={winningTargets} onChange={(e) => setWinningTargets(e.target.value)} rows={4}
-                placeholder={"取回聖石並帶出神廟\n消滅守門者\n所有玩家在黎明前逃脫"}
+                placeholder={"取回聖石並帶出神廟\n消滅守門者"}
                 className={taCls} />
             </Field>
-            <Field label="結局條件" hint="AI 主持人的完整勝敗情境說明（含失敗分支）。通關條件為空時作為備用。">
-              <textarea value={endingConditions} onChange={(e) => setEndingConditions(e.target.value)} rows={3} className={taCls} />
+            <Field label="每名存活玩家必須完成" hint="每一位存活玩家都必須各自完成的目標——每行一項。需要所有人個別達成，一人完成不算其他人完成。">
+              <textarea value={eachPlayerTargets} onChange={(e) => setEachPlayerTargets(e.target.value)} rows={3}
+                placeholder={"懺悔自己的罪行\n找到屬於自己的逃生符咒"}
+                className={taCls} />
+            </Field>
+            <Field label="失敗條件" hint="一旦發生即判定遊戲失敗的事件——每行一項。系統每回合檢查，若觸發則以失敗結局結束遊戲。">
+              <textarea value={failureConditions} onChange={(e) => setFailureConditions(e.target.value)} rows={3}
+                placeholder={"聖石被敵人奪走\n神廟在隊伍逃出前坍塌"}
+                className={taCls} />
             </Field>
             <Field label="補充主持人備注">
               <textarea value={gmNotes} onChange={(e) => setGmNotes(e.target.value)} rows={4} className={taCls} />
