@@ -165,6 +165,16 @@ Notes:
 - Be thorough, but ensure the JSON is COMPLETE and valid (every brace and bracket closed).`;
 }
 
+// Max output tokens for the deep extraction. Lower this (via AI_IMPORT_MAX_TOKENS)
+// if imports time out on a lower serverless tier.
+const IMPORT_MAX_TOKENS = Number(process.env.AI_IMPORT_MAX_TOKENS) || 8000;
+
+// Abort the AI call before the serverless function itself is killed, so we can
+// return a clean JSON error instead of the platform's HTML error page (which
+// made the client throw "Unexpected token ... is not valid JSON"). Keep this a
+// bit under the route's maxDuration.
+const IMPORT_TIMEOUT_MS = Number(process.env.AI_IMPORT_TIMEOUT_MS) || 110000;
+
 async function callAI(system: string, user: string): Promise<string> {
   const provider = process.env.AI_PROVIDER ?? "deepseek";
   // AI_IMPORT_MODEL overrides the default model for scenario imports only.
@@ -177,40 +187,55 @@ async function callAI(system: string, user: string): Promise<string> {
     throw new Error("AI is not configured. Set AI_PROVIDER, AI_MODEL, and AI_API_KEY in the server environment.");
   }
 
-  if (provider === "anthropic") {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), IMPORT_TIMEOUT_MS);
+  try {
+    if (provider === "anthropic") {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model,
+          system,
+          messages: [{ role: "user", content: user }],
+          max_tokens: IMPORT_MAX_TOKENS,
+        }),
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error(`AI request failed (${res.status}).`);
+      const data = await res.json();
+      return data.content?.[0]?.text?.trim() ?? "";
+    }
+
+    const baseUrl = provider === "deepseek" ? "https://api.deepseek.com" : "https://api.openai.com";
+    const res = await fetch(`${baseUrl}/v1/chat/completions`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model,
-        system,
-        messages: [{ role: "user", content: user }],
-        max_tokens: 8000,
+        messages: [{ role: "system", content: system }, { role: "user", content: user }],
+        max_tokens: IMPORT_MAX_TOKENS,
+        temperature: 0.4,
       }),
+      signal: controller.signal,
     });
     if (!res.ok) throw new Error(`AI request failed (${res.status}).`);
     const data = await res.json();
-    return data.content?.[0]?.text?.trim() ?? "";
+    return data.choices?.[0]?.message?.content?.trim() ?? "";
+  } catch (e: any) {
+    if (e?.name === "AbortError") {
+      throw new Error(
+        "AI 分析逾時：文件太長，請縮短文件或分段匯入後再試。（可調整 AI_IMPORT_MODEL 為較快的模型，或縮短文件長度）"
+      );
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
   }
-
-  const baseUrl = provider === "deepseek" ? "https://api.deepseek.com" : "https://api.openai.com";
-  const res = await fetch(`${baseUrl}/v1/chat/completions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "system", content: system }, { role: "user", content: user }],
-      max_tokens: 8000,
-      temperature: 0.4,
-    }),
-  });
-  if (!res.ok) throw new Error(`AI request failed (${res.status}).`);
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content?.trim() ?? "";
 }
 
 function extractFirstJSON(s: string): string {

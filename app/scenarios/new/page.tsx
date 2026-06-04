@@ -115,11 +115,24 @@ export default function NewScenarioPage() {
       const fd = new FormData();
       fd.append("file", file);
       const res = await fetch("/api/scenarios/import", { method: "POST", body: fd });
-      const json = await res.json();
-      if (!res.ok) {
-        setImportError(json?.error ?? "Import failed.");
+
+      // The server may return a non-JSON error page (e.g. a serverless
+      // function timeout / 5xx from the platform). Read the body as text first
+      // and only parse JSON when it actually is JSON — otherwise res.json()
+      // throws "Unexpected token ... is not valid JSON" and hides the cause.
+      const ct = res.headers.get("content-type") ?? "";
+      const isJson = ct.includes("application/json");
+      const json = isJson ? await res.json().catch(() => null) : null;
+
+      if (!res.ok || !json) {
+        if (res.status === 504 || res.status === 408 || (!json && res.status >= 500)) {
+          setImportError("匯入逾時：文件太長，AI 分析超過伺服器時間上限。請縮短文件、分段匯入，或稍後再試。");
+        } else {
+          setImportError(json?.error ?? `匯入失敗（HTTP ${res.status}）。請稍後再試或改用手動填寫。`);
+        }
         return;
       }
+
       applyImport(json.scenario as ImportedScenario);
       setImportNote(
         `已從「${file.name}」匯入。AI 已預填以下欄位 — 請逐一檢閱並編輯，然後選擇儲存為草稿或發佈。` +
@@ -129,7 +142,7 @@ export default function NewScenarioPage() {
       const msg = e?.message ?? "";
       setImportError(
         msg.includes("fetch") || msg === "" || msg.includes("Failed to fetch") || msg.includes("network")
-          ? "匯入逾時或網路錯誤。文件過長時分析需較多時間，請再試一次。"
+          ? "匯入逾時或網路錯誤。文件過長時分析需較多時間，請再試一次或縮短文件。"
           : `匯入失敗：${msg}`
       );
     } finally {
