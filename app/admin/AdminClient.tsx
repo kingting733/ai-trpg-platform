@@ -19,6 +19,7 @@ export interface AdminRoom {
   status: "waiting" | "in_progress" | "completed";
   round: number;
   created_at: string;
+  updated_at: string;
   scenarioTitle: string;
   hostName: string;
   playerCount: number;
@@ -78,6 +79,37 @@ export function AdminClient({
       setNotice(
         `已刪除劇本「${s.title}」` + (json?.roomsRemoved ? `，並移除 ${json.roomsRemoved} 個相關房間。` : "。")
       );
+    } catch (e: any) {
+      setError(e?.message ?? "刪除失敗");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const isIdle = (r: AdminRoom) => Date.now() - new Date(r.updated_at).getTime() > 60 * 60 * 1000;
+  const idleCount = rooms.filter(isIdle).length;
+
+  async function deleteInactiveRooms() {
+    if (idleCount === 0) {
+      setNotice("沒有閒置超過 1 小時的房間。");
+      setError(null);
+      return;
+    }
+    if (!confirm(`確定要刪除 ${idleCount} 個閒置超過 1 小時的房間嗎？\n\n這會刪除這些房間的所有角色與遊戲紀錄。此操作無法復原。`)) return;
+
+    setBusy("__inactive__");
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/admin/rooms/inactive`, { method: "DELETE" });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        setError(json?.error ?? `刪除失敗（HTTP ${res.status}）`);
+        return;
+      }
+      const removed: string[] = json?.ids ?? [];
+      setRooms((prev) => prev.filter((x) => !removed.includes(x.id)));
+      setNotice(`已刪除 ${json?.deleted ?? removed.length} 個閒置房間。`);
     } catch (e: any) {
       setError(e?.message ?? "刪除失敗");
     } finally {
@@ -169,6 +201,15 @@ export function AdminClient({
           placeholder="搜尋標題 / 建立者 / 代碼…"
           className="flex-1 min-w-[200px] bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
         />
+        {tab === "rooms" && (
+          <button
+            onClick={deleteInactiveRooms}
+            disabled={busy === "__inactive__" || idleCount === 0}
+            className="px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 bg-red-900/50 hover:bg-red-800/60 text-red-200 border border-red-900/60"
+          >
+            {busy === "__inactive__" ? "刪除中…" : `刪除閒置 1 小時的房間（${idleCount}）`}
+          </button>
+        )}
       </div>
 
       {error && (
@@ -225,6 +266,11 @@ export function AdminClient({
                       {statusLabel[r.status] ?? r.status}
                     </span>
                     <span className="text-xs text-slate-500 font-mono">{r.roomCode}</span>
+                    {isIdle(r) && (
+                      <span className="text-xs px-2 py-0.5 rounded border border-amber-900/60 bg-amber-950/40 text-amber-300 shrink-0">
+                        閒置 &gt; 1 小時
+                      </span>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-3 text-xs text-slate-500">
                     <span>劇本：{r.scenarioTitle}</span>
