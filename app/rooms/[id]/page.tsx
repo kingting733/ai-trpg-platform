@@ -49,8 +49,8 @@ interface Room {
   ending_type: string | null;
   ending_title: string | null;
   ending_summary: string | null;
-  objectives: { id: string; text: string; required: boolean }[] | null;
-  objective_progress: Record<string, { done: boolean; round: number; character: string | null }> | null;
+  objectives: { id: string; text: string; required: boolean; scope?: "party" | "each_player" }[] | null;
+  objective_progress: Record<string, { done: boolean; round: number | null; character: string | null; by?: Record<string, number> }> | null;
 }
 
 interface RoomPlayer {
@@ -373,7 +373,12 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
             <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">任務目標</h3>
             <div className="flex flex-col gap-1.5">
               {room.objectives!.map((o) => {
-                const done = room.objective_progress?.[o.id]?.done === true;
+                const entry = room.objective_progress?.[o.id];
+                const done = entry?.done === true;
+                const isEach = o.scope === "each_player";
+                const livingNames = sortedBySpeed.filter((c) => c.hp > 0).map((c) => c.name);
+                const byCount = entry?.by ? Object.keys(entry.by).length : 0;
+                const total = livingNames.length || byCount;
                 return (
                   <div key={o.id} className="flex items-start gap-2 text-xs">
                     <span className={`shrink-0 mt-0.5 ${done ? "text-green-400" : "text-slate-600"}`}>
@@ -382,6 +387,11 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                     <span className={`flex-1 ${done ? "text-green-300" : "text-slate-300"}`}>
                       {o.text}
                       {!o.required && <span className="text-slate-500 ml-1">（選填）</span>}
+                      {isEach && (
+                        <span className={`ml-1 ${done ? "text-green-400" : "text-amber-400"}`}>
+                          （每人 {byCount}/{total}）
+                        </span>
+                      )}
                     </span>
                   </div>
                 );

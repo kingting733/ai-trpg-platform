@@ -6,6 +6,8 @@ import { detectEnding } from "@/lib/ai/detect-ending";
 import {
   decomposeObjectives,
   checkObjectiveProgress,
+  incompleteForActor,
+  applyCompletions,
   allRequiredDone,
   generateVictoryNarration,
   Objective,
@@ -231,13 +233,17 @@ export async function POST(request: Request) {
       }
 
       if (objectives.length > 0) {
-        const progress: ObjectiveProgress =
+        let progress: ObjectiveProgress =
           room.objective_progress && typeof room.objective_progress === "object"
             ? { ...room.objective_progress }
             : {};
 
-        // 2. Only ask the AI about objectives not already flagged done.
-        const incomplete = objectives.filter((o) => progress[o.id]?.done !== true);
+        // Living characters define who must still complete each_player objectives.
+        const livingPlayerNames = sortedBySpeed.filter((c: any) => c.hp > 0).map((c: any) => c.name);
+
+        // 2. Only ask the AI about objectives this ACTOR hasn't personally done.
+        //    (party scope: not done; each_player scope: actor not yet recorded)
+        const incomplete = incompleteForActor(objectives, progress, actingName);
         const newlyDone = await checkObjectiveProgress(
           incomplete,
           storyLogSoFar,
@@ -246,22 +252,37 @@ export async function POST(request: Request) {
           gmResponse.narration
         );
 
-        // 3. Persist newly-completed objectives as PERMANENT flags.
+        // 3. Persist completions as PERMANENT flags (scope-aware).
         if (newlyDone.length > 0) {
-          for (const id of newlyDone) {
-            progress[id] = { done: true, round: room.current_round, character: actingName };
-          }
+          progress = applyCompletions(
+            objectives,
+            progress,
+            newlyDone,
+            actingName,
+            room.current_round,
+            livingPlayerNames
+          );
           await supabase.from("rooms").update({ objective_progress: progress }).eq("id", roomId);
 
-          // Visible feedback in the story log for each completed objective.
+          // Visible feedback per objective — distinguish personal vs full completion.
           for (const id of newlyDone) {
             const obj = objectives.find((o) => o.id === id);
             if (!obj) continue;
+            let content: string;
+            if (obj.scope === "each_player" && progress[id]?.done !== true) {
+              const done = Object.keys(progress[id]?.by ?? {}).length;
+              const total = livingPlayerNames.length;
+              content = isZh
+                ? `✓ ${actingName} 完成了個人目標：${obj.text}（${done}/${total}）`
+                : `✓ ${actingName} completed their part: ${obj.text} (${done}/${total})`;
+            } else {
+              content = isZh ? `✓ 目標達成：${obj.text}` : `✓ Objective complete: ${obj.text}`;
+            }
             await supabase.from("story_logs").insert({
               room_id: roomId,
               round_number: room.current_round,
               entry_type: "system",
-              content: isZh ? `✓ 目標達成：${obj.text}` : `✓ Objective complete: ${obj.text}`,
+              content,
             });
           }
         }
