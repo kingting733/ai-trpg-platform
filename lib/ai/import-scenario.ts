@@ -54,6 +54,12 @@ function normalizeLanguage(v: unknown): string {
 // rather than being front-truncated, which previously lost the climax/endings.
 const MAX_DOC_CHARS = 48000;
 
+// Ceiling for the full raw source we KEEP (separate from the summarization
+// budget above). This is injected into the GM's cached system prefix at play
+// time, so it can be larger than MAX_DOC_CHARS — but cap it to protect the
+// model's context window. ~100k chars ≈ ~30-40k tokens. Tunable via env.
+const SOURCE_DOC_MAX_CHARS = Number(process.env.AI_SOURCE_DOC_MAX_CHARS) || 100000;
+
 function asString(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
 }
@@ -265,9 +271,14 @@ function extractFirstJSON(s: string): string {
 /** Analyze raw document text and return validated, editable scenario fields. */
 export async function analyzeScenarioDocument(
   text: string
-): Promise<{ scenario: ImportedScenario; truncated: boolean }> {
+): Promise<{ scenario: ImportedScenario; truncated: boolean; sourceDocument: string }> {
   const truncated = text.length > MAX_DOC_CHARS;
   const doc = truncated ? text.slice(0, MAX_DOC_CHARS) : text;
+
+  // Keep the full raw text (up to a generous ceiling) so the GM can reference
+  // the WHOLE module at play time, not just the summary. This is stored on the
+  // scenario and injected into the GM's cached system prefix.
+  const sourceDocument = text.slice(0, SOURCE_DOC_MAX_CHARS);
 
   const system = buildPrompt();
   const user = `STORY DOCUMENT:\n"""\n${doc}\n"""`;
@@ -294,5 +305,5 @@ export async function analyzeScenarioDocument(
     );
   }
 
-  return { scenario: normalizeImported(parsed), truncated };
+  return { scenario: normalizeImported(parsed), truncated, sourceDocument };
 }

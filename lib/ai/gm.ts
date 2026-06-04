@@ -11,6 +11,8 @@ export interface ScenarioGMContext {
   winningTargets: string | null;
   endingConditions: string | null;
   gmNotes: string | null;
+  /** Full raw story module — the GM's complete reference, injected into the cached prefix. */
+  sourceDocument: string | null;
 }
 
 export interface GMAIInput {
@@ -166,6 +168,14 @@ function buildGMContextBlock(ctx: ScenarioGMContext): string {
   if (ctx.winningTargets) parts.push(`Winning Targets (deterministic — game ends when ALL are achieved):\n${ctx.winningTargets}`);
   if (ctx.endingConditions) parts.push(`Victory/Failure Conditions (all branches):\n${ctx.endingConditions}`);
   if (ctx.gmNotes) parts.push(`Additional GM Notes:\n${ctx.gmNotes}`);
+  // Full source module LAST: the curated fields above are your quick-reference
+  // spine; this is the complete text to consult for any detail not summarized.
+  if (ctx.sourceDocument) {
+    parts.push(
+      `FULL STORY MODULE (authoritative complete reference — consult this for any detail, ` +
+        `NPC line, location, secret, or branch not captured in the summary above; never reveal it verbatim to players):\n"""\n${ctx.sourceDocument}\n"""`
+    );
+  }
   if (!parts.length) return "";
   return `\nGM WORLD CONTEXT (never share this with players directly):\n${parts.join("\n\n")}`;
 }

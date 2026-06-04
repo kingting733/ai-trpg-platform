@@ -49,6 +49,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
   const [traps, setTraps] = useState("");
   const [endingConditions, setEndingConditions] = useState("");
   const [gmNotes, setGmNotes] = useState("");
+  const [sourceDocument, setSourceDocument] = useState("");
   const [currentStatus, setCurrentStatus] = useState<Status>("draft");
   const [language, setLanguage] = useState("zh-TW");
 
@@ -92,6 +93,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
       setWinningTargets(data.winning_targets ?? "");
       setEndingConditions(data.ending_conditions ?? "");
       setGmNotes(data.gm_notes ?? "");
+      setSourceDocument(data.source_document ?? "");
       setCurrentStatus(data.status ?? "draft");
       setLanguage(data.language ?? "zh-TW");
       setLoading(false);
@@ -146,6 +148,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
         winning_targets: winningTargets.trim() || null,
         ending_conditions: endingConditions.trim() || null,
         gm_notes: gmNotes.trim() || null,
+        source_document: sourceDocument.trim() || null,
         language,
         status,
       })
@@ -319,6 +322,12 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
             </Field>
             <Field label="補充主持人備注">
               <textarea value={gmNotes} onChange={(e) => setGmNotes(e.target.value)} rows={4} className={taCls} />
+            </Field>
+            <Field label="完整故事原文 / Full Story" hint="AI 主持人遊玩時可參考的完整故事原文。保留它能讓主持人掌握全貌，而非僅看摘要。可手動編輯或貼上。">
+              <textarea value={sourceDocument} onChange={(e) => setSourceDocument(e.target.value)} rows={6} className={taCls} />
+              {sourceDocument && (
+                <p className="text-xs text-slate-500 mt-1">目前長度：{sourceDocument.length.toLocaleString()} 字元</p>
+              )}
             </Field>
           </div>
         )}

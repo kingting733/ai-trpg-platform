@@ -92,8 +92,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { scenario, truncated } = await analyzeScenarioDocument(text);
-    return NextResponse.json({ scenario, truncated });
+    const { scenario, truncated, sourceDocument } = await analyzeScenarioDocument(text);
+    return NextResponse.json({ scenario, truncated, sourceDocument });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? "AI analysis failed." }, { status: 500 });
   }

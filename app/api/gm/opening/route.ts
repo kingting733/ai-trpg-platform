@@ -27,6 +27,11 @@ function buildGMContextBlock(ctx: ScenarioGMContext): string {
   if (ctx.winningTargets) parts.push(`Winning Targets (deterministic — game ends when ALL are achieved):\n${ctx.winningTargets}`);
   if (ctx.endingConditions) parts.push(`Victory/Failure Conditions:\n${ctx.endingConditions}`);
   if (ctx.gmNotes) parts.push(`Additional GM Notes:\n${ctx.gmNotes}`);
+  if (ctx.sourceDocument) {
+    parts.push(
+      `FULL STORY MODULE (authoritative complete reference — consult for any detail not in the summary above; never reveal verbatim to players):\n"""\n${ctx.sourceDocument}\n"""`
+    );
+  }
   if (!parts.length) return "";
   return `\nGM WORLD CONTEXT (never share this with players directly):\n${parts.join("\n\n")}`;
 }
@@ -151,7 +156,7 @@ export async function POST(request: Request) {
 
   const { data: room } = await supabase
     .from("rooms")
-    .select("*, scenarios(title, background, objective, rules, opening_scene, scene_flow, secret_rules, locations, npcs, clues, threats, traps, key_items, winning_targets, ending_conditions, gm_notes, language)")
+    .select("*, scenarios(title, background, objective, rules, opening_scene, scene_flow, secret_rules, locations, npcs, clues, threats, traps, key_items, winning_targets, ending_conditions, gm_notes, source_document, language)")
     .eq("id", roomId)
     .single();
   if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -193,6 +198,7 @@ export async function POST(request: Request) {
     winningTargets: scenario.winning_targets ?? null,
     endingConditions: scenario.ending_conditions ?? null,
     gmNotes: scenario.gm_notes ?? null,
+    sourceDocument: scenario.source_document ?? null,
   } : null;
 
   const opening = await generateOpening(

@@ -54,6 +54,9 @@ export default function NewScenarioPage() {
   const [endingConditions, setEndingConditions] = useState("");
   const [gmNotes, setGmNotes] = useState("");
 
+  // Full raw story text the AI GM references at play time (set by import, editable).
+  const [sourceDocument, setSourceDocument] = useState("");
+
   const [language, setLanguage] = useState("zh-TW");
 
   const [saving, setSaving] = useState(false);
@@ -136,6 +139,7 @@ export default function NewScenarioPage() {
       }
 
       applyImport(json.scenario as ImportedScenario);
+      if (typeof json.sourceDocument === "string") setSourceDocument(json.sourceDocument);
       setImportNote(
         `已從「${file.name}」匯入。AI 已預填以下欄位 — 請逐一檢閱並編輯，然後選擇儲存為草稿或發佈。` +
           (json.truncated ? "（文件過長，僅分析了前段內容。）" : "")
@@ -197,6 +201,7 @@ export default function NewScenarioPage() {
         winning_targets: winningTargets.trim() || null,
         ending_conditions: endingConditions.trim() || null,
         gm_notes: gmNotes.trim() || null,
+        source_document: sourceDocument.trim() || null,
         language,
         status,
       })
@@ -405,6 +410,14 @@ export default function NewScenarioPage() {
               <textarea value={gmNotes} onChange={(e) => setGmNotes(e.target.value)} rows={4}
                 placeholder="獎勵有創意的解決方案。若玩家提早找到隱藏通道，可直接推進至最終對決。盡可能引用角色背景..."
                 className={taCls} />
+            </Field>
+            <Field label="完整故事原文 / Full Story" hint="AI 主持人遊玩時可參考的完整故事原文（匯入時自動填入）。保留它能讓主持人掌握全貌，而非僅看摘要。可手動編輯或貼上。">
+              <textarea value={sourceDocument} onChange={(e) => setSourceDocument(e.target.value)} rows={6}
+                placeholder="匯入故事文件後，完整原文會顯示於此。也可直接貼上整篇故事。"
+                className={taCls} />
+              {sourceDocument && (
+                <p className="text-xs text-slate-500 mt-1">目前長度：{sourceDocument.length.toLocaleString()} 字元</p>
+              )}
             </Field>
           </div>
         )}
