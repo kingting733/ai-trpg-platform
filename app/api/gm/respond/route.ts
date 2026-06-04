@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   // Verify caller is a room participant and it's actually their turn
   const { data: room } = await supabase
     .from("rooms")
-    .select("*, scenarios(title, background, objective, rules, opening_scene, secret_rules, locations, npcs, threats, traps, key_items, ending_conditions, gm_notes)")
+    .select("*, scenarios(title, background, objective, rules, opening_scene, secret_rules, locations, npcs, threats, traps, key_items, ending_conditions, gm_notes, language)")
     .eq("id", roomId)
     .single();
   if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -155,6 +155,7 @@ export async function POST(request: Request) {
     scenarioBackground: scenario?.background ?? null,
     scenarioObjective: scenario?.objective ?? null,
     scenarioRules: scenario?.rules ?? null,
+    scenarioLanguage: scenario?.language ?? null,
     scenarioGMContext: gmContext,
     characters: partyForAI,
     storyLogSoFar,
@@ -195,18 +196,25 @@ export async function POST(request: Request) {
     const allDead = sortedBySpeed.every((c: any) => c.hp <= 0);
 
     // Check 2: AI-based story ending (only if scenario has ending_conditions)
+    const tpdTitle = scenario?.language === "zh-TW" || scenario?.language === "zh-CN"
+      ? "全員陣亡" : "Total Party Defeat";
+    const tpdSummary = scenario?.language === "zh-TW" || scenario?.language === "zh-CN"
+      ? "所有人都已倒下。黑暗取得了最終的勝利，冒險就此以失敗告終。"
+      : "The entire party has fallen. The darkness claims its victory and the adventure ends in defeat.";
+
     let ending = allDead
       ? {
           triggered: true as const,
           type: "failure" as const,
-          title: "Total Party Defeat",
-          summary: "The entire party has fallen. The darkness claims its victory and the adventure ends in defeat.",
+          title: tpdTitle,
+          summary: tpdSummary,
         }
       : await detectEnding(
           scenario?.ending_conditions ?? "",
           storyLogSoFar,
           actionText,
-          gmResponse.narration
+          gmResponse.narration,
+          scenario?.language ?? null
         );
 
     if (ending.triggered) {

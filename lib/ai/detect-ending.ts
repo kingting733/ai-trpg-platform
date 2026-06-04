@@ -67,16 +67,30 @@ async function callAI(system: string, user: string): Promise<string> {
  *
  * Skip calling this if endingConditions is blank — saves a round-trip.
  */
+const ENDING_LANGUAGE_LABELS: Record<string, string> = {
+  "zh-TW": "Traditional Chinese (繁體中文)",
+  "zh-CN": "Simplified Chinese (简体中文)",
+  "en": "English",
+  "ja": "Japanese (日本語)",
+  "ko": "Korean (한국어)",
+};
+
 export async function detectEnding(
   endingConditions: string,
   recentLog: string[],
   playerAction: string,
-  gmNarration: string
+  gmNarration: string,
+  language?: string | null
 ): Promise<EndingResult> {
   if (!endingConditions.trim()) return NULL_RESULT;
 
-  const system = `You are an ending-condition detector for a multiplayer TRPG text adventure.
+  const langLabel = language ? (ENDING_LANGUAGE_LABELS[language] ?? language) : null;
+  const langRule = langLabel
+    ? `\nLANGUAGE RULE: Write the "title" and "summary" fields in ${langLabel}. Do not use English for these fields unless the scenario language is English.\n`
+    : "";
 
+  const system = `You are an ending-condition detector for a multiplayer TRPG text adventure.
+${langRule}
 SCENARIO ENDING CONDITIONS (defined by the creator):
 ${endingConditions}
 
@@ -94,8 +108,8 @@ Return ONLY valid JSON, no markdown, no extra text:
 Field rules:
 - triggered: true only if an ending condition is clearly met
 - type: "best" = perfect/ideal win, "normal" = standard success, "bad" = pyrrhic/bittersweet success, "failure" = defeat/death/quest failed
-- title: 4-7 word ending title (e.g. "The Ritual is Complete" or "A Bitter Escape") — null if not triggered
-- summary: 2-3 sentences describing how the adventure concluded, written for a closing screen — null if not triggered`;
+- title: 4-7 word ending title written in the scenario language — null if not triggered
+- summary: 2-3 sentences describing how the adventure concluded, written in the scenario language for a closing screen — null if not triggered`;
 
   const user = `RECENT STORY:
 ${recentLog.slice(-6).join("\n")}

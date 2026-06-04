@@ -47,6 +47,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
   const [endingConditions, setEndingConditions] = useState("");
   const [gmNotes, setGmNotes] = useState("");
   const [currentStatus, setCurrentStatus] = useState<Status>("draft");
+  const [language, setLanguage] = useState("zh-TW");
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,6 +87,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
       setEndingConditions(data.ending_conditions ?? "");
       setGmNotes(data.gm_notes ?? "");
       setCurrentStatus(data.status ?? "draft");
+      setLanguage(data.language ?? "zh-TW");
       setLoading(false);
     }
     load();
@@ -135,6 +137,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
         traps: parseLines(traps),
         ending_conditions: endingConditions.trim() || null,
         gm_notes: gmNotes.trim() || null,
+        language,
         status,
       })
       .eq("id", params.id)
@@ -245,6 +248,15 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
             </Field>
             <Field label="標籤（逗號分隔）">
               <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="地城, 單人友好, 黑暗" className={inputCls} />
+            </Field>
+            <Field label="劇本語言" hint="AI 主持人將以此語言進行遊戲敘述。">
+              <select value={language} onChange={(e) => setLanguage(e.target.value)} className={inputCls}>
+                <option value="zh-TW">繁體中文</option>
+                <option value="zh-CN">简体中文</option>
+                <option value="en">English</option>
+                <option value="ja">日本語</option>
+                <option value="ko">한국어</option>
+              </select>
             </Field>
           </div>
         )}

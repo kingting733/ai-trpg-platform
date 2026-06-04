@@ -24,6 +24,23 @@ export interface ImportedScenario {
   traps: string[];
   ending_conditions: string | null;
   gm_notes: string | null;
+  /** BCP-47 language tag auto-detected from the source document. */
+  language: string;
+}
+
+const VALID_LANGUAGES = ["zh-TW", "zh-CN", "en", "ja", "ko", "fr", "de", "es"];
+
+function normalizeLanguage(v: unknown): string {
+  const s = typeof v === "string" ? v.trim() : "";
+  // Accept exact matches or common aliases
+  if (VALID_LANGUAGES.includes(s)) return s;
+  const lower = s.toLowerCase();
+  if (lower.startsWith("zh-tw") || lower === "traditional chinese" || lower === "繁體中文") return "zh-TW";
+  if (lower.startsWith("zh-cn") || lower === "simplified chinese" || lower === "简体中文") return "zh-CN";
+  if (lower === "en" || lower.startsWith("en-")) return "en";
+  if (lower === "ja" || lower.startsWith("ja-") || lower === "japanese") return "ja";
+  if (lower === "ko" || lower.startsWith("ko-") || lower === "korean") return "ko";
+  return "zh-TW"; // safe default
 }
 
 // Keep document size sane for token/cost limits. Long docs are read from the top.
@@ -85,6 +102,7 @@ export function normalizeImported(raw: any): ImportedScenario {
     traps: asStringArray(raw?.traps),
     ending_conditions: asNullableString(raw?.ending_conditions),
     gm_notes: asNullableString(raw?.gm_notes),
+    language: normalizeLanguage(raw?.language),
   };
 }
 
@@ -92,31 +110,40 @@ function buildPrompt(): string {
   return `You are a scenario-design assistant for a multiplayer TRPG text-adventure platform.
 A creator uploaded a story document. Analyze it and extract a structured scenario definition that will PRE-FILL a creation form for the creator to review. You are NOT publishing anything.
 
+CRITICAL LANGUAGE RULE — READ THIS FIRST:
+1. Detect the primary language of the uploaded document (e.g. Traditional Chinese, Simplified Chinese, English, Japanese).
+2. Write ALL generated text fields in the EXACT SAME LANGUAGE as the source document. Do NOT translate.
+3. If the document is in Chinese, write title, description, objective, opening_scene, background, locations, npcs, key_items, secret_rules, threats, traps, ending_conditions, gm_notes ALL in Chinese.
+4. If the document is in English, write all fields in English. If in Japanese, write in Japanese. Mirror the source language exactly.
+5. Set the "language" field to the appropriate BCP-47 tag: "zh-TW" for Traditional Chinese, "zh-CN" for Simplified Chinese, "en" for English, "ja" for Japanese, "ko" for Korean.
+6. Tags should also be in the source language.
+
 Return ONLY valid JSON (no markdown fences, no commentary) with EXACTLY these keys:
 {
+  "language": "zh-TW" | "zh-CN" | "en" | "ja" | "ko" | string,
   "title": string,
   "genre": one of [${IMPORT_GENRES.join(", ")}],
   "difficulty": one of [${IMPORT_DIFFICULTIES.join(", ")}],
-  "description": string,            // 1-3 sentence PLAYER-FACING summary, no spoilers
-  "objective": string,              // what players must accomplish to win
+  "description": string,            // 1-3 sentence PLAYER-FACING summary, no spoilers — in source language
+  "objective": string,              // what players must accomplish to win — in source language
   "max_players": integer 1-6,
   "estimated_play_time": integer minutes or null,
-  "tags": string[],                 // 3-6 short lowercase tags
-  "opening_scene": string or null,  // vivid opening narration
-  "background": string or null,     // world lore / history
-  "locations": string[],            // "Name — short note"
-  "npcs": string[],                 // "Name — role / personality"
-  "key_items": string[],            // "Name — what it does"
-  "secret_rules": string or null,   // GM pacing / tone / mechanics
-  "threats": string[],              // "Name — danger"
-  "traps": string[],                // "Name — trigger / effect"
-  "ending_conditions": string or null, // victory / failure conditions
-  "gm_notes": string or null        // extra GM guidance
+  "tags": string[],                 // 3-6 short tags — in source language
+  "opening_scene": string or null,  // vivid opening narration — in source language
+  "background": string or null,     // world lore / history — in source language
+  "locations": string[],            // "Name — short note" — in source language
+  "npcs": string[],                 // "Name — role / personality" — in source language
+  "key_items": string[],            // "Name — what it does" — in source language
+  "secret_rules": string or null,   // GM pacing / tone / mechanics — in source language
+  "threats": string[],              // "Name — danger" — in source language
+  "traps": string[],                // "Name — trigger / effect" — in source language
+  "ending_conditions": string or null, // victory / failure conditions — in source language
+  "gm_notes": string or null        // extra GM guidance — in source language
 }
 
 Rules:
-- title, genre, difficulty, description, objective MUST always be filled with your best inference, even if the document is vague. If unsure, make a reasonable suggestion.
-- If genre does not clearly match the list, pick the closest, or "Other".
+- title, genre, difficulty, description, objective MUST always be filled with your best inference, even if the document is vague.
+- genre and difficulty values must be from the English lists above (they are system enums, not UI text).
 - description is shown to players browsing — keep it concise and spoiler-free.
 - Put spoilers, secrets, twists, and mechanics in the GM-only fields (opening_scene, background, locations, npcs, key_items, secret_rules, threats, traps, ending_conditions, gm_notes).
 - Use [] for empty lists and null for empty text fields — never invent filler.

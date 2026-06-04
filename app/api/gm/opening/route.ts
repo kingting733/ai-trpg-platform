@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { buildPartyRoster, ROSTER_CONSTRAINT, ScenarioGMContext } from "@/lib/ai/gm";
+import { buildPartyRoster, buildLanguageInstruction, ROSTER_CONSTRAINT, ScenarioGMContext } from "@/lib/ai/gm";
 
 export interface OpeningScene {
   scene: string;
@@ -34,7 +34,8 @@ async function generateOpening(
   objective: string | null,
   rules: string | null,
   gmContext: ScenarioGMContext | null,
-  characters: PartyMember[]
+  characters: PartyMember[],
+  language?: string | null
 ): Promise<OpeningScene> {
   const provider = process.env.AI_PROVIDER ?? "deepseek";
   const model = process.env.AI_MODEL ?? "deepseek-chat";
@@ -45,13 +46,14 @@ async function generateOpening(
   const names = characters.map((c) => c.name).join(", ");
   const firstCharName = characters[0]?.name ?? "the party";
   const gmCtxBlock = gmContext ? buildGMContextBlock(gmContext) : "";
+  const langBlock = buildLanguageInstruction(language);
 
   const openingInstruction = gmContext?.openingScene
     ? `Use the "Opening Scene to narrate" above as the basis for your opening narration — expand it into a vivid 3-4 sentence scene that introduces all party members.`
     : `Write the opening scene. Describe the environment vividly in 3-4 sentences, placing all party members in the world.`;
 
   const systemPrompt = `You are an AI Game Master starting a multiplayer TRPG adventure called "${scenarioTitle}".
-${background ? `Background: ${background}` : ""}
+${langBlock}${background ? `Background: ${background}` : ""}
 ${objective ? `Objective: ${objective}` : ""}
 ${rules ? `Special Rules: ${rules}` : ""}
 ${gmCtxBlock}
@@ -146,7 +148,7 @@ export async function POST(request: Request) {
 
   const { data: room } = await supabase
     .from("rooms")
-    .select("*, scenarios(title, background, objective, rules, opening_scene, secret_rules, locations, npcs, threats, traps, key_items, ending_conditions, gm_notes)")
+    .select("*, scenarios(title, background, objective, rules, opening_scene, secret_rules, locations, npcs, threats, traps, key_items, ending_conditions, gm_notes, language)")
     .eq("id", roomId)
     .single();
   if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -193,7 +195,8 @@ export async function POST(request: Request) {
     scenario?.objective ?? null,
     scenario?.rules ?? null,
     gmContext,
-    party
+    party,
+    scenario?.language ?? null
   );
 
   await supabase.from("story_logs").insert({

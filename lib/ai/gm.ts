@@ -15,6 +15,7 @@ export interface GMAIInput {
   scenarioBackground: string | null;
   scenarioObjective: string | null;
   scenarioRules: string | null;
+  scenarioLanguage?: string | null;
   scenarioGMContext?: ScenarioGMContext | null;
   characters: Array<{ name: string; playerName?: string | null; background: string | null; speed: number; hp: number; str: number; agi: number; int: number; cha: number; luck: number; san: number }>;
   storyLogSoFar: string[];
@@ -97,6 +98,20 @@ export function buildPartyRoster(
     .join("\n");
 }
 
+const LANGUAGE_LABELS: Record<string, string> = {
+  "zh-TW": "Traditional Chinese (繁體中文)",
+  "zh-CN": "Simplified Chinese (简体中文)",
+  "en": "English",
+  "ja": "Japanese (日本語)",
+  "ko": "Korean (한국어)",
+};
+
+export function buildLanguageInstruction(language: string | null | undefined): string {
+  if (!language || language === "auto") return "";
+  const label = LANGUAGE_LABELS[language] ?? language;
+  return `\nLANGUAGE RULE: This scenario is written in ${label}. You MUST write ALL narration, all suggested player actions, and all responses in ${label}. Do NOT switch to English or any other language under any circumstances.\n`;
+}
+
 export const ROSTER_CONSTRAINT =
   "STRICT ROSTER RULE: The party roster below is the COMPLETE and ONLY list of player characters. " +
   "You MUST only use these exact character names. Do NOT invent, rename, or add any new protagonist, " +
@@ -126,9 +141,10 @@ function buildSystemPrompt(input: GMAIInput): string {
   const recentLog = input.storyLogSoFar.slice(-10).join("\n");
   const diceBlock = buildDiceDirective(input);
   const gmCtxBlock = input.scenarioGMContext ? buildGMContextBlock(input.scenarioGMContext) : "";
+  const langBlock = buildLanguageInstruction(input.scenarioLanguage);
 
   return `You are an AI Game Master running a multiplayer TRPG text adventure called "${input.scenarioTitle}".
-${input.scenarioBackground ? `\nBackground: ${input.scenarioBackground}` : ""}
+${langBlock}${input.scenarioBackground ? `\nBackground: ${input.scenarioBackground}` : ""}
 ${input.scenarioObjective ? `\nObjective: ${input.scenarioObjective}` : ""}
 ${input.scenarioRules ? `\nSpecial Rules: ${input.scenarioRules}` : ""}
 ${gmCtxBlock}

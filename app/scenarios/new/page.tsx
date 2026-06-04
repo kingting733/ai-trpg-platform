@@ -51,6 +51,8 @@ export default function NewScenarioPage() {
   const [endingConditions, setEndingConditions] = useState("");
   const [gmNotes, setGmNotes] = useState("");
 
+  const [language, setLanguage] = useState("zh-TW");
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -84,6 +86,7 @@ export default function NewScenarioPage() {
     setTraps((d.traps ?? []).join("\n"));
     setEndingConditions(d.ending_conditions ?? "");
     setGmNotes(d.gm_notes ?? "");
+    if (d.language) setLanguage(d.language);
     setActiveTab("player");
   }
 
@@ -167,6 +170,7 @@ export default function NewScenarioPage() {
         traps: parseLines(traps),
         ending_conditions: endingConditions.trim() || null,
         gm_notes: gmNotes.trim() || null,
+        language,
         status,
       })
       .select("id")
@@ -288,6 +292,15 @@ export default function NewScenarioPage() {
             </Field>
             <Field label="標籤（逗號分隔）" hint="幫助玩家找到你的劇本。例：地下城、可單人、黑暗">
               <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="地下城, 可單人, 黑暗, 調查" className={inputCls} />
+            </Field>
+            <Field label="劇本語言" hint="AI 主持人將以此語言進行遊戲敘述。">
+              <select value={language} onChange={(e) => setLanguage(e.target.value)} className={inputCls}>
+                <option value="zh-TW">繁體中文</option>
+                <option value="zh-CN">简体中文</option>
+                <option value="en">English</option>
+                <option value="ja">日本語</option>
+                <option value="ko">한국어</option>
+              </select>
             </Field>
           </div>
         )}
