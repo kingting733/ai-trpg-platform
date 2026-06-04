@@ -26,6 +26,8 @@ export interface ImportedScenario {
   secret_rules: string | null;
   threats: string[];
   traps: string[];
+  /** Explicit, player-completable victory conditions — numbered list for objective tracking. */
+  winning_targets: string | null;
   ending_conditions: string | null;
   gm_notes: string | null;
   /** BCP-47 language tag auto-detected from the source document. */
@@ -108,6 +110,7 @@ export function normalizeImported(raw: any): ImportedScenario {
     secret_rules: asNullableString(raw?.secret_rules),
     threats: asStringArray(raw?.threats),
     traps: asStringArray(raw?.traps),
+    winning_targets: asNullableString(raw?.winning_targets),
     ending_conditions: asNullableString(raw?.ending_conditions),
     gm_notes: asNullableString(raw?.gm_notes),
     language: normalizeLanguage(raw?.language),
@@ -130,6 +133,7 @@ DEPTH REQUIREMENTS — the most important part. For these fields, PRESERVE the s
 - threats: for each enemy/danger, give its behavior, abilities or stats, and weaknesses.
 - locations: for each, give a vivid description, what is found there, what happens there, and how it connects to other locations.
 - key_items: for each, give where it is found, what it does, and what it unlocks.
+- winning_targets: extract the EXPLICIT player-completable VICTORY conditions as a numbered list (e.g. "1. 取回聖石並逃出神廟\n2. 消滅守門者"). These are the discrete checkboxes a player must tick to WIN. Do NOT include failure conditions here. If the document has no explicit win conditions, set null.
 - ending_conditions: ALL outcomes — every victory, failure, and partial/branch ending — and the EXACT condition that triggers each one. Never collapse multiple endings into a single line.
 - secret_rules: pacing, tone, and special mechanics the GM must enforce.
 - gm_notes: anything else needed to run it well (foreshadowing, optional content, scaling, adjudication tips).
@@ -154,6 +158,7 @@ Required JSON keys:
 - secret_rules: GM pacing / tone / mechanics or null
 - threats: array of detailed threat entries
 - traps: array of detailed trap entries
+- winning_targets: numbered list of explicit player-completable victory conditions, or null
 - ending_conditions: every ending and its trigger, or null
 - gm_notes: extra GM guidance or null
 

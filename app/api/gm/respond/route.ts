@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   // Verify caller is a room participant and it's actually their turn
   const { data: room } = await supabase
     .from("rooms")
-    .select("*, scenarios(title, background, objective, rules, opening_scene, scene_flow, secret_rules, locations, npcs, clues, threats, traps, key_items, ending_conditions, gm_notes, language)")
+    .select("*, scenarios(title, background, objective, rules, opening_scene, scene_flow, secret_rules, locations, npcs, clues, threats, traps, key_items, winning_targets, ending_conditions, gm_notes, language)")
     .eq("id", roomId)
     .single();
   if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -158,6 +158,7 @@ export async function POST(request: Request) {
     threats: Array.isArray(scenario.threats) ? scenario.threats : [],
     traps: Array.isArray(scenario.traps) ? scenario.traps : [],
     keyItems: Array.isArray(scenario.key_items) ? scenario.key_items : [],
+    winningTargets: scenario.winning_targets ?? null,
     endingConditions: scenario.ending_conditions ?? null,
     gmNotes: scenario.gm_notes ?? null,
   } : null;
@@ -219,16 +220,20 @@ export async function POST(request: Request) {
 
     if (allDead) {
       ending = { triggered: true, type: "failure", title: tpdTitle, summary: tpdSummary };
-    } else if (scenario?.ending_conditions) {
+    } else if (scenario?.winning_targets || scenario?.ending_conditions) {
       // === DETERMINISTIC OBJECTIVE TRACKER ===
       // Progress is stored as PERMANENT FLAGS on the room — the AI never has to
       // remember earlier turns. It only classifies the current action against
       // the still-incomplete objectives; whether the game ends is pure code.
 
+      // winning_targets is the primary source (creator-written, explicit).
+      // Fall back to ending_conditions when winning_targets is absent.
+      const objectiveSource = scenario.winning_targets?.trim() || scenario.ending_conditions;
+
       // 1. Ensure the room has a decomposed objective checklist (build once).
       let objectives: Objective[] = Array.isArray(room.objectives) ? room.objectives : [];
       if (objectives.length === 0) {
-        objectives = await decomposeObjectives(scenario.ending_conditions, scenario?.language ?? null);
+        objectives = await decomposeObjectives(objectiveSource, scenario?.language ?? null);
         if (objectives.length > 0) {
           await supabase.from("rooms").update({ objectives }).eq("id", roomId);
         }

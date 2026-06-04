@@ -24,6 +24,7 @@ function buildGMContextBlock(ctx: ScenarioGMContext): string {
   if (ctx.traps.length) parts.push(`Traps & Hazards:\n${ctx.traps.map((t) => `  - ${t}`).join("\n")}`);
   if (ctx.keyItems.length) parts.push(`Key Items:\n${ctx.keyItems.map((i) => `  - ${i}`).join("\n")}`);
   if (ctx.secretRules) parts.push(`GM Rules & Pacing:\n${ctx.secretRules}`);
+  if (ctx.winningTargets) parts.push(`Winning Targets (deterministic — game ends when ALL are achieved):\n${ctx.winningTargets}`);
   if (ctx.endingConditions) parts.push(`Victory/Failure Conditions:\n${ctx.endingConditions}`);
   if (ctx.gmNotes) parts.push(`Additional GM Notes:\n${ctx.gmNotes}`);
   if (!parts.length) return "";
@@ -150,7 +151,7 @@ export async function POST(request: Request) {
 
   const { data: room } = await supabase
     .from("rooms")
-    .select("*, scenarios(title, background, objective, rules, opening_scene, scene_flow, secret_rules, locations, npcs, clues, threats, traps, key_items, ending_conditions, gm_notes, language)")
+    .select("*, scenarios(title, background, objective, rules, opening_scene, scene_flow, secret_rules, locations, npcs, clues, threats, traps, key_items, winning_targets, ending_conditions, gm_notes, language)")
     .eq("id", roomId)
     .single();
   if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -189,6 +190,7 @@ export async function POST(request: Request) {
     threats: Array.isArray(scenario.threats) ? scenario.threats : [],
     traps: Array.isArray(scenario.traps) ? scenario.traps : [],
     keyItems: Array.isArray(scenario.key_items) ? scenario.key_items : [],
+    winningTargets: scenario.winning_targets ?? null,
     endingConditions: scenario.ending_conditions ?? null,
     gmNotes: scenario.gm_notes ?? null,
   } : null;
