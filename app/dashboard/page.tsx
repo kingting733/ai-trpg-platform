@@ -62,19 +62,19 @@ export default function DashboardPage() {
     <div>
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-white">Creator Dashboard</h1>
-          <p className="text-slate-400 mt-1">Manage your scenarios</p>
+          <h1 className="text-3xl font-bold text-white">創作者後台</h1>
+          <p className="text-slate-400 mt-1">管理你的劇本</p>
         </div>
         <Link href="/scenarios/new" className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg font-medium">
-          + New Scenario
+          + 新增劇本
         </Link>
       </div>
 
       <div className="grid grid-cols-3 gap-4 mb-8">
         {[
-          { label: "Total Scenarios", value: scenarios.length },
-          { label: "Published", value: published },
-          { label: "Drafts", value: scenarios.length - published },
+          { label: "劇本總數", value: scenarios.length },
+          { label: "已發佈", value: published },
+          { label: "草稿", value: scenarios.length - published },
         ].map((s) => (
           <div key={s.label} className="bg-slate-800/50 border border-slate-700 rounded-xl p-5">
             <div className="text-2xl font-bold text-white">{s.value}</div>
@@ -85,16 +85,16 @@ export default function DashboardPage() {
 
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl">
         <div className="p-5 border-b border-slate-700">
-          <h2 className="text-lg font-semibold text-white">Your Scenarios</h2>
+          <h2 className="text-lg font-semibold text-white">我的劇本</h2>
         </div>
         {loading ? (
-          <div className="p-12 text-center text-slate-500">Loading...</div>
+          <div className="p-12 text-center text-slate-500">載入中...</div>
         ) : scenarios.length === 0 ? (
           <div className="p-12 text-center text-slate-500">
             <div className="text-4xl mb-3">📖</div>
-            <p>No scenarios yet. Create your first one!</p>
+            <p>尚無劇本，建立你的第一個吧！</p>
             <Link href="/scenarios/new" className="text-purple-400 hover:text-purple-300 text-sm mt-2 inline-block">
-              Create Scenario →
+              建立劇本 →
             </Link>
           </div>
         ) : (
@@ -109,13 +109,13 @@ export default function DashboardPage() {
                         ? "bg-green-900/40 text-green-300 border-green-800"
                         : "bg-slate-700 text-slate-400 border-slate-600"
                     }`}>
-                      {s.status}
+                      {s.status === "published" ? "已發佈" : "草稿"}
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-3 text-xs text-slate-500 mb-1">
                     <span>{s.genre}</span>
-                    {s.difficulty && <span>{s.difficulty}</span>}
-                    <span>up to {s.max_players} players</span>
+                    {s.difficulty && <span>{{ Story: "故事", Normal: "普通", Hard: "困難", Nightmare: "噩夢" }[s.difficulty] ?? s.difficulty}</span>}
+                    <span>最多 {s.max_players} 人</span>
                     {s.estimated_play_time && <span>{playTime(s.estimated_play_time)}</span>}
                   </div>
                   <p className="text-slate-400 text-sm line-clamp-1">{s.description}</p>
@@ -125,7 +125,7 @@ export default function DashboardPage() {
                     href={`/scenarios/${s.id}/edit`}
                     className="text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded-lg transition-colors"
                   >
-                    Edit
+                    編輯
                   </Link>
                   <button
                     onClick={() => togglePublish(s)}
@@ -136,7 +136,7 @@ export default function DashboardPage() {
                         : "bg-purple-700 hover:bg-purple-600 text-white"
                     }`}
                   >
-                    {toggling === s.id ? "..." : s.status === "published" ? "Unpublish" : "Publish"}
+                    {toggling === s.id ? "..." : s.status === "published" ? "取消發佈" : "發佈"}
                   </button>
                 </div>
               </div>

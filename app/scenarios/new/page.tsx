@@ -115,8 +115,8 @@ export default function NewScenarioPage() {
       }
       applyImport(json.scenario as ImportedScenario);
       setImportNote(
-        `Imported from "${file.name}". The AI filled the fields below — review and edit everything, then Save as Draft or Publish.` +
-          (json.truncated ? " (The document was long, so only the beginning was analyzed.)" : "")
+        `已從「${file.name}」匯入。AI 已預填以下欄位 — 請逐一檢閱並編輯，然後選擇儲存為草稿或發佈。` +
+          (json.truncated ? "（文件過長，僅分析了前段內容。）" : "")
       );
     } catch {
       setImportError("Import failed. Please try again.");
@@ -126,13 +126,13 @@ export default function NewScenarioPage() {
   }
 
   async function handleSave(status: Status) {
-    if (!title.trim()) { setActiveTab("player"); setError("Title is required."); return; }
-    if (!genre) { setActiveTab("player"); setError("Genre is required."); return; }
-    if (!difficulty) { setActiveTab("player"); setError("Difficulty is required."); return; }
-    if (!description.trim()) { setActiveTab("player"); setError("Description is required."); return; }
-    if (!objective.trim()) { setActiveTab("player"); setError("Objective is required."); return; }
+    if (!title.trim()) { setActiveTab("player"); setError("標題為必填項目。"); return; }
+    if (!genre) { setActiveTab("player"); setError("類型為必填項目。"); return; }
+    if (!difficulty) { setActiveTab("player"); setError("難度為必填項目。"); return; }
+    if (!description.trim()) { setActiveTab("player"); setError("描述為必填項目。"); return; }
+    if (!objective.trim()) { setActiveTab("player"); setError("目標為必填項目。"); return; }
     const mp = Number(maxPlayers);
-    if (mp < 1 || mp > 6) { setActiveTab("player"); setError("Max players must be between 1 and 6."); return; }
+    if (mp < 1 || mp > 6) { setActiveTab("player"); setError("玩家人數必須在 1 至 6 之間。"); return; }
 
     setSaving(true);
     setError(null);
@@ -174,38 +174,38 @@ export default function NewScenarioPage() {
 
     setSaving(false);
     if (insertError || !data) { setError(insertError?.message ?? "Failed to save"); return; }
-    setSuccess(status === "published" ? "Scenario published!" : "Saved as draft.");
+    setSuccess(status === "published" ? "劇本已發佈！" : "已儲存為草稿。");
     setTimeout(() => router.push("/dashboard"), 900);
   }
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: "player", label: "Player Info" },
-    { id: "world", label: "World & Story" },
-    { id: "gm", label: "GM Toolkit" },
+    { id: "player", label: "玩家資訊" },
+    { id: "world", label: "世界與故事" },
+    { id: "gm", label: "主持人工具" },
   ];
 
   const gmBanner = (
     <div className="bg-amber-950/40 border border-amber-900/50 rounded-lg px-4 py-2.5 text-xs text-amber-300/90">
-      GM-only — players will NOT see this content on the scenario browse or detail pages.
+      僅供主持人 — 玩家在劇本瀏覽或詳情頁面將看不到此內容。
     </div>
   );
 
   return (
     <div className="max-w-3xl mx-auto">
-      <h1 className="text-3xl font-bold text-white mb-2">Create Scenario</h1>
-      <p className="text-slate-400 mb-6">Build a new TRPG adventure — fill the form manually, or import a story document to get a head start.</p>
+      <h1 className="text-3xl font-bold text-white mb-2">建立劇本</h1>
+      <p className="text-slate-400 mb-6">建立新的 TRPG 冒險 — 手動填寫表格，或匯入故事文件快速預填。</p>
 
       {/* AI Import */}
       <div className="bg-gradient-to-r from-purple-900/30 to-slate-800/30 border border-purple-800/50 rounded-xl p-5 mb-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex-1 min-w-[220px]">
             <h2 className="text-white font-semibold flex items-center gap-2">
-              <span>✨</span> Import from Story Document
+              <span>✨</span> 從故事文件匯入
             </h2>
             <p className="text-slate-400 text-sm mt-1">
-              Upload a <span className="text-slate-300">.txt</span>, <span className="text-slate-300">.md</span>, or{" "}
-              <span className="text-slate-300">.docx</span> (max 2MB). The AI reads it and pre-fills the form below.
-              Nothing is saved or published automatically — you review everything first.
+              上傳 <span className="text-slate-300">.txt</span>、<span className="text-slate-300">.md</span> 或{" "}
+              <span className="text-slate-300">.docx</span>（最大 2MB）。AI 讀取後自動預填表格。
+              不會自動儲存或發佈 — 你需逐一確認所有內容。
             </p>
           </div>
           <button
@@ -214,7 +214,7 @@ export default function NewScenarioPage() {
             disabled={importing}
             className="bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white px-4 py-2 rounded-lg font-medium whitespace-nowrap"
           >
-            {importing ? "Analyzing..." : "Upload Document"}
+            {importing ? "分析中..." : "上傳文件"}
           </button>
           <input
             ref={fileInputRef}
@@ -225,7 +225,7 @@ export default function NewScenarioPage() {
           />
         </div>
         {importing && (
-          <p className="text-purple-300 text-xs mt-3">Reading the document and asking the AI — this can take a few seconds.</p>
+          <p className="text-purple-300 text-xs mt-3">正在讀取文件並詢問 AI，這可能需要幾秒鐘。</p>
         )}
         {importError && (
           <div className="mt-3 bg-red-900/30 border border-red-700 text-red-300 text-sm rounded-lg px-3 py-2">{importError}</div>
@@ -257,37 +257,37 @@ export default function NewScenarioPage() {
         {activeTab === "player" && (
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Title *">
-                <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. The Lost Temple" className={inputCls} />
+              <Field label="標題 *">
+                <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例：失落的神廟" className={inputCls} />
               </Field>
-              <Field label="Genre *">
+              <Field label="類型 *">
                 <select value={genre} onChange={(e) => setGenre(e.target.value)} className={inputCls}>
-                  <option value="">Select genre...</option>
+                  <option value="">選擇類型...</option>
                   {GENRES.map((g) => <option key={g} value={g}>{g}</option>)}
                 </select>
               </Field>
             </div>
             <div className="grid grid-cols-3 gap-4">
-              <Field label="Difficulty *">
+              <Field label="難度 *">
                 <select value={difficulty} onChange={(e) => setDifficulty(e.target.value as Difficulty)} className={inputCls}>
-                  {DIFFICULTIES.map((d) => <option key={d} value={d}>{d}</option>)}
+                  {DIFFICULTIES.map((d) => <option key={d} value={d}>{{ Story: "故事", Normal: "普通", Hard: "困難", Nightmare: "噩夢" }[d] ?? d}</option>)}
                 </select>
               </Field>
-              <Field label="Max Players (1–6)">
+              <Field label="最多玩家（1–6）">
                 <input type="number" value={maxPlayers} onChange={(e) => setMaxPlayers(Number(e.target.value))} min={1} max={6} className={inputCls} />
               </Field>
-              <Field label="Est. Play Time (min)">
-                <input type="number" value={estimatedPlayTime} onChange={(e) => setEstimatedPlayTime(e.target.value)} placeholder="e.g. 60" className={inputCls} />
+              <Field label="預計遊玩時間（分鐘）">
+                <input type="number" value={estimatedPlayTime} onChange={(e) => setEstimatedPlayTime(e.target.value)} placeholder="例：60" className={inputCls} />
               </Field>
             </div>
-            <Field label="Description *" hint="A short summary shown to players browsing scenarios.">
-              <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="What kind of adventure is this?" className={taCls} />
+            <Field label="描述 *" hint="顯示給玩家的簡短說明。">
+              <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="這是什麼樣的冒險？" className={taCls} />
             </Field>
-            <Field label="Objective *" hint="What must players accomplish to win?">
-              <textarea value={objective} onChange={(e) => setObjective(e.target.value)} rows={2} placeholder="Reach the inner sanctum and retrieve the Shard before dawn." className={taCls} />
+            <Field label="目標 *" hint="玩家需完成什麼才能獲勝？">
+              <textarea value={objective} onChange={(e) => setObjective(e.target.value)} rows={2} placeholder="在黎明前抵達內室並取回碎片。" className={taCls} />
             </Field>
-            <Field label="Tags (comma-separated)" hint="Help players find your scenario. e.g. dungeon, solo-friendly, dark">
-              <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="dungeon, solo-friendly, dark, investigation" className={inputCls} />
+            <Field label="標籤（逗號分隔）" hint="幫助玩家找到你的劇本。例：地下城、可單人、黑暗">
+              <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="地下城, 可單人, 黑暗, 調查" className={inputCls} />
             </Field>
           </div>
         )}
@@ -295,29 +295,29 @@ export default function NewScenarioPage() {
         {activeTab === "world" && (
           <div className="flex flex-col gap-4">
             {gmBanner}
-            <Field label="Opening Scene" hint="The AI GM will narrate this as the very first scene. Set the atmosphere vividly.">
+            <Field label="開場場景" hint="AI 主持人將以此作為第一幕的敘述基礎，請生動地設定氛圍。">
               <textarea value={openingScene} onChange={(e) => setOpeningScene(e.target.value)} rows={5}
-                placeholder="The party arrives at the base of an ancient moss-covered temple as dusk falls. Torchlight flickers against carved stone faces..."
+                placeholder="夜幕低垂，一行人來到了佈滿苔蘚的古老神廟腳下。火把的光芒在雕刻的石臉上搖曳..."
                 className={taCls} />
             </Field>
-            <Field label="World Background" hint="History, lore, and world context the AI GM should always know.">
+            <Field label="世界背景" hint="AI 主持人需要了解的歷史、傳說與世界背景。">
               <textarea value={background} onChange={(e) => setBackground(e.target.value)} rows={5}
-                placeholder="Deep in the jungle, a long-forgotten temple has been rediscovered. Legends say it holds the Shard of Eternity..."
+                placeholder="在叢林深處，一座被遺忘已久的神廟重見天日。傳說那裡珍藏著永恆碎片..."
                 className={taCls} />
             </Field>
-            <Field label="Key Locations (one per line)" hint="Locations the AI GM can describe and reference throughout the adventure.">
+            <Field label="關鍵地點（每行一個）" hint="AI 主持人可在冒險中描述和引用的地點。">
               <textarea value={locations} onChange={(e) => setLocations(e.target.value)} rows={4}
-                placeholder={"The Entrance Hall — first room, fire pits and statues\nThe Throne Room — final confrontation\nThe Library — ancient tomes and clues"}
+                placeholder={"入口大廳 — 第一個房間，有火坑和雕像\n王座室 — 最終對決\n圖書館 — 古老書卷和線索"}
                 className={taCls} />
             </Field>
-            <Field label="NPCs (one per line)" hint="Non-player characters with brief personality/role notes.">
+            <Field label="NPC（每行一個）" hint="非玩家角色及其性格/角色簡述。">
               <textarea value={npcs} onChange={(e) => setNpcs(e.target.value)} rows={4}
-                placeholder={"Elder Moros — cryptic guide, knows the temple's secret\nCaptain Draven — hostile guard captain, STR 16\nThia — imprisoned informant, will trade info for freedom"}
+                placeholder={"莫羅斯長老 — 神秘嚮導，知曉神廟的秘密\n德拉文上尉 — 敵對警衛隊長，STR 16\n西雅 — 被囚告密者，願以情報換取自由"}
                 className={taCls} />
             </Field>
-            <Field label="Key Items (one per line)" hint="Items the AI GM can introduce as players explore.">
+            <Field label="關鍵物品（每行一個）" hint="AI 主持人可在玩家探索時引入的物品。">
               <textarea value={keyItems} onChange={(e) => setKeyItems(e.target.value)} rows={3}
-                placeholder={"The Shard of Eternity — the main objective\nThe Iron Key — opens the vault door\nThe Ancient Map — reveals a hidden passage"}
+                placeholder={"永恆碎片 — 主要目標\n鐵鑰匙 — 開啟金庫門\n古代地圖 — 揭示隱藏通道"}
                 className={taCls} />
             </Field>
           </div>
@@ -326,29 +326,29 @@ export default function NewScenarioPage() {
         {activeTab === "gm" && (
           <div className="flex flex-col gap-4">
             {gmBanner}
-            <Field label="Secret Rules" hint="Pacing guidelines, tone instructions, and mechanical rules for the AI GM.">
+            <Field label="秘密規則" hint="AI 主持人的節奏、基調和機制指導。">
               <textarea value={secretRules} onChange={(e) => setSecretRules(e.target.value)} rows={4}
-                placeholder={"This is a horror scenario — build tension slowly, never show the monster directly at first.\nSAN checks trigger if players witness supernatural events.\nLuck checks determine random encounter timing."}
+                placeholder={"這是恐怖劇本 — 緩慢建立緊張感，起初不要直接展示怪物。\n玩家目睹超自然事件時觸發 SAN 檢定。\n幸運檢定決定隨機遭遇的時機。"}
                 className={taCls} />
             </Field>
-            <Field label="Threats & Enemies (one per line)" hint="Enemies and dangers the AI GM can deploy.">
+            <Field label="威脅與敵人（每行一個）" hint="AI 主持人可部署的敵人和危險。">
               <textarea value={threats} onChange={(e) => setThreats(e.target.value)} rows={3}
-                placeholder={"The Shadow Wraith — invulnerable to physical attack, flees light\nCorrupt Temple Guards — STR 14, AGI 10, patrol in pairs\nThe Stone Golem — wakes if players make loud noises"}
+                placeholder={"暗影幽靈 — 對物理攻擊免疫，遇光逃跑\n腐化神廟衛兵 — STR 14，AGI 10，成對巡邏\n石製魔像 — 玩家發出噪音時甦醒"}
                 className={taCls} />
             </Field>
-            <Field label="Traps & Hazards (one per line)" hint="Traps the AI GM can describe as players explore.">
+            <Field label="陷阱與危機（每行一個）" hint="AI 主持人可在玩家探索時描述的陷阱。">
               <textarea value={traps} onChange={(e) => setTraps(e.target.value)} rows={3}
-                placeholder={"Pressure plate — dart volley, AGI DC 14 to dodge\nFalling stone slab — blocks passage, STR DC 16 to hold\nPoison mist — 1 SAN loss per round until exit"}
+                placeholder={"壓力板 — 飛鏢射出，AGI DC 14 躲避\n落石板 — 堵塞通道，STR DC 16 支撐\n毒霧 — 每回合損失 1 SAN 直到離開"}
                 className={taCls} />
             </Field>
-            <Field label="Ending Conditions" hint="Define win and loss conditions the AI GM should work toward.">
+            <Field label="結局條件" hint="定義 AI 主持人應推進的勝敗條件。">
               <textarea value={endingConditions} onChange={(e) => setEndingConditions(e.target.value)} rows={3}
-                placeholder={"Victory: retrieve the Shard and escape before dawn.\nFailure: all characters die, or the temple collapses with the party inside."}
+                placeholder={"勝利：在黎明前取回碎片並逃脫。\n失敗：所有角色死亡，或神廟坍塌時隊伍仍在內部。"}
                 className={taCls} />
             </Field>
-            <Field label="Additional GM Notes" hint="Any other context, mood notes, or special instructions for the AI GM.">
+            <Field label="主持人補充備注" hint="其他背景資訊、氛圍說明或 AI 主持人的特殊指示。">
               <textarea value={gmNotes} onChange={(e) => setGmNotes(e.target.value)} rows={4}
-                placeholder="Reward creative problem-solving. If players find the hidden passage early, fast-track to the final confrontation. Reference character backgrounds when possible..."
+                placeholder="獎勵有創意的解決方案。若玩家提早找到隱藏通道，可直接推進至最終對決。盡可能引用角色背景..."
                 className={taCls} />
             </Field>
           </div>
@@ -358,11 +358,11 @@ export default function NewScenarioPage() {
       <div className="flex gap-3 mt-6">
         <button onClick={() => handleSave("draft")} disabled={saving}
           className="flex-1 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white py-2.5 rounded-lg font-medium">
-          {saving ? "Saving..." : "Save as Draft"}
+          {saving ? "儲存中..." : "儲存為草稿"}
         </button>
         <button onClick={() => handleSave("published")} disabled={saving}
           className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white py-2.5 rounded-lg font-medium">
-          {saving ? "Publishing..." : "Publish"}
+          {saving ? "發佈中..." : "發佈"}
         </button>
       </div>
     </div>

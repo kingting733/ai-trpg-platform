@@ -7,14 +7,14 @@ const STAT_KEYS = ["hp", "san", "str", "agi", "int", "cha", "luck", "speed"] as 
 type StatKey = typeof STAT_KEYS[number];
 
 const STAT_INFO: Record<StatKey, { label: string; desc: string; min: number; default: number }> = {
-  hp:    { label: "HP",    desc: "Hit Points — damage you can take",        min: 1, default: 5 },
-  san:   { label: "SAN",   desc: "Sanity — mental resilience",              min: 1, default: 5 },
-  str:   { label: "STR",   desc: "Strength — physical power",               min: 1, default: 5 },
-  agi:   { label: "AGI",   desc: "Agility — dodge and reflexes",            min: 1, default: 5 },
-  int:   { label: "INT",   desc: "Intelligence — knowledge and magic",      min: 1, default: 5 },
-  cha:   { label: "CHA",   desc: "Charisma — persuasion",                   min: 1, default: 5 },
-  luck:  { label: "LUCK",  desc: "Luck — chance and fortune",               min: 1, default: 5 },
-  speed: { label: "SPEED", desc: "Speed — higher = act first each round",   min: 1, default: 5 },
+  hp:    { label: "HP",    desc: "生命值 — 可承受的傷害",          min: 1, default: 5 },
+  san:   { label: "SAN",   desc: "理智值 — 精神抗壓能力",          min: 1, default: 5 },
+  str:   { label: "STR",   desc: "力量 — 體能與攻擊力",            min: 1, default: 5 },
+  agi:   { label: "AGI",   desc: "敏捷 — 閃避與反應速度",          min: 1, default: 5 },
+  int:   { label: "INT",   desc: "智力 — 知識與魔法",              min: 1, default: 5 },
+  cha:   { label: "CHA",   desc: "魅力 — 說服與交涉",              min: 1, default: 5 },
+  luck:  { label: "LUCK",  desc: "幸運 — 機率與運氣",              min: 1, default: 5 },
+  speed: { label: "SPEED", desc: "速度 — 越高越先行動",            min: 1, default: 5 },
 };
 
 const TOTAL_POINTS = 50;
@@ -72,7 +72,7 @@ export default function CharacterCreationPage({ params }: { params: { id: string
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!charName.trim()) return;
-    if (remaining !== 0) { setError("You must spend exactly 50 points."); return; }
+    if (remaining !== 0) { setError("必須精確分配 50 點。"); return; }
     setLoading(true);
     setError(null);
 
@@ -113,32 +113,32 @@ export default function CharacterCreationPage({ params }: { params: { id: string
     router.push(`/rooms/${params.id}`);
   }
 
-  if (checking) return <div className="text-center text-slate-400 py-20">Loading...</div>;
+  if (checking) return <div className="text-center text-slate-400 py-20">載入中...</div>;
 
   return (
     <div className="max-w-2xl mx-auto">
-      <h1 className="text-3xl font-bold text-white mb-2">Create Your Character</h1>
-      <p className="text-slate-400 mb-8">Distribute your points to define your adventurer.</p>
+      <h1 className="text-3xl font-bold text-white mb-2">建立你的角色</h1>
+      <p className="text-slate-400 mb-8">分配屬性點數，打造你的冒險者。</p>
 
       <form onSubmit={handleSubmit}>
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 mb-4 flex flex-col gap-4">
           <div>
-            <label className="block text-sm text-slate-400 mb-1">Character Name *</label>
+            <label className="block text-sm text-slate-400 mb-1">角色名稱 *</label>
             <input
               value={charName}
               onChange={(e) => setCharName(e.target.value)}
-              placeholder="e.g. Kira Ashwood"
+              placeholder="例：木靈·凱拉"
               required
               className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-400 mb-1">Background (optional)</label>
+            <label className="block text-sm text-slate-400 mb-1">背景故事（選填）</label>
             <textarea
               value={background}
               onChange={(e) => setBackground(e.target.value)}
               rows={2}
-              placeholder="A short description of your character's past..."
+              placeholder="簡述你角色的過去..."
               className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
             />
           </div>
@@ -146,9 +146,9 @@ export default function CharacterCreationPage({ params }: { params: { id: string
 
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 mb-4">
           <div className="flex items-center justify-between mb-5">
-            <h2 className="text-lg font-semibold text-white">Stats</h2>
+            <h2 className="text-lg font-semibold text-white">屬性</h2>
             <span className={`text-sm font-medium px-3 py-1 rounded-full ${remaining === 0 ? "bg-green-900/50 text-green-300 border border-green-700" : remaining < 0 ? "bg-red-900/50 text-red-300 border border-red-700" : "bg-slate-700 text-slate-300"}`}>
-              {remaining} points left
+              剩餘 {remaining} 點
             </span>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -187,7 +187,7 @@ export default function CharacterCreationPage({ params }: { params: { id: string
           disabled={loading || !charName.trim() || remaining !== 0}
           className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 rounded-lg font-medium"
         >
-          {loading ? "Creating..." : remaining !== 0 ? `Spend ${remaining > 0 ? remaining + " more" : "fewer"} points` : "Confirm Character & Enter Room"}
+          {loading ? "建立中..." : remaining !== 0 ? `${remaining > 0 ? `待分配 ${remaining} 點` : `點數超出 ${Math.abs(remaining)} 點`}` : "確認角色並進入房間"}
         </button>
       </form>
     </div>

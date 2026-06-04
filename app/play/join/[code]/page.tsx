@@ -22,13 +22,13 @@ export default function JoinRoomPage({ params }: { params: { code: string } }) {
         .single();
 
       if (roomError || !room) {
-        setError("Room not found. Check the code and try again.");
+        setError("找不到此房間，請確認代碼後再試。");
         setStatus("error");
         return;
       }
 
       if (room.status === "completed") {
-        setError("This room has already ended.");
+        setError("此房間已結束。");
         setStatus("error");
         return;
       }
@@ -49,7 +49,7 @@ export default function JoinRoomPage({ params }: { params: { code: string } }) {
           .eq("room_id", room.id);
 
         if ((count ?? 0) >= room.max_players) {
-          setError("This room is full.");
+          setError("此房間已滿。");
           setStatus("error");
           return;
         }
@@ -65,11 +65,11 @@ export default function JoinRoomPage({ params }: { params: { code: string } }) {
   return (
     <div className="flex items-center justify-center min-h-[60vh]">
       <div className="text-center">
-        {status === "loading" && <p className="text-slate-400 text-lg">Joining room <span className="font-mono text-white">{params.code}</span>...</p>}
+        {status === "loading" && <p className="text-slate-400 text-lg">加入房間 <span className="font-mono text-white">{params.code}</span> 中...</p>}
         {status === "error" && (
           <div>
             <p className="text-red-400 text-lg mb-4">{error}</p>
-            <button onClick={() => router.push("/play/hub")} className="text-purple-400 hover:text-purple-300">← Back to Hub</button>
+            <button onClick={() => router.push("/play/hub")} className="text-purple-400 hover:text-purple-300">← 返回大廳</button>
           </div>
         )}
       </div>

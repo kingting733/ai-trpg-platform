@@ -107,19 +107,19 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
     router.push(`/rooms/${params.id}`);
   }
 
-  if (loading) return <div className="text-center text-slate-400 py-20">Loading your cards...</div>;
+  if (loading) return <div className="text-center text-slate-400 py-20">載入角色卡中...</div>;
 
   if (cards.length === 0) {
     return (
       <div className="max-w-lg mx-auto text-center py-20">
         <div className="text-5xl mb-4">🎴</div>
-        <h2 className="text-2xl font-bold text-white mb-2">No character cards yet</h2>
-        <p className="text-slate-400 mb-6">You need at least one character card to play. Open your daily card first.</p>
+        <h2 className="text-2xl font-bold text-white mb-2">尚無角色卡</h2>
+        <p className="text-slate-400 mb-6">你需要至少一張角色卡才能遊玩。請先抽取每日卡。</p>
         <Link
           href="/characters"
           className="inline-block bg-purple-600 hover:bg-purple-500 text-white px-6 py-3 rounded-lg font-medium"
         >
-          Go to My Cards →
+          前往我的卡 →
         </Link>
       </div>
     );
@@ -128,8 +128,8 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
   return (
     <div className="max-w-5xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-white mb-1">Choose Your Character Card</h1>
-        <p className="text-slate-400 text-sm">Pick the card you want to play with in this adventure. Stats are locked once selected.</p>
+        <h1 className="text-3xl font-bold text-white mb-1">選擇你的角色卡</h1>
+        <p className="text-slate-400 text-sm">選擇你要在本次冒險中使用的角色卡。選定後屬性將永久鎖定。</p>
       </div>
 
       {error && (
@@ -160,8 +160,8 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
               </div>
 
               <div className="flex items-center justify-between text-xs border-t border-slate-700 pt-2">
-                <span className="text-slate-400">Total <span className="text-white font-bold">{card.total_stats}</span></span>
-                {isSelected && <span className="text-green-400 font-medium">Selected ✓</span>}
+                <span className="text-slate-400">合計 <span className="text-white font-bold">{card.total_stats}</span></span>
+                {isSelected && <span className="text-green-400 font-medium">已選擇 ✓</span>}
               </div>
             </button>
           );
@@ -174,10 +174,10 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
           disabled={!selectedId || confirming}
           className="bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-8 py-3 rounded-lg font-medium text-lg"
         >
-          {confirming ? "Entering room..." : selectedId ? "Play with this card →" : "Select a card to continue"}
+          {confirming ? "進入房間中..." : selectedId ? "使用此卡出戰 →" : "選擇一張卡以繼續"}
         </button>
         <Link href="/characters" className="text-sm text-slate-400 hover:text-white">
-          Open more cards
+          抽取更多卡
         </Link>
       </div>
     </div>

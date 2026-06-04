@@ -78,12 +78,12 @@ export function ActiveGamePopup() {
             ×
           </button>
         </div>
-        <p className="text-slate-400 text-xs mb-3">You have an adventure in progress.</p>
+        <p className="text-slate-400 text-xs mb-3">你有一場冒險正在進行中。</p>
         <button
           onClick={() => router.push(`/rooms/${room.id}`)}
           className="w-full bg-purple-600 hover:bg-purple-500 text-white py-2 rounded-lg text-sm font-medium transition-colors"
         >
-          Return to Game →
+          返回遊戲 →
         </button>
       </div>
     </div>

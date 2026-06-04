@@ -84,7 +84,7 @@ export default function HubPage() {
   return (
     <div className="max-w-4xl mx-auto">
       <div className="mb-8">
-        <p className="text-slate-400 text-sm mb-1">Playing as</p>
+        <p className="text-slate-400 text-sm mb-1">目前角色</p>
         <h1 className="text-3xl font-bold text-white">{username || "..."}</h1>
       </div>
 
@@ -92,7 +92,7 @@ export default function HubPage() {
       {activeRooms.length > 0 && (
         <div className="mb-8">
           <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">
-            Return to Active Game
+            返回進行中的遊戲
           </h2>
           <div className="flex flex-col gap-3">
             {activeRooms.map((r) => (
@@ -106,17 +106,17 @@ export default function HubPage() {
                           ? "bg-green-900/40 text-green-300 border-green-800"
                           : "bg-slate-700 text-slate-400 border-slate-600"
                       }`}>
-                        {r.status === "in_progress" ? "In Progress" : "Waiting"}
+                        {r.status === "in_progress" ? "進行中" : "等待中"}
                       </span>
                     </div>
                     <p className="text-slate-400 text-sm">
-                      {r.scenarios?.title ?? "Unknown Scenario"}
+                      {r.scenarios?.title ?? "未知劇本"}
                       <span className="text-slate-600 mx-1">·</span>
                       <span className="font-mono text-slate-500">{r.room_code}</span>
                     </p>
                   </div>
                   <span className="text-purple-400 font-medium text-sm shrink-0">
-                    {r.status === "in_progress" ? "Return to Game →" : "Back to Lobby →"}
+                    {r.status === "in_progress" ? "返回遊戲 →" : "返回大廳 →"}
                   </span>
                 </div>
               </Link>
@@ -127,8 +127,8 @@ export default function HubPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-white mb-1">Join a Room</h2>
-          <p className="text-slate-400 text-sm mb-4">Enter a room code from your friend</p>
+          <h2 className="text-lg font-semibold text-white mb-1">加入房間</h2>
+          <p className="text-slate-400 text-sm mb-4">輸入朋友的房間代碼</p>
           <div className="flex gap-2">
             <input
               value={joinCode}
@@ -142,19 +142,19 @@ export default function HubPage() {
               disabled={joinCode.length < 4}
               className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white px-4 py-2 rounded-lg font-medium"
             >
-              Join
+              加入
             </button>
           </div>
         </div>
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 flex flex-col justify-center">
-          <h2 className="text-lg font-semibold text-white mb-3">Create a Room</h2>
-          <p className="text-slate-400 text-sm">Pick a scenario below to start your own adventure.</p>
+          <h2 className="text-lg font-semibold text-white mb-3">建立房間</h2>
+          <p className="text-slate-400 text-sm">從下方選擇劇本，開始你的冒險。</p>
         </div>
       </div>
 
-      <h2 className="text-xl font-semibold text-white mb-4">Choose a Scenario</h2>
+      <h2 className="text-xl font-semibold text-white mb-4">選擇劇本</h2>
       {loadingScenarios ? (
-        <div className="text-slate-500 text-sm">Loading scenarios...</div>
+        <div className="text-slate-500 text-sm">載入劇本中...</div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {scenarios.map((s) => (
@@ -163,7 +163,7 @@ export default function HubPage() {
                 <span className="text-xs bg-purple-900/50 text-purple-300 border border-purple-800 px-2 py-0.5 rounded">{s.genre}</span>
                 <h3 className="text-white font-semibold mt-3 mb-2">{s.title}</h3>
                 <p className="text-slate-400 text-sm">{s.description}</p>
-                <div className="text-xs text-slate-500 mt-3">Up to {s.max_players} players</div>
+                <div className="text-xs text-slate-500 mt-3">最多 {s.max_players} 人</div>
               </div>
             </Link>
           ))}

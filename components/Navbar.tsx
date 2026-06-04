@@ -23,12 +23,12 @@ export async function Navbar() {
           ⚔ TRPG Platform
         </Link>
         <div className="flex items-center gap-4 text-sm">
-          <Link href="/scenarios" className="text-slate-300 hover:text-white">Scenarios</Link>
+          <Link href="/scenarios" className="text-slate-300 hover:text-white">劇本</Link>
           {user && (
-            <Link href="/characters" className="text-slate-300 hover:text-white">Cards</Link>
+            <Link href="/characters" className="text-slate-300 hover:text-white">角色卡</Link>
           )}
           {user && (
-            <Link href="/dashboard" className="text-slate-300 hover:text-white">Dashboard</Link>
+            <Link href="/dashboard" className="text-slate-300 hover:text-white">後台</Link>
           )}
           <NavbarClient user={user ? { username } : null} />
         </div>

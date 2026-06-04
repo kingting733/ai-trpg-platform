@@ -78,7 +78,7 @@ export default function CharactersPage() {
         setRolling(data.card as CharacterCard);
       }
     } catch {
-      setError("Network error — please try again.");
+      setError("網路錯誤，請再試一次。");
     }
     setOpening(false);
   }
@@ -102,8 +102,8 @@ export default function CharactersPage() {
       )}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white">My Character Cards</h1>
-          <p className="text-slate-400 text-sm mt-1">Open one new card per day. Stats are rolled by dice and locked forever.</p>
+          <h1 className="text-3xl font-bold text-white">我的角色卡</h1>
+          <p className="text-slate-400 text-sm mt-1">每天可抽取一張新卡。屬性由骰子決定，永久鎖定。</p>
         </div>
         <div className="flex flex-col items-end gap-1">
           <button
@@ -111,10 +111,10 @@ export default function CharactersPage() {
             disabled={opening || openedToday}
             className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-lg font-medium transition-colors"
           >
-            {opening ? "Rolling dice..." : openedToday ? "Card opened today ✓" : "Open Today's Character Card"}
+            {opening ? "擲骰中..." : openedToday ? "今日已抽卡 ✓" : "抽取今日角色卡"}
           </button>
           {openedToday && (
-            <span className="text-xs text-slate-500">Come back tomorrow (UTC) for your next card.</span>
+            <span className="text-xs text-slate-500">明天（UTC）再來抽取下一張卡。</span>
           )}
         </div>
       </div>
@@ -125,7 +125,7 @@ export default function CharactersPage() {
 
       {revealed && (
         <div className="mb-8">
-          <p className="text-xs text-purple-400 uppercase tracking-wider mb-2">New card unlocked!</p>
+          <p className="text-xs text-purple-400 uppercase tracking-wider mb-2">獲得新角色卡！</p>
           <div className="max-w-xs">
             <CardView card={revealed} highlight onNameSaved={handleNameSaved} />
           </div>
@@ -133,16 +133,16 @@ export default function CharactersPage() {
       )}
 
       {loading ? (
-        <div className="text-slate-500 text-sm">Loading your collection...</div>
+        <div className="text-slate-500 text-sm">載入收藏中...</div>
       ) : cards.length === 0 ? (
         <div className="text-center py-20 border border-dashed border-slate-700 rounded-xl">
           <div className="text-4xl mb-3">🎴</div>
-          <p className="text-slate-400">You have no character cards yet.</p>
-          <p className="text-slate-500 text-sm mt-1">Open your first card to start your collection.</p>
+          <p className="text-slate-400">你還沒有任何角色卡。</p>
+          <p className="text-slate-500 text-sm mt-1">抽取第一張卡開始你的收藏。</p>
         </div>
       ) : (
         <>
-          <p className="text-sm text-slate-500 mb-3">{cards.length} card{cards.length !== 1 ? "s" : ""} in your collection</p>
+          <p className="text-sm text-slate-500 mb-3">共 {cards.length} 張角色卡</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {cards.map((card) => (
               <CardView key={card.id} card={card} onNameSaved={handleNameSaved} />
@@ -179,7 +179,7 @@ function CardView({
 
   async function saveName() {
     const trimmed = draft.trim();
-    if (!trimmed) { setNameError("Name cannot be empty."); return; }
+    if (!trimmed) { setNameError("名稱不可為空。"); return; }
     if (trimmed === card.name) { setEditing(false); return; }
     setSaving(true);
     setNameError(null);
@@ -191,13 +191,13 @@ function CardView({
       });
       const data = await res.json();
       if (!res.ok) {
-        setNameError(data.error ?? "Failed to save.");
+        setNameError(data.error ?? "儲存失敗。");
       } else {
         setEditing(false);
         onNameSaved?.(card.id, data.card.name);
       }
     } catch {
-      setNameError("Network error.");
+      setNameError("網路錯誤。");
     }
     setSaving(false);
   }
@@ -226,13 +226,13 @@ function CardView({
                   disabled={saving}
                   className="text-xs bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white px-2 py-0.5 rounded"
                 >
-                  {saving ? "Saving…" : "Save"}
+                  {saving ? "儲存中…" : "儲存"}
                 </button>
                 <button
                   onClick={() => setEditing(false)}
                   className="text-xs text-slate-400 hover:text-white"
                 >
-                  Cancel
+                  取消
                 </button>
               </div>
             </div>
@@ -265,7 +265,7 @@ function CardView({
 
       <div className="flex items-center justify-between text-xs border-t border-slate-700 pt-2">
         <span className="text-slate-400">
-          Total <span className="text-white font-bold">{card.total_stats}</span>
+          合計 <span className="text-white font-bold">{card.total_stats}</span>
         </span>
         <span className="text-slate-600">
           {new Date(card.created_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}

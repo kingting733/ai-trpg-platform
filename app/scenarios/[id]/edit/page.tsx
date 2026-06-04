@@ -96,12 +96,12 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
   }
 
   async function handleSave(status: Status) {
-    if (!title.trim()) { setActiveTab("player"); setError("Title is required."); return; }
-    if (!genre) { setActiveTab("player"); setError("Genre is required."); return; }
-    if (!description.trim()) { setActiveTab("player"); setError("Description is required."); return; }
-    if (!objective.trim()) { setActiveTab("player"); setError("Objective is required."); return; }
+    if (!title.trim()) { setActiveTab("player"); setError("標題為必填欄位。"); return; }
+    if (!genre) { setActiveTab("player"); setError("類型為必填欄位。"); return; }
+    if (!description.trim()) { setActiveTab("player"); setError("描述為必填欄位。"); return; }
+    if (!objective.trim()) { setActiveTab("player"); setError("目標為必填欄位。"); return; }
     const mp = Number(maxPlayers);
-    if (mp < 1 || mp > 6) { setActiveTab("player"); setError("Max players must be between 1 and 6."); return; }
+    if (mp < 1 || mp > 6) { setActiveTab("player"); setError("玩家人數必須介於 1 至 6 之間。"); return; }
 
     setSaving(true);
     setError(null);
@@ -142,7 +142,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
 
     setSaving(false);
     if (updateError) { setError(updateError.message); return; }
-    setSuccess(status === "published" ? "Scenario published!" : "Saved as draft.");
+    setSuccess(status === "published" ? "劇本已發佈！" : "已儲存為草稿。");
     setCurrentStatus(status);
     setTimeout(() => router.push("/dashboard"), 900);
   }
@@ -150,7 +150,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <p className="text-slate-500">Loading scenario...</p>
+        <p className="text-slate-500">載入劇本中...</p>
       </div>
     );
   }
@@ -158,23 +158,23 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
   if (notFound) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <p className="text-slate-400">Scenario not found or you don't have permission to edit it.</p>
+        <p className="text-slate-400">找不到劇本或你沒有編輯權限。</p>
         <button onClick={() => router.push("/dashboard")} className="text-purple-400 hover:text-purple-300 text-sm">
-          ← Back to Dashboard
+          ← 返回後台
         </button>
       </div>
     );
   }
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: "player", label: "Player Info" },
-    { id: "world", label: "World & Story" },
-    { id: "gm", label: "GM Toolkit" },
+    { id: "player", label: "玩家資訊" },
+    { id: "world", label: "世界與故事" },
+    { id: "gm", label: "主持人工具" },
   ];
 
   const gmBanner = (
     <div className="bg-amber-950/40 border border-amber-900/50 rounded-lg px-4 py-2.5 text-xs text-amber-300/90">
-      GM-only — players will NOT see this content on the scenario browse or detail pages.
+      僅供主持人 — 玩家在劇本瀏覽或詳情頁面將看不到此內容。
     </div>
   );
 
@@ -182,13 +182,13 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
     <div className="max-w-3xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-white">Edit Scenario</h1>
+          <h1 className="text-3xl font-bold text-white">編輯劇本</h1>
           <p className="text-slate-400 mt-1">
-            Status: <span className={currentStatus === "published" ? "text-green-400" : "text-slate-400"}>{currentStatus}</span>
+            狀態：<span className={currentStatus === "published" ? "text-green-400" : "text-slate-400"}>{currentStatus === "published" ? "已發佈" : "草稿"}</span>
           </p>
         </div>
         <button onClick={() => router.push("/dashboard")} className="text-slate-400 hover:text-white text-sm">
-          ← Dashboard
+          ← 返回後台
         </button>
       </div>
 
@@ -214,37 +214,37 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
         {activeTab === "player" && (
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Title *">
+              <Field label="標題 *">
                 <input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} />
               </Field>
-              <Field label="Genre *">
+              <Field label="類型 *">
                 <select value={genre} onChange={(e) => setGenre(e.target.value)} className={inputCls}>
-                  <option value="">Select genre...</option>
+                  <option value="">選擇類型...</option>
                   {GENRES.map((g) => <option key={g} value={g}>{g}</option>)}
                 </select>
               </Field>
             </div>
             <div className="grid grid-cols-3 gap-4">
-              <Field label="Difficulty *">
+              <Field label="難度 *">
                 <select value={difficulty} onChange={(e) => setDifficulty(e.target.value as Difficulty)} className={inputCls}>
-                  {DIFFICULTIES.map((d) => <option key={d} value={d}>{d}</option>)}
+                  {DIFFICULTIES.map((d) => <option key={d} value={d}>{({ Story: "故事", Normal: "普通", Hard: "困難", Nightmare: "噩夢" } as Record<string, string>)[d] ?? d}</option>)}
                 </select>
               </Field>
-              <Field label="Max Players (1–6)">
+              <Field label="最多玩家（1–6）">
                 <input type="number" value={maxPlayers} onChange={(e) => setMaxPlayers(Number(e.target.value))} min={1} max={6} className={inputCls} />
               </Field>
-              <Field label="Est. Play Time (min)">
-                <input type="number" value={estimatedPlayTime} onChange={(e) => setEstimatedPlayTime(e.target.value)} placeholder="e.g. 60" className={inputCls} />
+              <Field label="預計時長（分鐘）">
+                <input type="number" value={estimatedPlayTime} onChange={(e) => setEstimatedPlayTime(e.target.value)} placeholder="例：60" className={inputCls} />
               </Field>
             </div>
-            <Field label="Description *">
+            <Field label="描述 *">
               <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className={taCls} />
             </Field>
-            <Field label="Objective *">
+            <Field label="目標 *">
               <textarea value={objective} onChange={(e) => setObjective(e.target.value)} rows={2} className={taCls} />
             </Field>
-            <Field label="Tags (comma-separated)">
-              <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="dungeon, solo-friendly, dark" className={inputCls} />
+            <Field label="標籤（逗號分隔）">
+              <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="地城, 單人友好, 黑暗" className={inputCls} />
             </Field>
           </div>
         )}
@@ -252,19 +252,19 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
         {activeTab === "world" && (
           <div className="flex flex-col gap-4">
             {gmBanner}
-            <Field label="Opening Scene" hint="The AI GM narrates this as the very first scene.">
+            <Field label="開場場景" hint="AI 主持人將以此作為遊戲的第一個場景進行敘述。">
               <textarea value={openingScene} onChange={(e) => setOpeningScene(e.target.value)} rows={5} className={taCls} />
             </Field>
-            <Field label="World Background" hint="History, lore, and context the AI GM should know.">
+            <Field label="世界背景" hint="AI 主持人需要了解的歷史、背景知識與情境。">
               <textarea value={background} onChange={(e) => setBackground(e.target.value)} rows={5} className={taCls} />
             </Field>
-            <Field label="Key Locations (one per line)">
+            <Field label="重要地點（每行一個）">
               <textarea value={locations} onChange={(e) => setLocations(e.target.value)} rows={4} className={taCls} />
             </Field>
-            <Field label="NPCs (one per line)">
+            <Field label="NPC（每行一個）">
               <textarea value={npcs} onChange={(e) => setNpcs(e.target.value)} rows={4} className={taCls} />
             </Field>
-            <Field label="Key Items (one per line)">
+            <Field label="重要道具（每行一個）">
               <textarea value={keyItems} onChange={(e) => setKeyItems(e.target.value)} rows={3} className={taCls} />
             </Field>
           </div>
@@ -273,19 +273,19 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
         {activeTab === "gm" && (
           <div className="flex flex-col gap-4">
             {gmBanner}
-            <Field label="Secret Rules" hint="Pacing, tone, and mechanical instructions for the AI GM.">
+            <Field label="隱藏規則" hint="給 AI 主持人的節奏、語氣與機制指示。">
               <textarea value={secretRules} onChange={(e) => setSecretRules(e.target.value)} rows={4} className={taCls} />
             </Field>
-            <Field label="Threats & Enemies (one per line)">
+            <Field label="威脅與敵人（每行一個）">
               <textarea value={threats} onChange={(e) => setThreats(e.target.value)} rows={3} className={taCls} />
             </Field>
-            <Field label="Traps & Hazards (one per line)">
+            <Field label="陷阱與危機（每行一個）">
               <textarea value={traps} onChange={(e) => setTraps(e.target.value)} rows={3} className={taCls} />
             </Field>
-            <Field label="Ending Conditions">
+            <Field label="結局條件">
               <textarea value={endingConditions} onChange={(e) => setEndingConditions(e.target.value)} rows={3} className={taCls} />
             </Field>
-            <Field label="Additional GM Notes">
+            <Field label="補充主持人備注">
               <textarea value={gmNotes} onChange={(e) => setGmNotes(e.target.value)} rows={4} className={taCls} />
             </Field>
           </div>
@@ -295,11 +295,11 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
       <div className="flex gap-3 mt-6">
         <button onClick={() => handleSave("draft")} disabled={saving}
           className="flex-1 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white py-2.5 rounded-lg font-medium">
-          {saving ? "Saving..." : "Save as Draft"}
+          {saving ? "儲存中..." : "儲存為草稿"}
         </button>
         <button onClick={() => handleSave("published")} disabled={saving}
           className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white py-2.5 rounded-lg font-medium">
-          {saving ? "Updating..." : currentStatus === "published" ? "Update & Keep Published" : "Publish"}
+          {saving ? "更新中..." : currentStatus === "published" ? "更新並保持發佈" : "發佈"}
         </button>
       </div>
     </div>

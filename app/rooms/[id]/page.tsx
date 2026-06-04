@@ -187,7 +187,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   }
 
   async function endGame() {
-    if (!room || !window.confirm("End this adventure? This cannot be undone.")) return;
+    if (!room || !window.confirm("確定要結束這場冒險嗎？此操作無法撤銷。")) return;
     setEndingGame(true);
     const supabase = createClient();
     await supabase.from("rooms").update({ status: "completed" }).eq("id", room.id);
@@ -195,7 +195,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     setEndingGame(false);
   }
 
-  if (!room) return <div className="text-center text-slate-400 py-20">Loading room...</div>;
+  if (!room) return <div className="text-center text-slate-400 py-20">載入房間中...</div>;
 
   // Ending screen
   if (room.status === "completed") {
@@ -221,16 +221,16 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
         {/* Header */}
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3 text-sm">
-            <span className="text-slate-400">Round <span className="text-white font-bold">{room.current_round || "—"}</span></span>
+            <span className="text-slate-400">回合 <span className="text-white font-bold">{room.current_round || "—"}</span></span>
             <span className="text-slate-600">·</span>
             {currentTurnChar ? (
               <span className="text-slate-400">
-                Turn: <span className={`font-bold ${isMyTurn ? "text-green-400" : "text-purple-400"}`}>
-                  {isMyTurn ? "Your Turn!" : currentTurnChar.name}
+                行動者：<span className={`font-bold ${isMyTurn ? "text-green-400" : "text-purple-400"}`}>
+                  {isMyTurn ? "輪到你了！" : currentTurnChar.name}
                 </span>
               </span>
             ) : (
-              <span className="text-slate-500">Waiting to start...</span>
+              <span className="text-slate-500">等待開始...</span>
             )}
           </div>
           <div className="flex items-center gap-3">
@@ -241,7 +241,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                 disabled={endingGame}
                 className="text-xs text-red-400 hover:text-red-300 border border-red-900/50 hover:border-red-700 px-2 py-1 rounded transition-colors disabled:opacity-40"
               >
-                End Game
+                結束遊戲
               </button>
             )}
           </div>
@@ -251,7 +251,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
         <div className="flex-1 bg-slate-900/50 border border-slate-700 rounded-xl p-4 overflow-y-auto min-h-0 flex flex-col gap-3">
           {storyLog.length === 0 && (
             <p className="text-slate-500 text-sm italic text-center mt-8">
-              {needsInit ? "Ready — click Begin Adventure below!" : "Waiting for all players to select their character cards..."}
+              {needsInit ? "準備就緒 — 點擊下方「開始冒險」！" : "等待所有玩家選擇角色卡..."}
             </p>
           )}
           {storyLog.map((entry) => (
@@ -288,7 +288,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
         {/* Suggested choices — only shown if they were generated FOR the current turn player */}
         {isMyTurn && choicesAreForMe && (room.current_choices?.length ?? 0) === 3 && hasStarted && (
           <div className="flex flex-col gap-2 shrink-0">
-            <p className="text-xs text-slate-500 uppercase tracking-wider">Suggested actions — or type your own below</p>
+            <p className="text-xs text-slate-500 uppercase tracking-wider">建議行動 — 或在下方輸入自己的行動</p>
             <div className="grid grid-cols-1 gap-2">
               {room.current_choices!.map((c, i) => (
                 <button
@@ -311,17 +311,17 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
             disabled={initializing}
             className="w-full bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white py-3 rounded-xl font-medium shrink-0"
           >
-            {initializing ? "Starting..." : "Begin Adventure"}
+            {initializing ? "開始中..." : "開始冒險"}
           </button>
         ) : hasStarted && iAmDown ? (
           <div className="text-center text-red-300 text-sm py-3 shrink-0 border border-red-900/50 bg-red-900/20 rounded-xl">
-            {myCharacter?.name ?? "Your character"} has fallen in this room and can no longer act.
+            {myCharacter?.name ?? "你的角色"} 已在此倒下，無法再行動。
           </div>
         ) : hasStarted ? (
           <div className="flex flex-col gap-2 shrink-0">
             {iAmBroken && (
               <div className="text-center text-fuchsia-300 text-xs py-1.5 border border-fuchsia-900/50 bg-fuchsia-900/20 rounded-lg">
-                {myCharacter?.name ?? "Your character"}'s mind has broken — actions may be erratic.
+                {myCharacter?.name ?? "你的角色"} 的精神已崩潰 — 行動可能異常。
               </div>
             )}
           <div className="flex gap-3">
@@ -329,7 +329,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
               value={actionText}
               onChange={(e) => setActionText(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && isMyTurn && !submitting) { e.preventDefault(); submitAction(); } }}
-              placeholder={isMyTurn ? "Describe your action..." : `Waiting for ${currentTurnChar?.name ?? "..."} to act...`}
+              placeholder={isMyTurn ? "描述你的行動..." : `等待 ${currentTurnChar?.name ?? "..."} 行動...`}
               disabled={!isMyTurn || submitting}
               className="flex-1 bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 disabled:opacity-50"
             />
@@ -344,7 +344,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           </div>
         ) : (
           <div className="text-center text-slate-500 text-sm py-3 shrink-0">
-            {allHaveChars ? "Waiting for host to begin..." : "Waiting for all players to select their character cards..."}
+            {allHaveChars ? "等待主持人開始..." : "等待所有玩家選擇角色卡..."}
           </div>
         )}
       </div>
@@ -352,9 +352,9 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
       {/* Sidebar */}
       <div className="flex flex-col gap-3 overflow-y-auto">
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 shrink-0">
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Turn Order</h3>
+          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">行動順序</h3>
           <div className="flex flex-col gap-1.5">
-            {sortedBySpeed.length === 0 && <p className="text-slate-500 text-xs">No characters yet</p>}
+            {sortedBySpeed.length === 0 && <p className="text-slate-500 text-xs">尚無角色</p>}
             {sortedBySpeed.map((c, i) => {
               const isActive = c.user_id === room.current_turn_player_id && hasStarted;
               return (
@@ -380,8 +380,8 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
             <div key={c.id} className={`bg-slate-800/50 border rounded-xl p-4 shrink-0 ${down ? "border-red-900/70 opacity-60" : isActive ? "border-purple-700" : "border-slate-700"}`}>
               <div className="flex items-center justify-between mb-2 gap-2">
                 <h4 className="font-medium text-white text-sm truncate">{c.name}</h4>
-                {down && <span className="text-[10px] bg-red-900/60 text-red-300 border border-red-800 px-1.5 py-0.5 rounded shrink-0">DEAD</span>}
-                {!down && broken && <span className="text-[10px] bg-fuchsia-900/60 text-fuchsia-300 border border-fuchsia-800 px-1.5 py-0.5 rounded shrink-0">BROKEN</span>}
+                {down && <span className="text-[10px] bg-red-900/60 text-red-300 border border-red-800 px-1.5 py-0.5 rounded shrink-0">陣亡</span>}
+                {!down && broken && <span className="text-[10px] bg-fuchsia-900/60 text-fuchsia-300 border border-fuchsia-800 px-1.5 py-0.5 rounded shrink-0">崩潰</span>}
               </div>
               <div className="grid grid-cols-2 gap-1">
                 {(["hp","san","str","agi","int","cha","luck","speed"] as const).map((k) => (
@@ -402,10 +402,10 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
 // ─── Ending Screen ────────────────────────────────────────────────────────────
 
 const ENDING_META: Record<string, { icon: string; badge: string; badgeCls: string; borderCls: string }> = {
-  best:    { icon: "✦", badge: "Best Ending",    badgeCls: "bg-amber-900/60 text-amber-300 border-amber-700",    borderCls: "border-amber-700/60" },
-  normal:  { icon: "✔", badge: "Victory",        badgeCls: "bg-green-900/60 text-green-300 border-green-700",    borderCls: "border-green-700/60" },
-  bad:     { icon: "↗", badge: "Bittersweet End", badgeCls: "bg-orange-900/60 text-orange-300 border-orange-700", borderCls: "border-orange-700/60" },
-  failure: { icon: "✕", badge: "Defeat",         badgeCls: "bg-red-900/60 text-red-300 border-red-700",         borderCls: "border-red-700/60" },
+  best:    { icon: "✦", badge: "最佳結局",   badgeCls: "bg-amber-900/60 text-amber-300 border-amber-700",    borderCls: "border-amber-700/60" },
+  normal:  { icon: "✔", badge: "勝利",       badgeCls: "bg-green-900/60 text-green-300 border-green-700",    borderCls: "border-green-700/60" },
+  bad:     { icon: "↗", badge: "苦甜結局",   badgeCls: "bg-orange-900/60 text-orange-300 border-orange-700", borderCls: "border-orange-700/60" },
+  failure: { icon: "✕", badge: "失敗",       badgeCls: "bg-red-900/60 text-red-300 border-red-700",         borderCls: "border-red-700/60" },
 };
 
 function EndingScreen({
@@ -437,10 +437,10 @@ function EndingScreen({
       {/* Title + room name */}
       <div className="text-center">
         <h1 className="text-3xl font-bold text-white mb-1">
-          {hasEnding ? room.ending_title : "Adventure Complete"}
+          {hasEnding ? room.ending_title : "冒險結束"}
         </h1>
         <p className="text-slate-400 text-sm">
-          The story of <span className="text-purple-400">{room.name}</span> has ended.
+          <span className="text-purple-400">{room.name}</span> 的故事已結束。
         </p>
       </div>
 
@@ -453,7 +453,7 @@ function EndingScreen({
 
       {/* Story log (last 10 non-system entries) */}
       <div className="w-full bg-slate-900/50 border border-slate-700 rounded-xl p-5">
-        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Story Recap</h3>
+        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">故事回顧</h3>
         <div className="flex flex-col gap-2 max-h-56 overflow-y-auto">
           {storyLog
             .filter((e) => e.entry_type !== "system")
@@ -480,19 +480,19 @@ function EndingScreen({
           onClick={onScenarios}
           className="flex-1 bg-purple-600 hover:bg-purple-500 text-white py-3 rounded-lg font-medium transition-colors"
         >
-          Browse Scenarios
+          瀏覽劇本
         </button>
         <button
           onClick={onHub}
           className="flex-1 border border-slate-600 hover:border-slate-400 text-slate-300 hover:text-white py-3 rounded-lg font-medium transition-colors"
         >
-          Play Hub
+          遊戲大廳
         </button>
         <button
           onClick={onDashboard}
           className="flex-1 border border-slate-600 hover:border-slate-400 text-slate-300 hover:text-white py-3 rounded-lg font-medium transition-colors"
         >
-          Dashboard
+          後台
         </button>
       </div>
     </div>
@@ -502,11 +502,11 @@ function EndingScreen({
 // ─── Dice Result ─────────────────────────────────────────────────────────────
 
 const OUTCOME_STYLES: Record<string, { label: string; cls: string }> = {
-  critical_success: { label: "Critical Success", cls: "text-emerald-300 border-emerald-700 bg-emerald-900/30" },
-  success:          { label: "Success",          cls: "text-green-300 border-green-700 bg-green-900/30" },
-  partial_success:  { label: "Partial Success",  cls: "text-yellow-300 border-yellow-700 bg-yellow-900/30" },
-  failure:          { label: "Failure",          cls: "text-orange-300 border-orange-700 bg-orange-900/30" },
-  critical_failure: { label: "Critical Failure", cls: "text-red-300 border-red-700 bg-red-900/30" },
+  critical_success: { label: "大成功",   cls: "text-emerald-300 border-emerald-700 bg-emerald-900/30" },
+  success:          { label: "成功",     cls: "text-green-300 border-green-700 bg-green-900/30" },
+  partial_success:  { label: "部分成功", cls: "text-yellow-300 border-yellow-700 bg-yellow-900/30" },
+  failure:          { label: "失敗",     cls: "text-orange-300 border-orange-700 bg-orange-900/30" },
+  critical_failure: { label: "大失敗",   cls: "text-red-300 border-red-700 bg-red-900/30" },
 };
 
 function DiceResult({ roll }: { roll: RollResult }) {

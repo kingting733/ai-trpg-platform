@@ -5,11 +5,10 @@ export default function HomePage() {
     <div className="flex flex-col items-center justify-center min-h-[70vh] text-center gap-8">
       <div>
         <h1 className="text-5xl font-bold text-white mb-4">
-          AI-Powered TRPG Adventures
+          AI 驅動的 TRPG 冒險
         </h1>
         <p className="text-xl text-slate-400 max-w-2xl">
-          Create stories, join rooms, and experience collaborative text adventures
-          guided by an AI Game Master.
+          創作故事、加入房間，與 AI 主持人共同體驗合作式文字冒險。
         </p>
       </div>
       <div className="flex gap-4">
@@ -17,20 +16,20 @@ export default function HomePage() {
           href="/scenarios"
           className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-3 rounded-lg font-medium text-lg"
         >
-          Browse Scenarios
+          瀏覽劇本
         </Link>
         <Link
           href="/login"
           className="border border-slate-600 hover:border-slate-400 text-slate-300 hover:text-white px-6 py-3 rounded-lg font-medium text-lg"
         >
-          Get Started
+          立即開始
         </Link>
       </div>
       <div className="grid grid-cols-3 gap-6 mt-8 text-left max-w-3xl w-full">
         {[
-          { icon: "📖", title: "Rich Scenarios", desc: "Browse creator-made TRPG scenarios across genres" },
-          { icon: "👥", title: "Multiplayer Rooms", desc: "Join friends and strangers in shared adventures" },
-          { icon: "🤖", title: "AI Game Master", desc: "An AI GM narrates and responds to your actions" },
+          { icon: "📖", title: "豐富劇本", desc: "瀏覽創作者製作的各類 TRPG 劇本" },
+          { icon: "👥", title: "多人房間", desc: "與朋友或陌生人一同踏上冒險" },
+          { icon: "🤖", title: "AI 主持人", desc: "AI 主持人為你的行動進行敘述與回應" },
         ].map((f) => (
           <div key={f.title} className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
             <div className="text-2xl mb-2">{f.icon}</div>

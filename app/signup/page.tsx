@@ -19,14 +19,14 @@ export default function SignupPage() {
     setError(null);
 
     const u = username.trim();
-    if (u.length < 2) { setError("Username must be at least 2 characters."); return; }
-    if (u.length > 30) { setError("Username must be 30 characters or less."); return; }
+    if (u.length < 2) { setError("使用者名稱至少需要 2 個字元。"); return; }
+    if (u.length > 30) { setError("使用者名稱不可超過 30 個字元。"); return; }
     if (!/^[a-zA-Z0-9_\- ]+$/.test(u)) {
-      setError("Username can only contain letters, numbers, spaces, hyphens, and underscores.");
+      setError("使用者名稱只能包含字母、數字、空格、連字號和底線。");
       return;
     }
-    if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
-    if (password !== confirm) { setError("Passwords do not match."); return; }
+    if (password.length < 6) { setError("密碼至少需要 6 個字元。"); return; }
+    if (password !== confirm) { setError("兩次輸入的密碼不一致。"); return; }
 
     setLoading(true);
     const supabase = createClient();
@@ -38,7 +38,7 @@ export default function SignupPage() {
       .eq("username", u);
 
     if ((count ?? 0) > 0) {
-      setError("That username is already taken. Please choose a different one.");
+      setError("該使用者名稱已被使用，請選擇其他名稱。");
       setLoading(false);
       return;
     }
@@ -56,7 +56,7 @@ export default function SignupPage() {
     }
 
     if (!data.user) {
-      setError("Signup failed. Please try again.");
+      setError("註冊失敗，請再試一次。");
       setLoading(false);
       return;
     }
@@ -78,18 +78,18 @@ export default function SignupPage() {
       <div className="flex justify-center items-center min-h-[70vh]">
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-10 w-full max-w-md text-center">
           <div className="text-5xl mb-4">📧</div>
-          <h1 className="text-2xl font-bold text-white mb-3">Check your email</h1>
+          <h1 className="text-2xl font-bold text-white mb-3">請查看你的電子郵件</h1>
           <p className="text-slate-400 mb-2">
-            We sent a confirmation link to <span className="text-white">{email}</span>.
+            我們已將確認連結寄送至 <span className="text-white">{email}</span>。
           </p>
           <p className="text-slate-500 text-sm mb-8">
-            Click the link in the email to activate your account, then log in here.
+            點擊郵件中的連結以啟用帳號，然後在此登入。
           </p>
           <Link
             href="/login"
             className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-2.5 rounded-lg font-medium"
           >
-            Go to Login
+            前往登入
           </Link>
         </div>
       </div>
@@ -99,8 +99,8 @@ export default function SignupPage() {
   return (
     <div className="flex justify-center items-center min-h-[70vh]">
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-8 w-full max-w-md">
-        <h1 className="text-2xl font-bold text-white mb-1 text-center">Create Account</h1>
-        <p className="text-slate-400 text-sm text-center mb-6">Join the adventure</p>
+        <h1 className="text-2xl font-bold text-white mb-1 text-center">建立帳號</h1>
+        <p className="text-slate-400 text-sm text-center mb-6">加入冒險</p>
 
         {error && (
           <div className="mb-4 bg-red-900/30 border border-red-700 text-red-300 text-sm rounded-lg px-4 py-3">
@@ -110,23 +110,23 @@ export default function SignupPage() {
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div>
-            <label className="block text-sm text-slate-400 mb-1">Username</label>
+            <label className="block text-sm text-slate-400 mb-1">使用者名稱</label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="YourAdventurerName"
+              placeholder="你的冒險者名稱"
               required
               maxLength={30}
               autoFocus
               className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
             />
             <p className="text-xs text-slate-500 mt-1">
-              This is the name other players will see in the game.
+              其他玩家在遊戲中將看到此名稱。
             </p>
           </div>
           <div>
-            <label className="block text-sm text-slate-400 mb-1">Email</label>
+            <label className="block text-sm text-slate-400 mb-1">電子郵件</label>
             <input
               type="email"
               value={email}
@@ -137,7 +137,7 @@ export default function SignupPage() {
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-400 mb-1">Password</label>
+            <label className="block text-sm text-slate-400 mb-1">密碼</label>
             <input
               type="password"
               value={password}
@@ -147,10 +147,10 @@ export default function SignupPage() {
               minLength={6}
               className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
             />
-            <p className="text-xs text-slate-500 mt-1">Minimum 6 characters.</p>
+            <p className="text-xs text-slate-500 mt-1">至少 6 個字元。</p>
           </div>
           <div>
-            <label className="block text-sm text-slate-400 mb-1">Confirm Password</label>
+            <label className="block text-sm text-slate-400 mb-1">確認密碼</label>
             <input
               type="password"
               value={confirm}
@@ -165,14 +165,14 @@ export default function SignupPage() {
             disabled={loading}
             className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-lg font-medium mt-1"
           >
-            {loading ? "Creating account..." : "Create Account"}
+            {loading ? "建立帳號中..." : "建立帳號"}
           </button>
         </form>
 
         <p className="text-slate-400 text-sm text-center mt-6">
-          Already have an account?{" "}
+          已有帳號？{" "}
           <Link href="/login" className="text-purple-400 hover:text-purple-300 font-medium">
-            Log in
+            登入
           </Link>
         </p>
       </div>

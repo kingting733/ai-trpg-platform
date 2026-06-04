@@ -98,7 +98,7 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={finished ? onDone : undefined}>
       <div className="bg-slate-900 border border-purple-700 rounded-2xl shadow-2xl shadow-purple-900/50 w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
         <div className="text-center mb-4">
-          <p className="text-xs text-purple-400 uppercase tracking-widest">Rolling your character</p>
+          <p className="text-xs text-purple-400 uppercase tracking-widest">抽取你的角色卡</p>
           <h2 className="text-xl font-bold text-white mt-1">{card.name}</h2>
         </div>
 
@@ -121,14 +121,14 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
           </div>
         ) : (
           <div className="text-center py-6">
-            <p className="text-sm text-slate-400 uppercase tracking-wider mb-1">Total Stats</p>
+            <p className="text-sm text-slate-400 uppercase tracking-wider mb-1">屬性總計</p>
             <div className="text-5xl font-extrabold text-white mb-3">{card.total_stats}</div>
             <div className={`text-2xl font-bold ${RARITY_TEXT[card.rarity]}`}>{card.rarity}</div>
             <button
               onClick={onDone}
               className="mt-6 w-full bg-purple-600 hover:bg-purple-500 text-white py-2.5 rounded-lg font-medium"
             >
-              Add to Collection
+              加入收藏
             </button>
           </div>
         )}
@@ -147,7 +147,7 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
 
         {!finished && (
           <button onClick={onDone} className="mt-4 w-full text-xs text-slate-500 hover:text-slate-300">
-            Skip animation
+            跳過動畫
           </button>
         )}
       </div>

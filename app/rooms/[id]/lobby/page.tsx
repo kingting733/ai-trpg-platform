@@ -104,11 +104,11 @@ export default function LobbyPage({ params }: { params: { id: string } }) {
     <div className="max-w-lg mx-auto">
       <h1 className="text-3xl font-bold text-white mb-1">{room?.name ?? "Loading..."}</h1>
       <p className="text-slate-400 mb-2 text-sm">
-        {isHost ? "Share the room code and start when ready." : "Waiting for the host to start..."}
+        {isHost ? "分享房間代碼，準備好後即可開始。" : "等待主持人開始..."}
       </p>
 
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 mb-4 text-center">
-        <div className="text-xs text-slate-500 mb-1">Room Code — share with friends</div>
+        <div className="text-xs text-slate-500 mb-1">房間代碼 — 分享給朋友</div>
         <div className="text-4xl font-mono font-bold text-purple-400 tracking-[0.3em]">{room?.room_code}</div>
       </div>
 
@@ -118,18 +118,18 @@ export default function LobbyPage({ params }: { params: { id: string } }) {
 
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 mb-6">
         <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">
-          Players ({players.length}/{room?.max_players ?? "?"})
+          玩家（{players.length}/{room?.max_players ?? "?"}）
         </h2>
         <div className="flex flex-col gap-2">
           {players.map((p) => (
             <div key={p.user_id} className="flex items-center justify-between py-2 px-3 bg-slate-900/50 rounded-lg">
               <span className="text-white font-medium">{p.username}</span>
               {p.user_id === room?.host_id && (
-                <span className="text-xs bg-amber-900/50 text-amber-300 border border-amber-800 px-2 py-0.5 rounded">Host</span>
+                <span className="text-xs bg-amber-900/50 text-amber-300 border border-amber-800 px-2 py-0.5 rounded">房主</span>
               )}
             </div>
           ))}
-          {players.length === 0 && <p className="text-slate-500 text-sm">Loading players...</p>}
+          {players.length === 0 && <p className="text-slate-500 text-sm">載入玩家中...</p>}
         </div>
       </div>
 
@@ -139,11 +139,11 @@ export default function LobbyPage({ params }: { params: { id: string } }) {
           disabled={loading || players.length < 1}
           className="w-full bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white py-3 rounded-lg font-medium text-lg"
         >
-          {loading ? "Starting..." : `Start Game${players.length === 1 ? " (Solo)" : ""}`}
+          {loading ? "開始中..." : `開始遊戲${players.length === 1 ? "（單人）" : ""}`}
         </button>
       ) : (
         <div className="text-center text-slate-400 text-sm py-3">
-          Waiting for the host to start the game...
+          等待主持人開始遊戲...
         </div>
       )}
     </div>

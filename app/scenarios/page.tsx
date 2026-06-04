@@ -65,8 +65,8 @@ export default function ScenariosPage() {
     <div>
       <div className="flex items-start justify-between mb-8 flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white">Scenario Library</h1>
-          <p className="text-slate-400 mt-1">Choose your adventure</p>
+          <h1 className="text-3xl font-bold text-white">劇本庫</h1>
+          <p className="text-slate-400 mt-1">選擇你的冒險</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -77,7 +77,7 @@ export default function ScenariosPage() {
                 : "border-slate-600 text-slate-300 hover:border-purple-500 hover:text-white"
             }`}
           >
-            All
+            全部
           </button>
           {genres.map((g) => (
             <button
@@ -96,9 +96,9 @@ export default function ScenariosPage() {
       </div>
 
       {loading ? (
-        <div className="text-slate-500 text-sm">Loading scenarios...</div>
+        <div className="text-slate-500 text-sm">載入劇本中...</div>
       ) : filtered.length === 0 ? (
-        <div className="text-center text-slate-500 py-20">No scenarios found for this genre.</div>
+        <div className="text-center text-slate-500 py-20">找不到此類型的劇本。</div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtered.map((s) => {
@@ -115,7 +115,7 @@ export default function ScenariosPage() {
                         {s.difficulty}
                       </span>
                     )}
-                    <span className="text-xs text-slate-500 ml-auto">up to {s.max_players}p</span>
+                    <span className="text-xs text-slate-500 ml-auto">最多 {s.max_players} 人</span>
                     {s.estimated_play_time && (
                       <span className="text-xs text-slate-500">{playTime(s.estimated_play_time)}</span>
                     )}
@@ -132,7 +132,7 @@ export default function ScenariosPage() {
                     </div>
                   )}
                   <div className="mt-4 text-purple-400 text-sm font-medium group-hover:text-purple-300">
-                    View Details →
+                    查看詳情 →
                   </div>
                 </div>
               </Link>

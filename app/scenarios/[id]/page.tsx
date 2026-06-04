@@ -101,7 +101,7 @@ export default function ScenarioDetailPage({ params }: { params: { id: string } 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <p className="text-slate-500">Loading scenario...</p>
+        <p className="text-slate-500">載入劇本中...</p>
       </div>
     );
   }
@@ -109,9 +109,9 @@ export default function ScenarioDetailPage({ params }: { params: { id: string } 
   if (notFound || !scenario) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <p className="text-slate-400 text-lg">Scenario not found.</p>
+        <p className="text-slate-400 text-lg">找不到此劇本。</p>
         <Link href="/scenarios" className="text-purple-400 hover:text-purple-300 text-sm">
-          ← Back to Library
+          ← 返回劇本庫
         </Link>
       </div>
     );
@@ -129,7 +129,7 @@ export default function ScenarioDetailPage({ params }: { params: { id: string } 
     <div className="max-w-3xl mx-auto">
       <div className="mb-6">
         <Link href="/scenarios" className="text-slate-400 hover:text-white text-sm">
-          ← Back to Library
+          ← 返回劇本庫
         </Link>
       </div>
 
@@ -143,7 +143,7 @@ export default function ScenarioDetailPage({ params }: { params: { id: string } 
               {scenario.difficulty}
             </span>
           )}
-          <span className="text-xs text-slate-500">up to {scenario.max_players} players</span>
+          <span className="text-xs text-slate-500">最多 {scenario.max_players} 人</span>
           {playTime && <span className="text-xs text-slate-500">{playTime}</span>}
         </div>
         <h1 className="text-3xl font-bold text-white mb-3">{scenario.title}</h1>
@@ -162,16 +162,16 @@ export default function ScenarioDetailPage({ params }: { params: { id: string } 
 
       {scenario.objective && (
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 mb-4">
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Objective</h3>
+          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">目標</h3>
           <p className="text-slate-300 text-sm leading-relaxed">{scenario.objective}</p>
         </div>
       )}
 
       {isFallback && (
         <div className="bg-amber-900/20 border border-amber-700/50 rounded-xl p-4 mb-4 text-sm text-amber-300">
-          <span className="font-semibold">Demo scenario</span> — not yet saved to the database.
-          Run the seed SQL in Supabase or publish a real scenario from the{" "}
-          <Link href="/dashboard" className="underline hover:text-amber-200">Creator Dashboard</Link>.
+          <span className="font-semibold">示範劇本</span> — 尚未儲存至資料庫。
+          請在 Supabase 執行種子 SQL，或從{" "}
+          <Link href="/dashboard" className="underline hover:text-amber-200">創作者後台</Link>發佈真實劇本。
         </div>
       )}
 
@@ -184,13 +184,13 @@ export default function ScenarioDetailPage({ params }: { params: { id: string } 
               : "bg-purple-600 hover:bg-purple-500 text-white"
           }`}
         >
-          {isFallback ? "Create Room (seed DB first)" : "Create Room"}
+          {isFallback ? "建立房間（請先執行種子 SQL）" : "建立房間"}
         </Link>
         <Link
           href="/play/hub"
           className="flex-1 border border-slate-600 hover:border-slate-400 text-slate-300 hover:text-white py-3 rounded-lg font-medium text-center transition-colors"
         >
-          Join Existing Room
+          加入現有房間
         </Link>
       </div>
     </div>

@@ -37,7 +37,7 @@ function CreateRoomInner() {
       .single();
 
     if (!scenarioCheck) {
-      setError("Scenario not found or is not published. Please go back and choose a different scenario.");
+      setError("找不到劇本或劇本尚未發佈，請返回選擇其他劇本。");
       setLoading(false);
       return;
     }
@@ -74,13 +74,13 @@ function CreateRoomInner() {
 
   return (
     <div className="max-w-lg mx-auto">
-      <button onClick={() => router.back()} className="text-slate-400 hover:text-white text-sm mb-6 block">← Back</button>
-      <h1 className="text-3xl font-bold text-white mb-2">Create Room</h1>
-      <p className="text-slate-400 mb-8">Set up your game session</p>
+      <button onClick={() => router.back()} className="text-slate-400 hover:text-white text-sm mb-6 block">← 返回</button>
+      <h1 className="text-3xl font-bold text-white mb-2">建立房間</h1>
+      <p className="text-slate-400 mb-8">設定你的遊戲房間</p>
 
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 flex flex-col gap-5">
         <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4">
-          <div className="text-xs text-slate-500 mb-1">Scenario</div>
+          <div className="text-xs text-slate-500 mb-1">劇本</div>
           <div className="text-white font-medium">{scenarioTitle}</div>
           <div className="text-xs text-slate-400 mt-0.5">{scenarioGenre}</div>
         </div>
@@ -91,17 +91,17 @@ function CreateRoomInner() {
 
         <form onSubmit={handleCreate} className="flex flex-col gap-4">
           <div>
-            <label className="block text-sm text-slate-400 mb-1">Room Name</label>
+            <label className="block text-sm text-slate-400 mb-1">房間名稱</label>
             <input
               value={roomName}
               onChange={(e) => setRoomName(e.target.value)}
-              placeholder="e.g. Friday Night Run"
+              placeholder="例：週五夜冒險"
               required
               className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-400 mb-1">Max Players</label>
+            <label className="block text-sm text-slate-400 mb-1">最多玩家</label>
             <input
               type="number"
               value={maxPlayers}
@@ -116,7 +116,7 @@ function CreateRoomInner() {
             disabled={loading || !roomName.trim()}
             className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white py-3 rounded-lg font-medium"
           >
-            {loading ? "Creating..." : "Create Room"}
+            {loading ? "建立中..." : "建立房間"}
           </button>
         </form>
       </div>
