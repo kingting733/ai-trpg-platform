@@ -48,7 +48,17 @@ export async function POST(request: Request) {
   }
 
   if (bytes.length === 0) {
-    return NextResponse.json({ error: "The file is empty." }, { status: 400 });
+    console.error(
+      `[import] empty upload: name="${file.name}" type="${file.type}" file.size=${file.size} bytes.length=${bytes.length}`
+    );
+    return NextResponse.json(
+      {
+        error:
+          "讀取不到檔案內容（0 位元組）。這通常發生在檔案來自雲端同步資料夾（iCloud、Google 雲端硬碟等）尚未下載到本機時。" +
+          "請先將檔案下載到裝置，或用純文字編輯器另存一份後再上傳。",
+      },
+      { status: 400 }
+    );
   }
   if (bytes.length > MAX_BYTES) {
     return NextResponse.json({ error: "File too large. Maximum size is 2MB." }, { status: 413 });
