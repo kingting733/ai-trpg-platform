@@ -108,46 +108,37 @@ export function normalizeImported(raw: any): ImportedScenario {
 
 function buildPrompt(): string {
   return `You are a scenario-design assistant for a multiplayer TRPG text-adventure platform.
-A creator uploaded a story document. Analyze it and extract a structured scenario definition that will PRE-FILL a creation form for the creator to review. You are NOT publishing anything.
+Analyze the uploaded story document and return a JSON object to pre-fill a scenario creation form.
 
-CRITICAL LANGUAGE RULE — READ THIS FIRST:
-1. Detect the primary language of the uploaded document (e.g. Traditional Chinese, Simplified Chinese, English, Japanese).
-2. Write ALL generated text fields in the EXACT SAME LANGUAGE as the source document. Do NOT translate.
-3. If the document is in Chinese, write title, description, objective, opening_scene, background, locations, npcs, key_items, secret_rules, threats, traps, ending_conditions, gm_notes ALL in Chinese.
-4. If the document is in English, write all fields in English. If in Japanese, write in Japanese. Mirror the source language exactly.
-5. Set the "language" field to the appropriate BCP-47 tag: "zh-TW" for Traditional Chinese, "zh-CN" for Simplified Chinese, "en" for English, "ja" for Japanese, "ko" for Korean.
-6. Tags should also be in the source language.
+OUTPUT FORMAT: Return ONLY a raw JSON object. No markdown fences, no code blocks, no commentary before or after. Start your response with { and end with }.
 
-Return ONLY valid JSON (no markdown fences, no commentary) with EXACTLY these keys:
-{
-  "language": "zh-TW" | "zh-CN" | "en" | "ja" | "ko" | string,
-  "title": string,
-  "genre": one of [${IMPORT_GENRES.join(", ")}],
-  "difficulty": one of [${IMPORT_DIFFICULTIES.join(", ")}],
-  "description": string,            // 1-3 sentence PLAYER-FACING summary, no spoilers — in source language
-  "objective": string,              // what players must accomplish to win — in source language
-  "max_players": integer 1-6,
-  "estimated_play_time": integer minutes or null,
-  "tags": string[],                 // 3-6 short tags — in source language
-  "opening_scene": string or null,  // vivid opening narration — in source language
-  "background": string or null,     // world lore / history — in source language
-  "locations": string[],            // "Name — short note" — in source language
-  "npcs": string[],                 // "Name — role / personality" — in source language
-  "key_items": string[],            // "Name — what it does" — in source language
-  "secret_rules": string or null,   // GM pacing / tone / mechanics — in source language
-  "threats": string[],              // "Name — danger" — in source language
-  "traps": string[],                // "Name — trigger / effect" — in source language
-  "ending_conditions": string or null, // victory / failure conditions — in source language
-  "gm_notes": string or null        // extra GM guidance — in source language
-}
+LANGUAGE: Detect the language of the document. Write all text fields in that same language (do not translate). Set "language" to "zh-TW" for Traditional Chinese, "zh-CN" for Simplified Chinese, "en" for English, "ja" for Japanese, "ko" for Korean.
 
-Rules:
-- title, genre, difficulty, description, objective MUST always be filled with your best inference, even if the document is vague.
-- genre and difficulty values must be from the English lists above (they are system enums, not UI text).
-- description is shown to players browsing — keep it concise and spoiler-free.
-- Put spoilers, secrets, twists, and mechanics in the GM-only fields (opening_scene, background, locations, npcs, key_items, secret_rules, threats, traps, ending_conditions, gm_notes).
-- Use [] for empty lists and null for empty text fields — never invent filler.
-- Do not add real authors or copyrighted character names that are not in the document.`;
+Required JSON keys:
+- language: BCP-47 tag (zh-TW, zh-CN, en, ja, ko)
+- title: scenario name
+- genre: exactly one of [${IMPORT_GENRES.join(", ")}]
+- difficulty: exactly one of [${IMPORT_DIFFICULTIES.join(", ")}]
+- description: 1-3 sentence player-facing summary (no spoilers)
+- objective: what players must do to win
+- max_players: integer 1-6
+- estimated_play_time: integer minutes or null
+- tags: array of 3-6 short strings
+- opening_scene: vivid opening narration or null
+- background: world lore / history or null
+- locations: array of "Name — short description" strings
+- npcs: array of "Name — role / personality" strings
+- key_items: array of "Name — what it does" strings
+- secret_rules: GM pacing / mechanics or null
+- threats: array of "Name — danger description" strings
+- traps: array of "Name — trigger / effect" strings
+- ending_conditions: victory and failure conditions or null
+- gm_notes: extra GM guidance or null
+
+Notes:
+- title, genre, difficulty, description, objective must always be filled (infer if vague).
+- genre and difficulty must be exact English enum values from the lists above.
+- Use [] for empty arrays and null for missing text fields.`;
 }
 
 async function callAI(system: string, user: string): Promise<string> {
@@ -195,6 +186,25 @@ async function callAI(system: string, user: string): Promise<string> {
   return data.choices?.[0]?.message?.content?.trim() ?? "";
 }
 
+function extractFirstJSON(s: string): string {
+  // Strip markdown code fences
+  s = s.replace(/^```(?:json)?\s*/im, "").replace(/```\s*$/im, "").trim();
+
+  // Find outermost { ... } using bracket matching
+  const start = s.indexOf("{");
+  if (start === -1) return s;
+  let depth = 0;
+  for (let i = start; i < s.length; i++) {
+    if (s[i] === "{") depth++;
+    else if (s[i] === "}") {
+      depth--;
+      if (depth === 0) return s.slice(start, i + 1);
+    }
+  }
+  // Unmatched — return from start to end
+  return s.slice(start);
+}
+
 /** Analyze raw document text and return validated, editable scenario fields. */
 export async function analyzeScenarioDocument(
   text: string
@@ -205,21 +215,19 @@ export async function analyzeScenarioDocument(
   const system = buildPrompt();
   const user = `STORY DOCUMENT:\n"""\n${doc}\n"""`;
 
-  let raw = await callAI(system, user);
-  raw = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
-
-  // Be forgiving: extract the first {...} block if the model added stray text.
-  if (!raw.startsWith("{")) {
-    const start = raw.indexOf("{");
-    const end = raw.lastIndexOf("}");
-    if (start !== -1 && end > start) raw = raw.slice(start, end + 1);
-  }
+  const raw = await callAI(system, user);
+  const extracted = extractFirstJSON(raw);
 
   let parsed: any;
   try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Error("The AI could not produce a structured scenario from this document. Try a clearer story document, or fill the form manually.");
+    parsed = JSON.parse(extracted);
+  } catch (err) {
+    // Log the actual AI output server-side to aid debugging
+    console.error("[import-scenario] JSON parse failed. Raw AI output (first 500 chars):", raw.slice(0, 500));
+    throw new Error(
+      "The AI could not produce a structured scenario from this document. " +
+      "Try a clearer story document, or fill the form manually."
+    );
   }
 
   return { scenario: normalizeImported(parsed), truncated };
