@@ -46,6 +46,7 @@ export default function NewScenarioPage() {
   const [keyItems, setKeyItems] = useState("");
 
   // GM-only: GM Toolkit
+  const [winningTargets, setWinningTargets] = useState("");
   const [secretRules, setSecretRules] = useState("");
   const [clues, setClues] = useState("");
   const [threats, setThreats] = useState("");
@@ -88,6 +89,7 @@ export default function NewScenarioPage() {
     setClues((d.clues ?? []).join("\n"));
     setThreats((d.threats ?? []).join("\n"));
     setTraps((d.traps ?? []).join("\n"));
+    setWinningTargets(d.winning_targets ?? "");
     setEndingConditions(d.ending_conditions ?? "");
     setGmNotes(d.gm_notes ?? "");
     if (d.language) setLanguage(d.language);
@@ -192,6 +194,7 @@ export default function NewScenarioPage() {
         clues: parseLines(clues),
         threats: parseLines(threats),
         traps: parseLines(traps),
+        winning_targets: winningTargets.trim() || null,
         ending_conditions: endingConditions.trim() || null,
         gm_notes: gmNotes.trim() || null,
         language,
@@ -388,7 +391,12 @@ export default function NewScenarioPage() {
                 placeholder={"壓力板 — 飛鏢射出，AGI DC 14 躲避\n落石板 — 堵塞通道，STR DC 16 支撐\n毒霧 — 每回合損失 1 SAN 直到離開"}
                 className={taCls} />
             </Field>
-            <Field label="結局條件" hint="定義 AI 主持人應推進的勝敗條件。">
+            <Field label="通關條件 / Winning Targets" hint="玩家必須完成的明確勝利目標——每行一項。這是系統判定遊戲結束的主要依據。留空則改用下方「結局條件」。">
+              <textarea value={winningTargets} onChange={(e) => setWinningTargets(e.target.value)} rows={4}
+                placeholder={"取回聖石並帶出神廟\n消滅守門者\n所有玩家在黎明前逃脫"}
+                className={taCls} />
+            </Field>
+            <Field label="結局條件" hint="AI 主持人的完整勝敗情境說明（含失敗分支）。通關條件為空時作為備用。">
               <textarea value={endingConditions} onChange={(e) => setEndingConditions(e.target.value)} rows={3}
                 placeholder={"勝利：在黎明前取回碎片並逃脫。\n失敗：所有角色死亡，或神廟坍塌時隊伍仍在內部。"}
                 className={taCls} />

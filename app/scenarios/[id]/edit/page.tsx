@@ -42,6 +42,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
   const [locations, setLocations] = useState("");
   const [npcs, setNpcs] = useState("");
   const [keyItems, setKeyItems] = useState("");
+  const [winningTargets, setWinningTargets] = useState("");
   const [secretRules, setSecretRules] = useState("");
   const [clues, setClues] = useState("");
   const [threats, setThreats] = useState("");
@@ -88,6 +89,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
       setClues(Array.isArray(data.clues) ? data.clues.join("\n") : "");
       setThreats(Array.isArray(data.threats) ? data.threats.join("\n") : "");
       setTraps(Array.isArray(data.traps) ? data.traps.join("\n") : "");
+      setWinningTargets(data.winning_targets ?? "");
       setEndingConditions(data.ending_conditions ?? "");
       setGmNotes(data.gm_notes ?? "");
       setCurrentStatus(data.status ?? "draft");
@@ -141,6 +143,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
         clues: parseLines(clues),
         threats: parseLines(threats),
         traps: parseLines(traps),
+        winning_targets: winningTargets.trim() || null,
         ending_conditions: endingConditions.trim() || null,
         gm_notes: gmNotes.trim() || null,
         language,
@@ -306,7 +309,12 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
             <Field label="陷阱與危機（每行一個）">
               <textarea value={traps} onChange={(e) => setTraps(e.target.value)} rows={3} className={taCls} />
             </Field>
-            <Field label="結局條件">
+            <Field label="通關條件 / Winning Targets" hint="玩家必須完成的明確勝利目標——每行一項。這是系統判定遊戲結束的主要依據。留空則改用下方「結局條件」。">
+              <textarea value={winningTargets} onChange={(e) => setWinningTargets(e.target.value)} rows={4}
+                placeholder={"取回聖石並帶出神廟\n消滅守門者\n所有玩家在黎明前逃脫"}
+                className={taCls} />
+            </Field>
+            <Field label="結局條件" hint="AI 主持人的完整勝敗情境說明（含失敗分支）。通關條件為空時作為備用。">
               <textarea value={endingConditions} onChange={(e) => setEndingConditions(e.target.value)} rows={3} className={taCls} />
             </Field>
             <Field label="補充主持人備注">

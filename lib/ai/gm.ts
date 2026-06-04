@@ -8,6 +8,7 @@ export interface ScenarioGMContext {
   threats: string[];
   traps: string[];
   keyItems: string[];
+  winningTargets: string | null;
   endingConditions: string | null;
   gmNotes: string | null;
 }
@@ -162,6 +163,7 @@ function buildGMContextBlock(ctx: ScenarioGMContext): string {
   if (ctx.traps.length) parts.push(`Traps & Hazards:\n${ctx.traps.map((t) => `  - ${t}`).join("\n")}`);
   if (ctx.keyItems.length) parts.push(`Key Items:\n${ctx.keyItems.map((i) => `  - ${i}`).join("\n")}`);
   if (ctx.secretRules) parts.push(`GM Rules & Pacing:\n${ctx.secretRules}`);
+  if (ctx.winningTargets) parts.push(`Winning Targets (deterministic — game ends when ALL are achieved):\n${ctx.winningTargets}`);
   if (ctx.endingConditions) parts.push(`Victory/Failure Conditions (all branches):\n${ctx.endingConditions}`);
   if (ctx.gmNotes) parts.push(`Additional GM Notes:\n${ctx.gmNotes}`);
   if (!parts.length) return "";
