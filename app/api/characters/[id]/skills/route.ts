@@ -38,7 +38,7 @@ export async function PATCH(
   let totalAllocated = 0;
 
   for (const [key, val] of Object.entries(skills)) {
-    if (!Number.isInteger(val) || val < 0 || val > 99) {
+    if (!Number.isInteger(val) || val < 0 || val > 95) {
       return NextResponse.json({ error: `Invalid value for skill ${key}.` }, { status: 400 });
     }
     const rawBase = SKILL_BASES[key];

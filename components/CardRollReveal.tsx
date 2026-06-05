@@ -122,7 +122,7 @@ function SkillAllocator({
       if (next < 0) return prev;
       if (delta > 0 && remaining <= 0) return prev;
       const base = baseForSkill(SKILLS.find((s) => s.key === key)!, card.dex, card.app);
-      if (base + next > 99) return prev;
+      if (base + next > 95) return prev;
       return { ...prev, [key]: next };
     });
   }
@@ -133,7 +133,7 @@ function SkillAllocator({
     const base = baseForSkill(SKILLS.find((s) => s.key === key)!, card.dex, card.app);
     const cur = allocated[key] ?? 0;
     const headroom = remaining + cur; // points we can reassign from this skill
-    const capped = Math.min(n, headroom, 99 - base);
+    const capped = Math.min(n, headroom, 95 - base);
     setAllocated((prev) => ({ ...prev, [key]: capped }));
   }
 
@@ -190,14 +190,14 @@ function SkillAllocator({
               <input
                 type="number"
                 min={0}
-                max={99 - base}
+                max={95 - base}
                 value={add}
                 onChange={(e) => setDirect(s.key, e.target.value)}
                 className="w-10 bg-slate-900 border border-slate-700 focus:border-purple-500 rounded text-center text-xs text-white py-0.5 focus:outline-none"
               />
               <button
                 onClick={() => adjust(s.key, 1)}
-                disabled={remaining <= 0 || base + add >= 99}
+                disabled={remaining <= 0 || base + add >= 95}
                 className="w-5 h-5 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-30 text-white text-xs flex items-center justify-center shrink-0"
               >+</button>
               <span className={`w-8 text-right text-xs font-bold shrink-0 ${total >= 80 ? "text-amber-300" : total >= 60 ? "text-green-300" : "text-slate-200"}`}>

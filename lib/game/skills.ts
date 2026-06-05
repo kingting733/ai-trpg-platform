@@ -32,8 +32,8 @@ export const SKILL_KEY_BY_ZH: Record<string, string> =
 export const SKILL_ZH_BY_KEY: Record<string, string> =
   Object.fromEntries(SKILL_CATALOGUE.map((s) => [s.key, s.zh]));
 
-/** Highest a skill can reach via growth (CoC convention). */
-export const SKILL_CAP = 99;
+/** Highest a skill can reach. */
+export const SKILL_CAP = 95;
 
 /** Resolve a skill's base value for a given card's attributes. */
 export function skillBase(
