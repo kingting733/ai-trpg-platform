@@ -105,7 +105,9 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   const [initializing, setInitializing] = useState(false);
   const [gmThinking, setGmThinking] = useState(false);
   const [endingGame, setEndingGame] = useState(false);
+  const [skillsOpen, setSkillsOpen] = useState<Record<string, boolean>>({});
   const logEndRef = useRef<HTMLDivElement>(null);
+  function toggleSkills(id: string) { setSkillsOpen((p) => ({ ...p, [id]: !p[id] })); }
 
   const fetchAll = useCallback(async () => {
     const supabase = createClient();
@@ -244,8 +246,6 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   // Choices must belong to the current turn player — guards against stale one-turn-lag choices
   const choicesAreForMe = room.current_choices_for_player_id === currentUserId;
   const sortedByDex = [...characters].sort((a, b) => b.dex - a.dex);
-  const [skillsOpen, setSkillsOpen] = useState<Record<string, boolean>>({});
-  function toggleSkills(id: string) { setSkillsOpen((p) => ({ ...p, [id]: !p[id] })); }
   const currentTurnChar = sortedByDex.find((c) => c.user_id === room.current_turn_player_id);
   const allHaveChars = roomPlayers.length > 0 && roomPlayers.every((p) => p.character_id);
   const needsInit = room.status === "in_progress" && room.current_round === 0 && allHaveChars;
