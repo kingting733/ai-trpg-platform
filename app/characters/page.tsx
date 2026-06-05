@@ -26,6 +26,22 @@ const RARITY_STYLES: Record<CharacterCard["rarity"], { border: string; chip: str
 
 const STAT_KEYS = ["str", "con", "siz", "dex", "app", "int", "pow", "edu", "luck"] as const;
 
+const SKILL_ZH: Record<string, string> = {
+  spot_hidden:  "偵查",
+  listen:       "聆聽",
+  library_use:  "圖書館使用",
+  psychology:   "心理學",
+  persuade:     "說服",
+  fast_talk:    "話術",
+  charm:        "魅惑",
+  intimidate:   "恐嚇",
+  dodge:        "閃避",
+  first_aid:    "急救",
+  stealth:      "潛行",
+  lockpick:     "開鎖",
+  drive_auto:   "駕駛汽車",
+};
+
 function isSameUtcDay(iso: string) {
   const d = new Date(iso);
   const now = new Date();
@@ -93,6 +109,11 @@ export default function CharactersPage() {
     if (revealed?.id === id) setRevealed((r) => r ? { ...r, name: newName } : r);
   }
 
+  function handleDeleted(id: string) {
+    setCards((prev) => prev.filter((c) => c.id !== id));
+    if (revealed?.id === id) setRevealed(null);
+  }
+
   return (
     <div className="max-w-5xl mx-auto">
       {rolling && (
@@ -125,7 +146,7 @@ export default function CharactersPage() {
         <div className="mb-8">
           <p className="text-xs text-purple-400 uppercase tracking-wider mb-2">獲得新角色卡！</p>
           <div className="max-w-xs">
-            <CardView card={revealed} highlight onNameSaved={handleNameSaved} />
+            <CardView card={revealed} highlight onNameSaved={handleNameSaved} onDeleted={handleDeleted} />
           </div>
         </div>
       )}
@@ -143,7 +164,7 @@ export default function CharactersPage() {
           <p className="text-sm text-slate-500 mb-3">共 {cards.length} 張角色卡</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {cards.map((card) => (
-              <CardView key={card.id} card={card} onNameSaved={handleNameSaved} />
+              <CardView key={card.id} card={card} onNameSaved={handleNameSaved} onDeleted={handleDeleted} />
             ))}
           </div>
         </>
@@ -156,10 +177,12 @@ function CardView({
   card,
   highlight,
   onNameSaved,
+  onDeleted,
 }: {
   card: CharacterCard;
   highlight?: boolean;
   onNameSaved?: (id: string, newName: string) => void;
+  onDeleted?: (id: string) => void;
 }) {
   const style = RARITY_STYLES[card.rarity];
   const [editing, setEditing] = useState(false);
@@ -167,7 +190,21 @@ function CardView({
   const [saving, setSaving] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
   const [showSkills, setShowSkills] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  async function deleteCard() {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/characters/${card.id}`, { method: "DELETE" });
+      if (res.ok) { onDeleted?.(card.id); }
+      else { setConfirmDelete(false); setDeleting(false); }
+    } catch {
+      setConfirmDelete(false);
+      setDeleting(false);
+    }
+  }
 
   function startEdit() {
     setDraft(card.name);
@@ -289,7 +326,7 @@ function CardView({
                 .sort(([, a], [, b]) => b - a)
                 .map(([k, v]) => (
                   <div key={k} className="flex justify-between bg-slate-900/50 rounded px-2 py-1">
-                    <span className="text-slate-400 text-xs">{k.replace(/_/g, " ")}</span>
+                    <span className="text-slate-400 text-xs">{SKILL_ZH[k] ?? k.replace(/_/g, " ")}</span>
                     <span className="text-purple-300 text-xs font-bold">{v}%</span>
                   </div>
                 ))}
@@ -297,6 +334,31 @@ function CardView({
           ) : (
             <p className="text-slate-500 text-xs text-center py-2">尚未分配技能點數</p>
           )}
+        </div>
+      )}
+
+      {!confirmDelete ? (
+        <button
+          onClick={() => setConfirmDelete(true)}
+          className="mt-2 w-full text-xs text-slate-600 hover:text-red-400 transition-colors py-1"
+        >
+          刪除此卡
+        </button>
+      ) : (
+        <div className="mt-2 flex gap-2">
+          <button
+            onClick={deleteCard}
+            disabled={deleting}
+            className="flex-1 text-xs bg-red-800/70 hover:bg-red-700 disabled:opacity-50 text-red-200 rounded py-1.5 font-medium"
+          >
+            {deleting ? "刪除中…" : "確認刪除"}
+          </button>
+          <button
+            onClick={() => setConfirmDelete(false)}
+            className="flex-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded py-1.5"
+          >
+            取消
+          </button>
         </div>
       )}
     </div>
