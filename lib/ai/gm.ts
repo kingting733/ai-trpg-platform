@@ -254,6 +254,74 @@ ${input.actingCharacterName} declares: "${input.playerAction}"
 Narrate the outcome of ${input.actingCharacterName}'s action (6-8 sentences, third person, rich in atmosphere and sensory detail; reveal information only as it is actively uncovered), then suggest 3 next actions for ${input.nextCharacterName} (whose turn is now active). Respond ONLY with the JSON object described in the system instructions.`;
 }
 
+// Context-sensitive guidance for critical outcomes, keyed by stat and action text.
+function criticalGuidance(
+  outcome: "critical_success" | "critical_failure",
+  stat: string | null,
+  action: string,
+): string {
+  const t = action.toLowerCase();
+  const has = (...kws: string[]) => kws.some((k) => t.includes(k));
+
+  if (outcome === "critical_success") {
+    switch (stat) {
+      case "int":
+        if (has("search","spot","investigate","inspect","examine","notice","observe"))
+          return "Found the clue AND an extra hidden detail — reveal a bonus piece of information the character noticed.";
+        if (has("library","research","archives","look it up"))
+          return "Found the information faster AND more completely — an unexpected related detail surfaces as well.";
+        return "Gained deeper insight than expected — include an extra detail, pattern, or hidden truth the character perceived.";
+      case "edu":
+        if (has("heal","first aid","bandage","treat"))
+          return "Treatment was exceptionally effective — restore 1 extra HP and avoid any follow-up complications.";
+        return "Knowledge applied masterfully — the character recalled a crucial detail that creates a clear advantage.";
+      case "app":
+        return "The NPC is fully won over — they not only comply but volunteer extra help, information, or goodwill.";
+      case "dex":
+        if (has("sneak","hide","stealth","crawl","quietly"))
+          return "Moved without any trace — also noticed a useful route, hiding spot, or opportunity along the way.";
+        if (has("dodge","evade","duck"))
+          return "Evaded with such precision that a counter-opening appears for the character or an ally.";
+        if (has("lock","lockpick","pick the lock"))
+          return "Lock opened quickly and cleanly — no noise, no damage, no trace left behind.";
+        if (has("drive","steer"))
+          return "Executed the maneuver flawlessly — perfect positioning, faster pace, no attention drawn.";
+        return "The action was executed flawlessly — describe an unexpected positional or tactical bonus.";
+      case "str":
+        return "Hit a vital spot or weak point — describe an impactful blow that grants a meaningful tactical advantage.";
+      default:
+        return "Achieved the goal exceptionally — describe a clear extra benefit or discovery beyond what was expected.";
+    }
+  } else {
+    switch (stat) {
+      case "int":
+        if (has("search","spot","investigate","inspect","examine"))
+          return "Missed a key clue AND mistook a red herring for real evidence — misdirection now threatens the investigation.";
+        if (has("library","research","archives"))
+          return "Found wrong or misleading data — the character believes it is correct, setting up a false trail.";
+        return "Analysis went badly wrong — a false conclusion was reached that will cause problems.";
+      case "edu":
+        if (has("heal","first aid","bandage","treat"))
+          return "Made the wound worse OR wasted critical medical supplies — describe the painful setback.";
+        return "Knowledge was dangerously mis-applied — an embarrassing or costly error with lasting consequence.";
+      case "app":
+        return "The NPC is now hostile or deeply suspicious — they may warn others, refuse further contact, or take action.";
+      case "dex":
+        if (has("sneak","hide","stealth","crawl","quietly"))
+          return "Made a loud noise, triggered a hazard, or fully exposed their position — describe the exposure.";
+        if (has("lock","lockpick","pick the lock"))
+          return "Tool snapped, lock jammed, or visible damage was left — the entry point is now compromised.";
+        if (has("drive","steer"))
+          return "Lost control — crash, spin-out, or drew loud unwanted attention.";
+        return "The action went badly wrong — a stumble, misfire, or harmful accident resulted.";
+      case "str":
+        return "The attack backfired — weapon jammed, lost footing, or struck the wrong target. Describe the dangerous setback.";
+      default:
+        return "Not only failed, but a complication arose — describe a new danger, exposure, misreading, or consequence.";
+    }
+  }
+}
+
 function buildDiceDirective(input: GMAIInput): string {
   const r = input.resolution;
   if (!r) return "";
@@ -265,11 +333,17 @@ function buildDiceDirective(input: GMAIInput): string {
     : r.actorBroke
     ? ` IMPORTANT: ${input.actingCharacterName}'s SAN has dropped to 0 — ${input.actingCharacterName}'s mind BREAKS and they lose control in this room. Narrate this clearly. ${input.actingCharacterName} can no longer act normally.`
     : "";
+
+  const isCrit = r.outcome === "critical_success" || r.outcome === "critical_failure";
+  const critLine = isCrit
+    ? `\n- CRITICAL NARRATION GUIDE: ${criticalGuidance(r.outcome as "critical_success" | "critical_failure", r.statUsed, input.playerAction)}`
+    : "";
+
   return `
 DICE RESULT (THIS IS FINAL — YOU MUST OBEY IT):
 - ${input.actingCharacterName} attempted an action requiring a ${r.statUsed?.toUpperCase()} check.
 - d100 roll: ${r.d100} vs target ${r.target}% → OUTCOME: ${r.outcome?.replace(/_/g, " ").toUpperCase()}
-- Mechanical consequence: ${r.consequenceSummary}${r.hpChange ? ` HP ${r.hpChange}.` : ""}${r.sanChange ? ` SAN ${r.sanChange}.` : ""}${deathNote}
+- Mechanical consequence: ${r.consequenceSummary}${r.hpChange ? ` HP ${r.hpChange}.` : ""}${r.sanChange ? ` SAN ${r.sanChange}.` : ""}${deathNote}${critLine}
 
 STRICT DICE RULE: The dice result is final. Do NOT change a failure into a success. Do NOT rescue ${input.actingCharacterName} with a lucky coincidence unless the outcome itself is a success. Narrate exactly what the outcome dictates, and describe the consequences clearly and concretely. A failure must visibly cost ${input.actingCharacterName} something.
 `;
