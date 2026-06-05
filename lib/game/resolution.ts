@@ -252,8 +252,8 @@ const SAN_TIERS: SanTier[] = [
       "鬼", "幽靈", "鬼魂", "屍體", "亡魂", "童鬼", "死屍", "遺體",
       "靈異", "超自然", "鬼影", "陰魂",
     ],
-    successLoss: () => 1,
-    failLoss:    () => rollDiceN(1, 3),
+    successLoss: () => 0,
+    failLoss:    () => 1,
   },
 ];
 
