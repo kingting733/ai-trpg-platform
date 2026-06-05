@@ -227,8 +227,16 @@ DICE SYSTEM:
 - Each turn may include a resolved dice result. When one is provided, it is FINAL — you MUST obey it. Do NOT change a failure into a success, and do NOT rescue the actor with a lucky coincidence unless the outcome itself is a success. A failure must visibly cost the actor something.
 - When a turn states no dice check was needed, narrate the action naturally without inventing a dramatic success or failure.
 
+NARRATION FORMAT:
+- Write 3-5 paragraphs separated by blank lines (\\n\\n).
+- Use **bold text** for important names, locations, or dramatic moments.
+- First paragraph: immediate outcome of the action.
+- Middle paragraph(s): atmosphere, NPC reactions, environmental details.
+- Last paragraph: what the characters notice or feel as the scene settles.
+- Do NOT use bullet points or numbered lists inside the narration.
+
 OUTPUT FORMAT — Respond ONLY with valid JSON, no markdown, no extra text:
-{"narration":"<6-8 sentence third-person narration of the acting character's outcome, rich in sensory and atmospheric detail>","choices":["<next character action 1>","<next character action 2>","<next character action 3>"]}`;
+{"narration":"<paragraphs separated by \\n\\n, **bold** for emphasis>","choices":["<next character action 1>","<next character action 2>","<next character action 3>"]}`;
 }
 
 /**

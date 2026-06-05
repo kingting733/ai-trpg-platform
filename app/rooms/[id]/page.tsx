@@ -58,6 +58,33 @@ interface RoomPlayer {
   turn_order: number | null;
 }
 
+// Renders GM text with paragraph breaks and **bold** inline formatting
+function GmText({ content }: { content: string }) {
+  const paragraphs = content.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  if (paragraphs.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      {paragraphs.map((para, i) => {
+        // Bold header: paragraph that is entirely **...**
+        const headerMatch = para.match(/^\*\*(.+?)\*\*$/);
+        if (headerMatch) {
+          return <p key={i} className="text-amber-300 font-semibold text-sm">{headerMatch[1]}</p>;
+        }
+        // Inline **bold** within a line
+        const parts = para.split(/(\*\*.+?\*\*)/g);
+        return (
+          <p key={i} className="text-slate-200 text-sm leading-relaxed">
+            {parts.map((part, j) => {
+              const m = part.match(/^\*\*(.+?)\*\*$/);
+              return m ? <strong key={j} className="text-white font-semibold">{m[1]}</strong> : part;
+            })}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
 const SKILL_ZH: Record<string, string> = {
   spot_hidden: "偵查", listen: "聆聽", library_use: "圖書館使用",
   psychology: "心理學", persuade: "說服", fast_talk: "話術",
@@ -280,8 +307,8 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
               )}
               {entry.entry_type === "gm_response" && (
                 <div className="bg-slate-800 border border-amber-900/50 rounded-lg p-3">
-                  <span className="text-xs text-amber-500 font-medium uppercase tracking-wider block mb-1">GM</span>
-                  <p className="text-slate-200 text-sm leading-relaxed">{entry.content}</p>
+                  <span className="text-xs text-amber-500 font-medium uppercase tracking-wider block mb-2">GM</span>
+                  <GmText content={entry.content} />
                 </div>
               )}
             </div>
@@ -551,7 +578,7 @@ function EndingScreen({
                   </p>
                 )}
                 {entry.entry_type === "gm_response" && (
-                  <p className="text-slate-300 italic">{entry.content}</p>
+                  <GmText content={entry.content} />
                 )}
               </div>
             ))}
