@@ -114,6 +114,8 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   const [endingGame, setEndingGame] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState<Record<string, boolean>>({});
   const logEndRef = useRef<HTMLDivElement>(null);
+  const logContainerRef = useRef<HTMLDivElement>(null);
+  const prevLogLenRef = useRef(0);
   function toggleSkills(id: string) { setSkillsOpen((p) => ({ ...p, [id]: !p[id] })); }
 
   const fetchAll = useCallback(async () => {
@@ -150,8 +152,21 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     return () => clearInterval(interval);
   }, [fetchAll]);
 
+  // Auto-scroll only when a NEW entry arrives AND the player is already near the
+  // bottom. This lets the player freely scroll up to read older messages without
+  // the 3s poll yanking them back down.
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const grew = storyLog.length > prevLogLenRef.current;
+    prevLogLenRef.current = storyLog.length;
+
+    const el = logContainerRef.current;
+    const nearBottom = el
+      ? el.scrollHeight - el.scrollTop - el.clientHeight < 120
+      : true;
+
+    if ((grew || gmThinking) && nearBottom) {
+      logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [storyLog, gmThinking]);
 
   async function initializeTurns() {
@@ -293,7 +308,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
         </div>
 
         {/* Story log */}
-        <div className="flex-1 bg-slate-900/50 border border-slate-700 rounded-xl p-4 overflow-y-auto min-h-0 flex flex-col gap-3">
+        <div ref={logContainerRef} className="flex-1 bg-slate-900/50 border border-slate-700 rounded-xl p-4 overflow-y-auto min-h-0 flex flex-col gap-3">
           {storyLog.length === 0 && (
             <p className="text-slate-500 text-sm italic text-center mt-8">
               {needsInit ? "準備就緒 — 點擊下方「開始冒險」！" : "等待所有玩家選擇角色卡..."}
