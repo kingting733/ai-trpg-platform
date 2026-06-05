@@ -1,3 +1,10 @@
+export interface LedgerEntry {
+  turn: number;
+  type: string;
+  character: string;
+  fact: string;
+}
+
 export interface ScenarioGMContext {
   openingScene: string | null;
   sceneFlow: string | null;
@@ -13,8 +20,6 @@ export interface ScenarioGMContext {
   failureConditions: string | null;
   endingConditions: string | null;
   gmNotes: string | null;
-  /** Full raw story module — the GM's complete reference, injected into the cached prefix. */
-  sourceDocument: string | null;
 }
 
 export interface GMAIInput {
@@ -30,6 +35,11 @@ export interface GMAIInput {
     str: number; con: number; siz: number; app: number;
     int: number; pow: number; edu: number; luck: number;
   }>;
+  /** Compressed arc of older turns — stays ~2 sentences regardless of game length. */
+  storySummary: string | null;
+  /** Structured key facts that must never be dropped (clues found, deaths, etc.). */
+  storyLedger: LedgerEntry[];
+  /** Last 3 raw turns for immediate continuity. */
   storyLogSoFar: string[];
   currentRound: number;
   /** The character who just submitted the action — narration resolves THIS actor. */
@@ -62,6 +72,8 @@ export interface GMAIInput {
 export interface GMResponseWithChoices {
   narration: string;
   choices: [string, string, string];
+  /** 0-2 short player-visible facts to persist in the story ledger (e.g. "found the key"). */
+  memory?: string[];
 }
 
 export async function generateGMResponse(input: GMAIInput): Promise<GMResponseWithChoices> {
@@ -182,14 +194,9 @@ function buildGMContextBlock(ctx: ScenarioGMContext): string {
   if (ctx.failureConditions) parts.push(`Failure Conditions — if any of these occurs, the adventure ends in defeat. Steer outcomes honestly; do not contrive to avoid them:\n${ctx.failureConditions}`);
   if (ctx.endingConditions) parts.push(`Additional Ending Notes:\n${ctx.endingConditions}`);
   if (ctx.gmNotes) parts.push(`Additional GM Notes:\n${ctx.gmNotes}`);
-  // Full source module LAST: the curated fields above are your quick-reference
-  // spine; this is the complete text to consult for any detail not summarized.
-  if (ctx.sourceDocument) {
-    parts.push(
-      `FULL STORY MODULE (authoritative complete reference — consult this for any detail, ` +
-        `NPC line, location, secret, or branch not captured in the summary above; never reveal it verbatim to players):\n"""\n${ctx.sourceDocument}\n"""`
-    );
-  }
+  // source_document intentionally omitted: curated fields above already capture
+  // all structured knowledge; injecting the full raw module every turn would
+  // blow the prefix cache on every cold start and cost 10× more per cache miss.
   if (!parts.length) return "";
   return `\nGM WORLD CONTEXT (never share this with players directly):\n${parts.join("\n\n")}`;
 }
@@ -247,18 +254,30 @@ NARRATION FORMAT:
 - Last paragraph: what the characters notice or feel as the scene settles.
 - Do NOT use bullet points or numbered lists inside the narration.
 
-OUTPUT FORMAT — Respond ONLY with valid JSON, no markdown, no extra text:
-{"narration":"<paragraphs separated by \\n\\n, **bold** for emphasis>","choices":["<next character action 1>","<next character action 2>","<next character action 3>"]}`;
+OUTPUT: Respond ONLY with valid JSON as specified in the user message each turn.`;
 }
 
 /**
  * DYNAMIC per-turn user message — everything that changes each turn. Placed
  * AFTER the cached static system prefix so the cacheable portion stays stable.
+ *
+ * Memory architecture keeps this message small:
+ *   - storySummary: 2 sentences covering everything older than the last few turns
+ *   - storyLedger: structured list of key facts (clues, deaths, objectives)
+ *   - storyLogSoFar: only the last 3 raw turns for immediate continuity
  */
 export function buildTurnMessage(input: GMAIInput): string {
   const liveStatus = buildLiveStatus(input.characters, input.actingCharacterName);
   const diceBlock = buildDiceDirective(input);
-  const recentLog = input.storyLogSoFar.slice(-10).join("\n");
+  const recentLog = input.storyLogSoFar.slice(-3).join("\n");
+
+  const summaryBlock = input.storySummary
+    ? `STORY SO FAR:\n${input.storySummary}\n`
+    : "";
+
+  const ledgerBlock = input.storyLedger.length
+    ? `KEY FACTS (clues found, deaths, important events — never forget these):\n${input.storyLedger.map((e) => `[Turn ${e.turn}] ${e.character}: ${e.fact}`).join("\n")}\n`
+    : "";
 
   return `CURRENT PARTY STATUS (Round ${input.currentRound}):
 ${liveStatus}
@@ -266,12 +285,15 @@ ${liveStatus}
 ACTING THIS TURN: ${input.actingCharacterName}
 NEXT TO ACT: ${input.nextCharacterName}
 ${diceBlock}
-RECENT STORY LOG:
+${summaryBlock}${ledgerBlock}RECENT TURNS:
 ${recentLog || "(Adventure just started)"}
 
 ${input.actingCharacterName} declares: "${input.playerAction}"
 
-Narrate the outcome of ${input.actingCharacterName}'s action (6-8 sentences, third person, rich in atmosphere and sensory detail; reveal information only as it is actively uncovered), then suggest 3 next actions for ${input.nextCharacterName} (whose turn is now active). Respond ONLY with the JSON object described in the system instructions.`;
+Narrate the outcome of ${input.actingCharacterName}'s action (6-8 sentences, third person, rich in atmosphere and sensory detail; reveal information only as it is actively uncovered), then suggest 3 next actions for ${input.nextCharacterName} (whose turn is now active).
+
+OUTPUT FORMAT — Respond ONLY with valid JSON, no markdown, no extra text:
+{"narration":"<paragraphs separated by \\n\\n, **bold** for emphasis>","choices":["<next character action 1>","<next character action 2>","<next character action 3>"],"memory":["<0 to 2 short player-visible facts worth remembering, e.g. found a key, met an NPC. Omit if nothing notable happened.>"]}`;
 }
 
 // Context-sensitive guidance for critical outcomes, keyed by stat and action text.

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { generateGMResponse, GMAIInput, ScenarioGMContext } from "@/lib/ai/gm";
+import { generateGMResponse, GMAIInput, ScenarioGMContext, LedgerEntry } from "@/lib/ai/gm";
 import { createClient } from "@/lib/supabase/server";
 import { resolveAction } from "@/lib/game/resolution";
+import { refreshStorySummary } from "@/lib/ai/summarize";
 import { detectEnding } from "@/lib/ai/detect-ending";
 import {
   decomposeObjectives,
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
   // Verify caller is a room participant and it's actually their turn
   const { data: room } = await supabase
     .from("rooms")
-    .select("*, scenarios(title, background, objective, rules, opening_scene, scene_flow, secret_rules, locations, npcs, clues, threats, traps, key_items, winning_targets, each_player_targets, failure_conditions, ending_conditions, gm_notes, source_document, language)")
+    .select("*, scenarios(title, background, objective, rules, opening_scene, scene_flow, secret_rules, locations, npcs, clues, threats, traps, key_items, winning_targets, each_player_targets, failure_conditions, ending_conditions, gm_notes, language)")
     .eq("id", roomId)
     .single();
   if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -141,13 +142,13 @@ export async function POST(request: Request) {
     });
   }
 
-  // Fetch recent story log for GM context
+  // Fetch last 3 turns for immediate continuity — older history lives in summary+ledger
   const { data: logs } = await supabase
     .from("story_logs")
     .select("entry_type, content, characters(name)")
     .eq("room_id", roomId)
     .order("created_at", { ascending: false })
-    .limit(20);
+    .limit(6);
 
   const storyLogSoFar = (logs ?? [])
     .reverse()
@@ -156,6 +157,15 @@ export async function POST(request: Request) {
       if (l.entry_type === "gm_response") return `GM: ${l.content}`;
       return l.content;
     });
+
+  // Load the room's persistent memory (summary + ledger)
+  const { data: roomMemory } = await supabase
+    .from("rooms")
+    .select("story_summary, story_ledger")
+    .eq("id", roomId)
+    .single();
+  const storySummary: string | null = roomMemory?.story_summary ?? null;
+  const storyLedger: LedgerEntry[] = Array.isArray(roomMemory?.story_ledger) ? roomMemory.story_ledger : [];
 
   const partyForAI = sortedByDex.map((c: any) => ({
     name: c.name,
@@ -182,8 +192,34 @@ export async function POST(request: Request) {
     failureConditions: scenario.failure_conditions ?? null,
     endingConditions: scenario.ending_conditions ?? null,
     gmNotes: scenario.gm_notes ?? null,
-    sourceDocument: scenario.source_document ?? null,
   } : null;
+
+  // === DETERMINISTIC LEDGER POPULATION ===
+  // Facts that must never be forgotten are appended here before the AI call.
+  // The AI can also add up to 2 narrative facts via its `memory` field (below).
+  const newLedgerEntries: LedgerEntry[] = [];
+  const turnLabel = room.current_round;
+  const actorName = resolvedActor?.name ?? "Unknown";
+
+  if (roll?.requires_check) {
+    const outcome = roll.outcome ?? "";
+    const isInvestigation = ["偵查", "聆聽", "圖書館使用", "心理學", "spot_hidden", "library_use"].includes(roll.stat_used ?? "");
+
+    if ((outcome === "critical_success" || outcome === "success") && isInvestigation) {
+      newLedgerEntries.push({ turn: turnLabel, type: "clue", character: actorName, fact: `成功調查：${actionText.slice(0, 80)}` });
+    }
+    if (actorDied) {
+      newLedgerEntries.push({ turn: turnLabel, type: "death", character: actorName, fact: `${actorName} 的 HP 歸零，已陣亡。` });
+    }
+    if (actorBroke) {
+      newLedgerEntries.push({ turn: turnLabel, type: "san_break", character: actorName, fact: `${actorName} 的 SAN 歸零，精神崩潰。` });
+    }
+    if (roll.san_check && !roll.san_check.success) {
+      newLedgerEntries.push({ turn: turnLabel, type: "event", character: actorName, fact: `遭遇恐怖（${roll.san_check.severity_label}），SAN −${roll.san_check.san_loss}。` });
+    }
+  }
+
+  const updatedLedger = [...storyLedger, ...newLedgerEntries];
 
   const input: GMAIInput = {
     scenarioTitle: scenario?.title ?? "Unknown Scenario",
@@ -193,6 +229,8 @@ export async function POST(request: Request) {
     scenarioLanguage: scenario?.language ?? null,
     scenarioGMContext: gmContext,
     characters: partyForAI,
+    storySummary,
+    storyLedger: updatedLedger,
     storyLogSoFar,
     currentRound: room.current_round,
     actingCharacterName: resolvedActor?.name ?? "Unknown",
@@ -232,6 +270,34 @@ export async function POST(request: Request) {
       entry_type: "gm_response",
       content: gmResponse.narration,
     });
+
+    // === MEMORY UPDATE ===
+    // Append AI-emitted memory items to the ledger (player-visible facts only).
+    const aiMemoryEntries: LedgerEntry[] = (gmResponse.memory ?? [])
+      .filter((m) => typeof m === "string" && m.trim().length > 0)
+      .slice(0, 2)
+      .map((fact) => ({ turn: turnLabel, type: "event", character: actorName, fact: fact.trim() }));
+
+    const finalLedger = [...updatedLedger, ...aiMemoryEntries];
+
+    // Refresh the rolling summary at every round boundary (cheap call, infrequent).
+    let finalSummary = storySummary;
+    if (nextRound !== room.current_round) {
+      finalSummary = await refreshStorySummary(
+        storySummary,
+        finalLedger,
+        storyLogSoFar,
+        scenario?.title ?? "the adventure",
+        scenario?.language ?? null,
+      );
+    }
+
+    // Persist updated ledger and (if refreshed) summary.
+    const memoryUpdate: Record<string, any> = { story_ledger: finalLedger };
+    if (finalSummary !== storySummary) memoryUpdate.story_summary = finalSummary;
+    if (Object.keys(memoryUpdate).length > 0) {
+      await supabase.from("rooms").update(memoryUpdate).eq("id", roomId);
+    }
 
     // === ENDING DETECTION ===
     // Check 1: all party members dead → forced failure ending (pure code).
