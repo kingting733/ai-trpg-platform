@@ -234,7 +234,7 @@ function consequences(category: Category, outcome: Outcome): { hp: number; san: 
     case "failure":
       return isSanity
         ? { hp: 0, san: -2, flavor: "失敗 — 恐懼侵蝕心神（SAN −2）。" }
-        : { hp: -2, san: 0,  flavor: "失敗 — 行動受挫，付出代價（HP −2）。" };
+        : { hp: 0, san: 0,  flavor: "失敗 — 行動受挫，但未受傷。" };
     case "critical_failure":
       return isSanity
         ? { hp: 0, san: -4, flavor: "大失敗 — 心神瀕臨崩潰（SAN −4）。" }
