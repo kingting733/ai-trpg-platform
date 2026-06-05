@@ -10,6 +10,7 @@ interface Character {
   hp: number; san: number; mp: number;
   str: number; con: number; siz: number; dex: number; app: number;
   int: number; pow: number; edu: number; luck: number;
+  skills: Record<string, number> | null;
 }
 
 interface RollResult {
@@ -56,6 +57,13 @@ interface RoomPlayer {
   character_id: string | null;
   turn_order: number | null;
 }
+
+const SKILL_ZH: Record<string, string> = {
+  spot_hidden: "偵查", listen: "聆聽", library_use: "圖書館使用",
+  psychology: "心理學", persuade: "說服", fast_talk: "話術",
+  charm: "魅惑", intimidate: "恐嚇", dodge: "閃避",
+  first_aid: "急救", stealth: "潛行", lockpick: "開鎖", drive_auto: "駕駛汽車",
+};
 
 export default function RoomPlayPage({ params }: { params: { id: string } }) {
   const router = useRouter();
@@ -209,6 +217,8 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   // Choices must belong to the current turn player — guards against stale one-turn-lag choices
   const choicesAreForMe = room.current_choices_for_player_id === currentUserId;
   const sortedByDex = [...characters].sort((a, b) => b.dex - a.dex);
+  const [skillsOpen, setSkillsOpen] = useState<Record<string, boolean>>({});
+  function toggleSkills(id: string) { setSkillsOpen((p) => ({ ...p, [id]: !p[id] })); }
   const currentTurnChar = sortedByDex.find((c) => c.user_id === room.current_turn_player_id);
   const allHaveChars = roomPlayers.length > 0 && roomPlayers.every((p) => p.character_id);
   const needsInit = room.status === "in_progress" && room.current_round === 0 && allHaveChars;
@@ -446,6 +456,25 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                   </div>
                 ))}
               </div>
+              <button
+                onClick={() => toggleSkills(c.id)}
+                className="mt-2 w-full text-xs text-purple-400 hover:text-purple-300 text-left"
+              >
+                {skillsOpen[c.id] ? "收起技能 ▲" : "查看技能 ▼"}
+              </button>
+              {skillsOpen[c.id] && (
+                <div className="mt-1 grid grid-cols-2 gap-1">
+                  {c.skills && Object.entries(c.skills).filter(([,v]) => (v ?? 0) > 0).sort(([,a],[,b]) => b-a).map(([k,v]) => (
+                    <div key={k} className="flex justify-between bg-slate-900/50 rounded px-2 py-0.5">
+                      <span className="text-slate-500 text-xs truncate">{SKILL_ZH[k] ?? k.replace(/_/g," ")}</span>
+                      <span className="text-purple-300 text-xs font-bold">{v}%</span>
+                    </div>
+                  ))}
+                  {(!c.skills || Object.values(c.skills).every(v => (v??0) === 0)) && (
+                    <p className="col-span-2 text-slate-600 text-xs text-center py-1">尚未分配技能</p>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
