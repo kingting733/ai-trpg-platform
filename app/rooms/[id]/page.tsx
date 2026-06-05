@@ -7,8 +7,9 @@ interface Character {
   id: string;
   user_id: string;
   name: string;
-  hp: number; san: number; str: number; agi: number;
-  int: number; cha: number; luck: number; speed: number;
+  hp: number; san: number; mp: number;
+  str: number; con: number; siz: number; dex: number; app: number;
+  int: number; pow: number; edu: number; luck: number;
 }
 
 interface RollResult {
@@ -88,7 +89,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     setRoomPlayers(rp ?? []);
 
     const { data: chars } = await supabase.from("characters").select("*").eq("room_id", params.id);
-    const sortedChars = (chars ?? []).sort((a, b) => b.speed - a.speed);
+    const sortedChars = (chars ?? []).sort((a, b) => b.dex - a.dex);
     setCharacters(sortedChars);
 
     const myChar = (chars ?? []).find((c: Character) => c.user_id === user.id);
@@ -117,7 +118,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     setInitializing(true);
     const supabase = createClient();
 
-    const sorted = [...characters].sort((a, b) => b.speed - a.speed);
+    const sorted = [...characters].sort((a, b) => b.dex - a.dex);
     if (sorted.length === 0) { setInitializing(false); return; }
 
     for (let i = 0; i < sorted.length; i++) {
@@ -138,7 +139,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
       room_id: room.id,
       round_number: 1,
       entry_type: "system",
-      content: `Turn order: ${sorted.map((c) => `${c.name} (SPD ${c.speed})`).join(" → ")}`,
+      content: `Turn order: ${sorted.map((c) => `${c.name} (DEX ${c.dex})`).join(" → ")}`,
     });
 
     await fetchAll();
@@ -210,8 +211,8 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   const isMyTurn = room.current_turn_player_id === currentUserId && !iAmDown;
   // Choices must belong to the current turn player — guards against stale one-turn-lag choices
   const choicesAreForMe = room.current_choices_for_player_id === currentUserId;
-  const sortedBySpeed = [...characters].sort((a, b) => b.speed - a.speed);
-  const currentTurnChar = sortedBySpeed.find((c) => c.user_id === room.current_turn_player_id);
+  const sortedByDex = [...characters].sort((a, b) => b.dex - a.dex);
+  const currentTurnChar = sortedByDex.find((c) => c.user_id === room.current_turn_player_id);
   const allHaveChars = roomPlayers.length > 0 && roomPlayers.every((p) => p.character_id);
   const needsInit = room.status === "in_progress" && room.current_round === 0 && allHaveChars;
   const hasStarted = room.current_round > 0;
@@ -376,7 +377,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                 const entry = room.objective_progress?.[o.id];
                 const done = entry?.done === true;
                 const isEach = o.scope === "each_player";
-                const livingNames = sortedBySpeed.filter((c) => c.hp > 0).map((c) => c.name);
+                const livingNames = sortedByDex.filter((c) => c.hp > 0).map((c) => c.name);
                 const byCount = entry?.by ? Object.keys(entry.by).length : 0;
                 const total = livingNames.length || byCount;
                 return (
@@ -403,8 +404,8 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 shrink-0">
           <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">行動順序</h3>
           <div className="flex flex-col gap-1.5">
-            {sortedBySpeed.length === 0 && <p className="text-slate-500 text-xs">尚無角色</p>}
-            {sortedBySpeed.map((c, i) => {
+            {sortedByDex.length === 0 && <p className="text-slate-500 text-xs">尚無角色</p>}
+            {sortedByDex.map((c, i) => {
               const isActive = c.user_id === room.current_turn_player_id && hasStarted;
               return (
                 <div
@@ -413,7 +414,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                 >
                   <span className="text-slate-600 w-3">{i + 1}.</span>
                   <span className={`flex-1 font-medium truncate ${isActive ? "text-purple-300" : "text-slate-300"}`}>{c.name}</span>
-                  <span className="text-slate-500">SPD {c.speed}</span>
+                  <span className="text-slate-500">DEX {c.dex}</span>
                   {isActive && <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />}
                 </div>
               );
@@ -421,7 +422,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           </div>
         </div>
 
-        {sortedBySpeed.map((c) => {
+        {sortedByDex.map((c) => {
           const isActive = c.user_id === room.current_turn_player_id && hasStarted;
           const down = c.hp <= 0;
           const broken = c.san <= 0;
@@ -432,8 +433,16 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                 {down && <span className="text-[10px] bg-red-900/60 text-red-300 border border-red-800 px-1.5 py-0.5 rounded shrink-0">陣亡</span>}
                 {!down && broken && <span className="text-[10px] bg-fuchsia-900/60 text-fuchsia-300 border border-fuchsia-800 px-1.5 py-0.5 rounded shrink-0">崩潰</span>}
               </div>
+              <div className="grid grid-cols-2 gap-1 mb-1">
+                {(["hp","san","mp"] as const).map((k) => (
+                  <div key={k} className="flex justify-between bg-slate-900/50 rounded px-2 py-0.5">
+                    <span className="text-slate-500 text-xs">{k.toUpperCase()}</span>
+                    <span className={`text-xs font-medium ${k === "hp" && c.hp <= 3 ? "text-red-300" : k === "san" && c.san <= 15 ? "text-amber-300" : "text-slate-300"}`}>{c[k]}</span>
+                  </div>
+                ))}
+              </div>
               <div className="grid grid-cols-2 gap-1">
-                {(["hp","san","str","agi","int","cha","luck","speed"] as const).map((k) => (
+                {(["str","con","siz","dex","app","int","pow","edu","luck"] as const).map((k) => (
                   <div key={k} className="flex justify-between bg-slate-900/50 rounded px-2 py-0.5">
                     <span className="text-slate-500 text-xs">{k.toUpperCase()}</span>
                     <span className="text-slate-300 text-xs font-medium">{c[k]}</span>

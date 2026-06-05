@@ -54,11 +54,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const sortedBySpeed = [...characters].sort((a, b) => b.speed - a.speed);
-  const currentIndex = sortedBySpeed.findIndex((c) => c.user_id === user.id);
+  const sortedByDex = [...characters].sort((a, b) => b.dex - a.dex);
+  const currentIndex = sortedByDex.findIndex((c) => c.user_id === user.id);
 
   // resolvedActor = the character who just submitted the action (narration is about them)
-  const resolvedActor = sortedBySpeed.find((c) => c.user_id === (actingUserId || user.id)) ?? null;
+  const resolvedActor = sortedByDex.find((c) => c.user_id === (actingUserId || user.id)) ?? null;
 
   // === DICE RESOLUTION ===
   // The SYSTEM decides the outcome; the GM only narrates it.
@@ -95,14 +95,14 @@ export async function POST(request: Request) {
   const isDown = (c: any) => c.hp <= 0;
   let nextRound = room.current_round;
   let nextPlayerId: string;
-  let nextActor = sortedBySpeed[0];
-  for (let step = 1; step <= sortedBySpeed.length; step++) {
+  let nextActor = sortedByDex[0];
+  for (let step = 1; step <= sortedByDex.length; step++) {
     const idx = currentIndex + step;
-    if (idx >= sortedBySpeed.length && nextRound === room.current_round) {
+    if (idx >= sortedByDex.length && nextRound === room.current_round) {
       nextRound = room.current_round + 1;
     }
-    const candidate = sortedBySpeed[idx % sortedBySpeed.length];
-    if (!isDown(candidate) || step === sortedBySpeed.length) {
+    const candidate = sortedByDex[idx % sortedByDex.length];
+    if (!isDown(candidate) || step === sortedByDex.length) {
       nextActor = candidate;
       break;
     }
@@ -142,12 +142,13 @@ export async function POST(request: Request) {
       return l.content;
     });
 
-  const partyForAI = sortedBySpeed.map((c: any) => ({
+  const partyForAI = sortedByDex.map((c: any) => ({
     name: c.name,
     playerName: c.users?.username ?? null,
     background: c.background ?? null,
-    speed: c.speed, hp: c.hp, str: c.str, agi: c.agi,
-    int: c.int, cha: c.cha, luck: c.luck, san: c.san,
+    dex: c.dex, hp: c.hp, san: c.san, mp: c.mp ?? 0,
+    str: c.str, con: c.con, siz: c.siz, app: c.app,
+    int: c.int, pow: c.pow, edu: c.edu, luck: c.luck,
   }));
 
   const scenario = (room as any).scenarios;
@@ -212,7 +213,7 @@ export async function POST(request: Request) {
 
     // === ENDING DETECTION ===
     // Check 1: all party members dead → forced failure ending (pure code).
-    const allDead = sortedBySpeed.every((c: any) => c.hp <= 0);
+    const allDead = sortedByDex.every((c: any) => c.hp <= 0);
 
     const isZh = scenario?.language === "zh-TW" || scenario?.language === "zh-CN";
     const tpdTitle = isZh ? "全員陣亡" : "Total Party Defeat";
@@ -261,7 +262,7 @@ export async function POST(request: Request) {
             : {};
 
         // Living characters define who must still complete each_player objectives.
-        const livingPlayerNames = sortedBySpeed.filter((c: any) => c.hp > 0).map((c: any) => c.name);
+        const livingPlayerNames = sortedByDex.filter((c: any) => c.hp > 0).map((c: any) => c.name);
 
         // 2. Only ask the AI about objectives this ACTOR hasn't personally done.
         //    (party scope: not done; each_player scope: actor not yet recorded)

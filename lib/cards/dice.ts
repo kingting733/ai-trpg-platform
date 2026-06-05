@@ -1,47 +1,57 @@
 export type Rarity = "Common" | "Rare" | "Epic" | "Legendary";
 
-/** Per-stat breakdown of the individual dice that produced each stat. */
+export type SkillKey =
+  | "spot_hidden" | "listen" | "library_use" | "psychology"
+  | "persuade" | "fast_talk" | "charm" | "intimidate"
+  | "dodge" | "first_aid" | "stealth" | "lockpick" | "drive_auto";
+
+export type SkillPoints = Partial<Record<SkillKey, number>>;
+
 export interface RollDetails {
-  hp: { base: number; dice: number[] };    // base 20 + 1d10
-  san: { base: number; dice: number[] };   // base 20 + 1d10
-  str: { dice: number[] };                  // 3d6
-  agi: { dice: number[] };
-  int: { dice: number[] };
-  cha: { dice: number[] };
+  str:  { dice: number[] };
+  con:  { dice: number[] };
+  siz:  { base: number; dice: number[] };
+  dex:  { dice: number[] };
+  app:  { dice: number[] };
+  int:  { base: number; dice: number[] };
+  pow:  { dice: number[] };
+  edu:  { base: number; dice: number[] };
   luck: { dice: number[] };
-  speed: { dice: number[] };
 }
 
 export interface RolledCard {
-  name: string;
-  hp: number;
-  san: number;
-  str: number;
-  agi: number;
-  int: number;
-  cha: number;
-  luck: number;
-  speed: number;
-  total_stats: number;
-  rarity: Rarity;
+  name:        string;
+  str:         number;  // 3d6×5 — 力量
+  con:         number;  // 3d6×5 — 體質
+  siz:         number;  // (2d6+6)×5 — 體型
+  dex:         number;  // 3d6×5 — 敏捷 (turn order)
+  app:         number;  // 3d6×5 — 外貌
+  int:         number;  // (2d6+6)×5 — 智力
+  pow:         number;  // 3d6×5 — 意志
+  edu:         number;  // (2d6+6)×5 — 教育
+  luck:        number;  // 3d6×5 — 幸運
+  hp:          number;  // (CON+SIZ)÷10
+  san:         number;  // = POW (starting sanity)
+  mp:          number;  // POW÷5
+  total_stats: number;  // sum of 9 base stats (rarity gate)
+  rarity:      Rarity;
   roll_details: RollDetails;
+  skill_points: number; // EDU×2 + INT×2 — pool to allocate to skills
+  skills:      SkillPoints; // allocated by player after rolling
 }
 
-/** Roll `count` dice each with `sides` faces, returning the individual results. */
 function rollDice(count: number, sides: number): number[] {
   const rolls: number[] = [];
-  for (let i = 0; i < count; i++) {
-    rolls.push(Math.floor(Math.random() * sides) + 1);
-  }
+  for (let i = 0; i < count; i++) rolls.push(Math.floor(Math.random() * sides) + 1);
   return rolls;
 }
 
 const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
 
 export function rarityForTotal(totalStats: number): Rarity {
-  if (totalStats >= 86) return "Legendary";
-  if (totalStats >= 71) return "Epic";
-  if (totalStats >= 56) return "Rare";
+  if (totalStats >= 650) return "Legendary";
+  if (totalStats >= 570) return "Epic";
+  if (totalStats >= 470) return "Rare";
   return "Common";
 }
 
@@ -52,48 +62,59 @@ const NAME_PREFIXES = [
 
 function generateName(): string {
   const prefix = NAME_PREFIXES[Math.floor(Math.random() * NAME_PREFIXES.length)];
-  const num = Math.floor(1000 + Math.random() * 9000); // 1000–9999
+  const num = Math.floor(1000 + Math.random() * 9000);
   return `${prefix}-${num}`;
 }
 
-/** Roll a brand-new character card per the MVP dice rules, capturing dice detail. */
 export function rollCharacterCard(): RolledCard {
-  const hpDie = rollDice(1, 10);
-  const sanDie = rollDice(1, 10);
-  const strDice = rollDice(3, 6);
-  const agiDice = rollDice(3, 6);
-  const intDice = rollDice(3, 6);
-  const chaDice = rollDice(3, 6);
+  // 3d6×5 stats
+  const strDice  = rollDice(3, 6);
+  const conDice  = rollDice(3, 6);
+  const dexDice  = rollDice(3, 6);
+  const appDice  = rollDice(3, 6);
+  const powDice  = rollDice(3, 6);
   const luckDice = rollDice(3, 6);
-  const speedDice = rollDice(3, 6);
+  // (2d6+6)×5 stats
+  const sizDice  = rollDice(2, 6);
+  const intDice  = rollDice(2, 6);
+  const eduDice  = rollDice(2, 6);
 
-  const hp = 20 + sum(hpDie);
-  const san = 20 + sum(sanDie);
-  const str = sum(strDice);
-  const agi = sum(agiDice);
-  const int = sum(intDice);
-  const cha = sum(chaDice);
-  const luck = sum(luckDice);
-  const speed = sum(speedDice);
+  const str  = sum(strDice) * 5;
+  const con  = sum(conDice) * 5;
+  const siz  = (sum(sizDice) + 6) * 5;
+  const dex  = sum(dexDice) * 5;
+  const app  = sum(appDice) * 5;
+  const int  = (sum(intDice) + 6) * 5;
+  const pow  = sum(powDice) * 5;
+  const edu  = (sum(eduDice) + 6) * 5;
+  const luck = sum(luckDice) * 5;
 
-  const total_stats = str + agi + int + cha + luck + speed;
+  const hp          = Math.floor((con + siz) / 10);
+  const san         = pow;
+  const mp          = Math.floor(pow / 5);
+  const total_stats = str + con + siz + dex + app + int + pow + edu + luck;
+  const skill_points = edu * 2 + int * 2;
 
   const roll_details: RollDetails = {
-    hp: { base: 20, dice: hpDie },
-    san: { base: 20, dice: sanDie },
-    str: { dice: strDice },
-    agi: { dice: agiDice },
-    int: { dice: intDice },
-    cha: { dice: chaDice },
+    str:  { dice: strDice },
+    con:  { dice: conDice },
+    siz:  { base: 6, dice: sizDice },
+    dex:  { dice: dexDice },
+    app:  { dice: appDice },
+    int:  { base: 6, dice: intDice },
+    pow:  { dice: powDice },
+    edu:  { base: 6, dice: eduDice },
     luck: { dice: luckDice },
-    speed: { dice: speedDice },
   };
 
   return {
     name: generateName(),
-    hp, san, str, agi, int, cha, luck, speed,
+    str, con, siz, dex, app, int, pow, edu, luck,
+    hp, san, mp,
     total_stats,
     rarity: rarityForTotal(total_stats),
     roll_details,
+    skill_points,
+    skills: {},
   };
 }

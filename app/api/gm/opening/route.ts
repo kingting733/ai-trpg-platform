@@ -9,8 +9,9 @@ export interface OpeningScene {
 
 type PartyMember = {
   name: string; playerName?: string | null; background: string | null;
-  speed: number; hp: number; str: number; agi: number;
-  int: number; cha: number; luck: number; san: number;
+  dex: number; hp: number; san: number; mp: number;
+  str: number; con: number; siz: number; app: number;
+  int: number; pow: number; edu: number; luck: number;
 };
 
 function buildGMContextBlock(ctx: ScenarioGMContext): string {
@@ -177,15 +178,16 @@ export async function POST(request: Request) {
     );
   }
 
-  const sortedChars = [...characters].sort((a: any, b: any) => b.speed - a.speed);
+  const sortedChars = [...characters].sort((a: any, b: any) => b.dex - a.dex);
   const firstPlayerId = sortedChars[0]?.user_id ?? null;
 
   const party: PartyMember[] = sortedChars.map((c: any) => ({
     name: c.name,
     playerName: c.users?.username ?? null,
     background: c.background ?? null,
-    speed: c.speed, hp: c.hp, str: c.str, agi: c.agi,
-    int: c.int, cha: c.cha, luck: c.luck, san: c.san,
+    dex: c.dex, hp: c.hp, san: c.san, mp: c.mp ?? 0,
+    str: c.str, con: c.con, siz: c.siz, app: c.app,
+    int: c.int, pow: c.pow, edu: c.edu, luck: c.luck,
   }));
 
   const scenario = (room as any).scenarios;

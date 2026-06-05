@@ -7,16 +7,12 @@ import { createClient } from "@/lib/supabase/client";
 interface CharacterCard {
   id: string;
   name: string;
-  hp: number;
-  san: number;
-  str: number;
-  agi: number;
-  int: number;
-  cha: number;
-  luck: number;
-  speed: number;
+  str: number; con: number; siz: number; dex: number; app: number;
+  int: number; pow: number; edu: number; luck: number;
+  hp: number; san: number; mp: number;
   total_stats: number;
   rarity: "Common" | "Rare" | "Epic" | "Legendary";
+  skills: Record<string, number> | null;
 }
 
 const RARITY_STYLES: Record<CharacterCard["rarity"], { border: string; chip: string; selected: string }> = {
@@ -26,7 +22,7 @@ const RARITY_STYLES: Record<CharacterCard["rarity"], { border: string; chip: str
   Legendary: { border: "border-amber-600",  chip: "bg-amber-900/50 text-amber-300 border-amber-600",    selected: "border-amber-400 ring-2 ring-amber-400" },
 };
 
-const STAT_KEYS = ["str", "agi", "int", "cha", "luck", "speed"] as const;
+const STAT_KEYS = ["str", "con", "siz", "dex", "app", "int", "pow", "edu", "luck"] as const;
 
 export default function SelectCardPage({ params }: { params: { id: string } }) {
   const router = useRouter();
@@ -81,12 +77,17 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
         name: card.name,
         hp: card.hp,
         san: card.san,
+        mp: card.mp,
         str: card.str,
-        agi: card.agi,
+        con: card.con,
+        siz: card.siz,
+        dex: card.dex,
+        app: card.app,
         int: card.int,
-        cha: card.cha,
+        pow: card.pow,
+        edu: card.edu,
         luck: card.luck,
-        speed: card.speed,
+        skills: card.skills ?? {},
       })
       .select("id")
       .single();
@@ -151,11 +152,12 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
                 <span className={`text-xs px-2 py-0.5 rounded border ${style.chip} shrink-0`}>{card.rarity}</span>
               </div>
 
-              <div className="grid grid-cols-2 gap-1.5 mb-2">
+              <div className="grid grid-cols-3 gap-1.5 mb-2">
                 <StatBox label="HP" value={card.hp} />
                 <StatBox label="SAN" value={card.san} />
+                <StatBox label="MP" value={card.mp} />
               </div>
-              <div className="grid grid-cols-3 gap-1.5 mb-3">
+              <div className="grid grid-cols-3 gap-1.5 mb-2">
                 {STAT_KEYS.map((k) => <StatBox key={k} label={k.toUpperCase()} value={card[k]} />)}
               </div>
 

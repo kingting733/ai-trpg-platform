@@ -177,14 +177,22 @@ CREATE TABLE IF NOT EXISTS public.characters (
   room_id UUID NOT NULL REFERENCES public.rooms(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   background TEXT,
-  hp INTEGER NOT NULL DEFAULT 10 CHECK (hp >= 0),
-  san INTEGER NOT NULL DEFAULT 10 CHECK (san >= 0),
-  str INTEGER NOT NULL DEFAULT 5 CHECK (str >= 1),
-  agi INTEGER NOT NULL DEFAULT 5 CHECK (agi >= 1),
-  int INTEGER NOT NULL DEFAULT 5 CHECK (int >= 1),
-  cha INTEGER NOT NULL DEFAULT 5 CHECK (cha >= 1),
-  luck INTEGER NOT NULL DEFAULT 5 CHECK (luck >= 1),
-  speed INTEGER NOT NULL DEFAULT 5 CHECK (speed >= 1),
+  -- Mutable during play
+  hp  INTEGER NOT NULL DEFAULT 11 CHECK (hp >= 0),
+  san INTEGER NOT NULL DEFAULT 50 CHECK (san >= 0),
+  mp  INTEGER NOT NULL DEFAULT 10 CHECK (mp >= 0),
+  -- Immutable CoC-style base stats (×5 scale)
+  str INTEGER NOT NULL DEFAULT 50 CHECK (str >= 5),
+  con INTEGER NOT NULL DEFAULT 50 CHECK (con >= 5),
+  siz INTEGER NOT NULL DEFAULT 65 CHECK (siz >= 5),
+  dex INTEGER NOT NULL DEFAULT 50 CHECK (dex >= 5),
+  app INTEGER NOT NULL DEFAULT 50 CHECK (app >= 5),
+  int INTEGER NOT NULL DEFAULT 65 CHECK (int >= 5),
+  pow INTEGER NOT NULL DEFAULT 50 CHECK (pow >= 5),
+  edu INTEGER NOT NULL DEFAULT 65 CHECK (edu >= 5),
+  luck INTEGER NOT NULL DEFAULT 50 CHECK (luck >= 5),
+  -- Skill allocations (set once, copied from character card)
+  skills JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(user_id, room_id)
 );
@@ -336,17 +344,27 @@ CREATE TABLE IF NOT EXISTS public.character_cards (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
-  hp INTEGER NOT NULL,
-  san INTEGER NOT NULL,
-  str INTEGER NOT NULL,
-  agi INTEGER NOT NULL,
-  int INTEGER NOT NULL,
-  cha INTEGER NOT NULL,
+  -- CoC-style base stats (×5 scale: 3d6×5 or (2d6+6)×5)
+  str  INTEGER NOT NULL,
+  con  INTEGER NOT NULL,
+  siz  INTEGER NOT NULL,
+  dex  INTEGER NOT NULL,
+  app  INTEGER NOT NULL,
+  int  INTEGER NOT NULL,
+  pow  INTEGER NOT NULL,
+  edu  INTEGER NOT NULL,
   luck INTEGER NOT NULL,
-  speed INTEGER NOT NULL,
+  -- Derived values (stored for display)
+  hp  INTEGER NOT NULL,  -- floor((CON+SIZ)/10)
+  san INTEGER NOT NULL,  -- = POW at roll time
+  mp  INTEGER NOT NULL,  -- floor(POW/5)
+  -- Rarity
   total_stats INTEGER NOT NULL,
   rarity TEXT NOT NULL CHECK (rarity IN ('Common', 'Rare', 'Epic', 'Legendary')),
+  -- Dice details for the reveal animation
   roll_details JSONB,
+  -- Skill allocations chosen during card reveal (set once, null until allocated)
+  skills JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

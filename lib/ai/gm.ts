@@ -24,7 +24,12 @@ export interface GMAIInput {
   scenarioRules: string | null;
   scenarioLanguage?: string | null;
   scenarioGMContext?: ScenarioGMContext | null;
-  characters: Array<{ name: string; playerName?: string | null; background: string | null; speed: number; hp: number; str: number; agi: number; int: number; cha: number; luck: number; san: number }>;
+  characters: Array<{
+    name: string; playerName?: string | null; background: string | null;
+    dex: number; hp: number; san: number; mp: number;
+    str: number; con: number; siz: number; app: number;
+    int: number; pow: number; edu: number; luck: number;
+  }>;
   storyLogSoFar: string[];
   currentRound: number;
   /** The character who just submitted the action — narration resolves THIS actor. */
@@ -100,7 +105,7 @@ export function buildPartyRoster(
     .map((c) => {
       const acting = actingCharacterName && c.name === actingCharacterName ? " ← ACTING THIS TURN" : "";
       const player = c.playerName ? ` [player: ${c.playerName}]` : "";
-      return `- ${c.name}${player}${acting}: HP ${c.hp}, SAN ${c.san}, STR ${c.str}, AGI ${c.agi}, INT ${c.int}, CHA ${c.cha}, LUCK ${c.luck}, SPEED ${c.speed}${c.background ? ` | Background: ${c.background}` : ""}`;
+      return `- ${c.name}${player}${acting}: HP ${c.hp}, SAN ${c.san}, MP ${c.mp}, STR ${c.str}, CON ${c.con}, SIZ ${c.siz}, DEX ${c.dex}, APP ${c.app}, INT ${c.int}, POW ${c.pow}, EDU ${c.edu}, LUCK ${c.luck}${c.background ? ` | Background: ${c.background}` : ""}`;
     })
     .join("\n");
 }
@@ -114,7 +119,7 @@ export function buildStaticRoster(characters: GMAIInput["characters"]): string {
   return characters
     .map((c) => {
       const player = c.playerName ? ` [player: ${c.playerName}]` : "";
-      return `- ${c.name}${player}: STR ${c.str}, AGI ${c.agi}, INT ${c.int}, CHA ${c.cha}, LUCK ${c.luck}, SPEED ${c.speed}${c.background ? ` | Background: ${c.background}` : ""}`;
+      return `- ${c.name}${player}: STR ${c.str}, CON ${c.con}, SIZ ${c.siz}, DEX ${c.dex}, APP ${c.app}, INT ${c.int}, POW ${c.pow}, EDU ${c.edu}, LUCK ${c.luck}${c.background ? ` | Background: ${c.background}` : ""}`;
     })
     .join("\n");
 }
@@ -131,7 +136,7 @@ export function buildLiveStatus(
     .map((c) => {
       const acting = actingCharacterName && c.name === actingCharacterName ? " ← ACTING THIS TURN" : "";
       const down = c.hp <= 0 ? " (DOWN)" : "";
-      return `- ${c.name}: HP ${c.hp}, SAN ${c.san}${down}${acting}`;
+      return `- ${c.name}: HP ${c.hp}, SAN ${c.san}, MP ${c.mp}${down}${acting}`;
     })
     .join("\n");
 }

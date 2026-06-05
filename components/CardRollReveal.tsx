@@ -1,38 +1,44 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import type { SkillKey, SkillPoints } from "@/lib/cards/dice";
 
 type Rarity = "Common" | "Rare" | "Epic" | "Legendary";
 
 interface RollDetails {
-  hp: { base: number; dice: number[] };
-  san: { base: number; dice: number[] };
-  str: { dice: number[] };
-  agi: { dice: number[] };
-  int: { dice: number[] };
-  cha: { dice: number[] };
+  str:  { dice: number[] };
+  con:  { dice: number[] };
+  siz:  { base: number; dice: number[] };
+  dex:  { dice: number[] };
+  app:  { dice: number[] };
+  int:  { base: number; dice: number[] };
+  pow:  { dice: number[] };
+  edu:  { base: number; dice: number[] };
   luck: { dice: number[] };
-  speed: { dice: number[] };
 }
 
 export interface RevealCard {
-  name: string;
-  hp: number; san: number;
-  str: number; agi: number; int: number; cha: number; luck: number; speed: number;
+  id:          string;
+  name:        string;
+  str:  number; con: number; siz: number; dex: number; app: number;
+  int:  number; pow: number; edu: number; luck: number;
+  hp:   number; san: number; mp: number;
   total_stats: number;
-  rarity: Rarity;
+  rarity:      Rarity;
   roll_details: RollDetails | null;
+  skill_points: number; // EDU×2 + INT×2
 }
 
 const RARITY_TEXT: Record<Rarity, string> = {
-  Common: "text-slate-300",
-  Rare: "text-sky-300",
-  Epic: "text-purple-300",
+  Common:    "text-slate-300",
+  Rare:      "text-sky-300",
+  Epic:      "text-purple-300",
   Legendary: "text-amber-300",
 };
 
 interface Step {
   key: string;
   label: string;
+  labelZh: string;
   sides: number;
   base: number;
   dice: number[];
@@ -41,25 +47,156 @@ interface Step {
 
 function buildSteps(card: RevealCard): Step[] {
   const rd = card.roll_details;
-  // Fallback for older cards without roll_details — synthesize a single "die".
   if (!rd) {
-    const mk = (label: string, total: number): Step => ({ key: label, label, sides: 6, base: 0, dice: [total], total });
+    const mk = (key: string, label: string, labelZh: string, total: number): Step =>
+      ({ key, label, labelZh, sides: 6, base: 0, dice: [total], total });
     return [
-      mk("HP", card.hp), mk("SAN", card.san), mk("STR", card.str), mk("AGI", card.agi),
-      mk("INT", card.int), mk("CHA", card.cha), mk("LUCK", card.luck), mk("SPEED", card.speed),
+      mk("str",  "STR",  "力量", card.str),
+      mk("con",  "CON",  "體質", card.con),
+      mk("siz",  "SIZ",  "體型", card.siz),
+      mk("dex",  "DEX",  "敏捷", card.dex),
+      mk("app",  "APP",  "外貌", card.app),
+      mk("int",  "INT",  "智力", card.int),
+      mk("pow",  "POW",  "意志", card.pow),
+      mk("edu",  "EDU",  "教育", card.edu),
+      mk("luck", "LUCK", "幸運", card.luck),
     ];
   }
   return [
-    { key: "HP", label: "HP", sides: 10, base: rd.hp.base, dice: rd.hp.dice, total: card.hp },
-    { key: "SAN", label: "SAN", sides: 10, base: rd.san.base, dice: rd.san.dice, total: card.san },
-    { key: "STR", label: "STR", sides: 6, base: 0, dice: rd.str.dice, total: card.str },
-    { key: "AGI", label: "AGI", sides: 6, base: 0, dice: rd.agi.dice, total: card.agi },
-    { key: "INT", label: "INT", sides: 6, base: 0, dice: rd.int.dice, total: card.int },
-    { key: "CHA", label: "CHA", sides: 6, base: 0, dice: rd.cha.dice, total: card.cha },
-    { key: "LUCK", label: "LUCK", sides: 6, base: 0, dice: rd.luck.dice, total: card.luck },
-    { key: "SPEED", label: "SPEED", sides: 6, base: 0, dice: rd.speed.dice, total: card.speed },
+    { key: "str",  label: "STR",  labelZh: "力量", sides: 6, base: 0,  dice: rd.str.dice,  total: card.str  },
+    { key: "con",  label: "CON",  labelZh: "體質", sides: 6, base: 0,  dice: rd.con.dice,  total: card.con  },
+    { key: "siz",  label: "SIZ",  labelZh: "體型", sides: 6, base: rd.siz.base * 5, dice: rd.siz.dice,  total: card.siz  },
+    { key: "dex",  label: "DEX",  labelZh: "敏捷", sides: 6, base: 0,  dice: rd.dex.dice,  total: card.dex  },
+    { key: "app",  label: "APP",  labelZh: "外貌", sides: 6, base: 0,  dice: rd.app.dice,  total: card.app  },
+    { key: "int",  label: "INT",  labelZh: "智力", sides: 6, base: rd.int.base * 5, dice: rd.int.dice,  total: card.int  },
+    { key: "pow",  label: "POW",  labelZh: "意志", sides: 6, base: 0,  dice: rd.pow.dice,  total: card.pow  },
+    { key: "edu",  label: "EDU",  labelZh: "教育", sides: 6, base: rd.edu.base * 5, dice: rd.edu.dice,  total: card.edu  },
+    { key: "luck", label: "LUCK", labelZh: "幸運", sides: 6, base: 0,  dice: rd.luck.dice, total: card.luck },
   ];
 }
+
+// ─── Skill system ─────────────────────────────────────────────────────────────
+
+const SKILLS: { key: SkillKey; zh: string; base: number | "dex2" }[] = [
+  { key: "spot_hidden",  zh: "偵查",      base: 25 },
+  { key: "listen",       zh: "聆聽",      base: 20 },
+  { key: "library_use",  zh: "圖書館使用", base: 20 },
+  { key: "psychology",   zh: "心理學",    base: 10 },
+  { key: "persuade",     zh: "說服",      base: 25 },
+  { key: "fast_talk",    zh: "話術",      base:  5 },
+  { key: "charm",        zh: "魅惑",      base: 15 },
+  { key: "intimidate",   zh: "恐嚇",      base: 15 },
+  { key: "dodge",        zh: "閃避",      base: "dex2" },
+  { key: "first_aid",    zh: "急救",      base: 30 },
+  { key: "stealth",      zh: "潛行",      base: 20 },
+  { key: "lockpick",     zh: "開鎖",      base:  1 },
+  { key: "drive_auto",   zh: "駕駛汽車",  base: 20 },
+];
+
+function baseForSkill(s: typeof SKILLS[number], dex: number): number {
+  return s.base === "dex2" ? Math.floor(dex / 2) : s.base;
+}
+
+function SkillAllocator({
+  card,
+  onSaved,
+}: {
+  card: RevealCard;
+  onSaved: () => void;
+}) {
+  const totalPool = card.skill_points;
+  const [allocated, setAllocated] = useState<Partial<Record<SkillKey, number>>>({});
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const spent = Object.values(allocated).reduce((s, v) => s + (v ?? 0), 0);
+  const remaining = totalPool - spent;
+
+  function adjust(key: SkillKey, delta: number) {
+    setAllocated((prev) => {
+      const cur = prev[key] ?? 0;
+      const next = cur + delta;
+      if (next < 0) return prev;
+      if (delta > 0 && remaining <= 0) return prev;
+      const base = baseForSkill(SKILLS.find((s) => s.key === key)!, card.dex);
+      if (base + next > 99) return prev;
+      return { ...prev, [key]: next };
+    });
+  }
+
+  async function save() {
+    setSaving(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/characters/${card.id}/skills`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ skills: allocated }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error ?? "儲存失敗"); setSaving(false); return; }
+      onSaved();
+    } catch {
+      setErr("網路錯誤，請重試。");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm text-slate-300">分配技能點數</p>
+        <span className={`text-sm font-bold px-2 py-0.5 rounded ${remaining === 0 ? "text-green-300" : "text-purple-300"}`}>
+          剩餘 {remaining} / {totalPool}
+        </span>
+      </div>
+      <div className="grid grid-cols-1 gap-1.5 max-h-64 overflow-y-auto pr-1">
+        {SKILLS.map((s) => {
+          const base = baseForSkill(s, card.dex);
+          const add  = allocated[s.key] ?? 0;
+          const total = base + add;
+          return (
+            <div key={s.key} className="flex items-center gap-2 bg-slate-800/60 rounded px-2 py-1.5">
+              <span className="flex-1 text-xs text-slate-200">{s.zh}</span>
+              <span className="text-xs text-slate-500 w-7 text-right">{base}</span>
+              <span className="text-xs text-slate-600">+</span>
+              <button
+                onClick={() => adjust(s.key, -1)}
+                disabled={add <= 0}
+                className="w-5 h-5 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-30 text-white text-xs flex items-center justify-center"
+              >−</button>
+              <span className="w-5 text-center text-xs text-slate-400">{add}</span>
+              <button
+                onClick={() => adjust(s.key, 1)}
+                disabled={remaining <= 0 || base + add >= 99}
+                className="w-5 h-5 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-30 text-white text-xs flex items-center justify-center"
+              >+</button>
+              <span className={`w-8 text-right text-xs font-bold ${total >= 80 ? "text-amber-300" : total >= 60 ? "text-green-300" : "text-slate-200"}`}>
+                {total}%
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      {err && <p className="text-red-400 text-xs mt-2">{err}</p>}
+      <button
+        onClick={save}
+        disabled={saving}
+        className="mt-3 w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white py-2.5 rounded-lg font-medium text-sm"
+      >
+        {saving ? "儲存中…" : "確認技能並加入收藏"}
+      </button>
+      <button
+        onClick={onSaved}
+        className="mt-1 w-full text-xs text-slate-500 hover:text-slate-300"
+      >
+        跳過（使用基礎值）
+      </button>
+    </div>
+  );
+}
+
+// ─── Die animation ────────────────────────────────────────────────────────────
 
 function Die({ value, rolling, sides }: { value: number; rolling: boolean; sides: number }) {
   const [display, setDisplay] = useState(value);
@@ -77,34 +214,44 @@ function Die({ value, rolling, sides }: { value: number; rolling: boolean; sides
   );
 }
 
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () => void }) {
   const steps = useRef(buildSteps(card)).current;
   const [index, setIndex] = useState(0);
   const [rolling, setRolling] = useState(true);
-  const [finished, setFinished] = useState(false);
+  const [phase, setPhase] = useState<"rolling" | "summary" | "skills">("rolling");
   const completed = steps.slice(0, index).map((s) => ({ label: s.label, total: s.total }));
 
   useEffect(() => {
-    if (index >= steps.length) { setFinished(true); return; }
+    if (phase !== "rolling") return;
+    if (index >= steps.length) { setPhase("summary"); return; }
     setRolling(true);
-    const rollTime = setTimeout(() => setRolling(false), 650);   // tumble
-    const advance = setTimeout(() => setIndex((i) => i + 1), 1250); // settle then next
+    const rollTime = setTimeout(() => setRolling(false), 650);
+    const advance  = setTimeout(() => setIndex((i) => i + 1), 1250);
     return () => { clearTimeout(rollTime); clearTimeout(advance); };
-  }, [index, steps.length]);
+  }, [index, steps.length, phase]);
 
   const step = steps[index];
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={finished ? onDone : undefined}>
-      <div className="bg-slate-900 border border-purple-700 rounded-2xl shadow-2xl shadow-purple-900/50 w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={phase === "skills" ? undefined : onDone}
+    >
+      <div
+        className="bg-slate-900 border border-purple-700 rounded-2xl shadow-2xl shadow-purple-900/50 w-full max-w-md p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="text-center mb-4">
           <p className="text-xs text-purple-400 uppercase tracking-widest">抽取你的角色卡</p>
           <h2 className="text-xl font-bold text-white mt-1">{card.name}</h2>
         </div>
 
-        {!finished && step ? (
+        {phase === "rolling" && step ? (
           <div className="text-center py-6">
-            <p className="text-sm text-slate-400 uppercase tracking-wider mb-4">{step.label}</p>
+            <p className="text-slate-400 text-xs mb-0.5 uppercase tracking-wider">{step.label}</p>
+            <p className="text-slate-500 text-xs mb-4">{step.labelZh}</p>
             <div className="flex items-center justify-center gap-2 mb-4 flex-wrap">
               {step.dice.map((d, i) => (
                 <Die key={i} value={d} rolling={rolling} sides={step.sides} />
@@ -119,22 +266,43 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
               )}
             </div>
           </div>
-        ) : (
-          <div className="text-center py-6">
+        ) : phase === "summary" ? (
+          <div className="text-center py-4">
             <p className="text-sm text-slate-400 uppercase tracking-wider mb-1">屬性總計</p>
-            <div className="text-5xl font-extrabold text-white mb-3">{card.total_stats}</div>
-            <div className={`text-2xl font-bold ${RARITY_TEXT[card.rarity]}`}>{card.rarity}</div>
+            <div className="text-5xl font-extrabold text-white mb-1">{card.total_stats}</div>
+            <div className={`text-2xl font-bold mb-3 ${RARITY_TEXT[card.rarity]}`}>{card.rarity}</div>
+            <div className="grid grid-cols-3 gap-1.5 text-xs mb-3">
+              {[
+                { label: "HP", value: card.hp },
+                { label: "SAN", value: card.san },
+                { label: "MP", value: card.mp },
+              ].map((d) => (
+                <div key={d.label} className="bg-slate-800 rounded px-2 py-1">
+                  <div className="text-slate-500">{d.label}</div>
+                  <div className="text-white font-bold">{d.value}</div>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-slate-400 mb-1">
+              技能點：<span className="text-purple-300 font-bold">{card.skill_points}</span>
+              <span className="text-slate-500"> (EDU×2 + INT×2)</span>
+            </p>
             <button
-              onClick={onDone}
-              className="mt-6 w-full bg-purple-600 hover:bg-purple-500 text-white py-2.5 rounded-lg font-medium"
+              onClick={() => setPhase("skills")}
+              className="mt-2 w-full bg-purple-600 hover:bg-purple-500 text-white py-2.5 rounded-lg font-medium"
             >
-              加入收藏
+              分配技能點數 →
+            </button>
+            <button onClick={onDone} className="mt-1 w-full text-xs text-slate-500 hover:text-slate-300">
+              跳過，直接加入收藏
             </button>
           </div>
+        ) : (
+          <SkillAllocator card={card} onSaved={onDone} />
         )}
 
-        {/* Running tally of settled stats */}
-        {completed.length > 0 && (
+        {/* Running tally during roll */}
+        {phase === "rolling" && completed.length > 0 && (
           <div className="grid grid-cols-4 gap-1.5 mt-2 pt-4 border-t border-slate-800">
             {completed.map((c) => (
               <div key={c.label} className="bg-slate-800/60 rounded px-1.5 py-1 text-center">
@@ -145,7 +313,7 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
           </div>
         )}
 
-        {!finished && (
+        {phase === "rolling" && (
           <button onClick={onDone} className="mt-4 w-full text-xs text-slate-500 hover:text-slate-300">
             跳過動畫
           </button>

@@ -7,17 +7,14 @@ import { CardRollReveal, RevealCard } from "@/components/CardRollReveal";
 interface CharacterCard {
   id: string;
   name: string;
-  hp: number;
-  san: number;
-  str: number;
-  agi: number;
-  int: number;
-  cha: number;
-  luck: number;
-  speed: number;
+  str: number; con: number; siz: number; dex: number; app: number;
+  int: number; pow: number; edu: number; luck: number;
+  hp: number; san: number; mp: number;
   total_stats: number;
   rarity: "Common" | "Rare" | "Epic" | "Legendary";
   roll_details: RevealCard["roll_details"];
+  skill_points: number;
+  skills: Record<string, number> | null;
   created_at: string;
 }
 
@@ -28,7 +25,7 @@ const RARITY_STYLES: Record<CharacterCard["rarity"], { border: string; chip: str
   Legendary: { border: "border-amber-500",  chip: "bg-amber-900/50 text-amber-300 border-amber-600",    glow: "shadow-xl shadow-amber-900/50" },
 };
 
-const STAT_KEYS = ["str", "agi", "int", "cha", "luck", "speed"] as const;
+const STAT_KEYS = ["str", "con", "siz", "dex", "app", "int", "pow", "edu", "luck"] as const;
 
 function isSameUtcDay(iso: string) {
   const d = new Date(iso);
@@ -252,16 +249,31 @@ function CardView({
         <span className={`text-xs px-2 py-0.5 rounded border ${style.chip} shrink-0`}>{card.rarity}</span>
       </div>
 
-      <div className="grid grid-cols-2 gap-1.5 mb-2">
+      <div className="grid grid-cols-3 gap-1.5 mb-2">
         <StatBox label="HP" value={card.hp} />
         <StatBox label="SAN" value={card.san} />
+        <StatBox label="MP" value={card.mp} />
       </div>
 
-      <div className="grid grid-cols-3 gap-1.5 mb-3">
+      <div className="grid grid-cols-3 gap-1.5 mb-2">
         {STAT_KEYS.map((k) => (
           <StatBox key={k} label={k.toUpperCase()} value={card[k]} />
         ))}
       </div>
+
+      {card.skills && Object.keys(card.skills).length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1">
+          {Object.entries(card.skills)
+            .filter(([, v]) => v > 0)
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 5)
+            .map(([k, v]) => (
+              <span key={k} className="text-[10px] bg-slate-900/80 border border-slate-700 rounded px-1.5 py-0.5 text-slate-400">
+                {k.replace(/_/g, " ")} {v}%
+              </span>
+            ))}
+        </div>
+      )}
 
       <div className="flex items-center justify-between text-xs border-t border-slate-700 pt-2">
         <span className="text-slate-400">

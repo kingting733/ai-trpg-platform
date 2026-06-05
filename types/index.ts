@@ -69,14 +69,22 @@ export interface Character {
   room_id: string;
   name: string;
   background: string | null;
+  // Mutable during play
   hp: number;
   san: number;
+  mp: number;
+  // Immutable base stats (CoC ×5 scale, 15–90)
   str: number;
-  agi: number;
+  con: number;
+  siz: number;
+  dex: number;  // determines turn order
+  app: number;
   int: number;
-  cha: number;
+  pow: number;
+  edu: number;
   luck: number;
-  speed: number;
+  // Skill allocations (set once during card rolling)
+  skills: Record<string, number> | null;
   created_at: string;
 }
 
