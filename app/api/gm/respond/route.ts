@@ -60,10 +60,22 @@ export async function POST(request: Request) {
   // resolvedActor = the character who just submitted the action (narration is about them)
   const resolvedActor = sortedByDex.find((c) => c.user_id === (actingUserId || user.id)) ?? null;
 
+  // Pull the most recent GM narration so horror in the current scene can also
+  // trigger a SAN check, not just the player's own action wording.
+  const { data: lastGm } = await supabase
+    .from("story_logs")
+    .select("content")
+    .eq("room_id", roomId)
+    .eq("entry_type", "gm_response")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+  const sceneContext = lastGm?.content ?? "";
+
   // === DICE RESOLUTION ===
   // The SYSTEM decides the outcome; the GM only narrates it.
   const roll = resolvedActor
-    ? resolveAction(actionText, resolvedActor)
+    ? resolveAction(actionText, resolvedActor, sceneContext)
     : null;
 
   let actorDied = false;
@@ -195,6 +207,15 @@ export async function POST(request: Request) {
           sanChange: roll.san_change,
           actorDied,
           actorBroke,
+          sanCheck: roll.san_check
+            ? {
+                severityLabel: roll.san_check.severity_label,
+                pow: roll.san_check.pow,
+                roll: roll.san_check.roll,
+                success: roll.san_check.success,
+                sanLoss: roll.san_check.san_loss,
+              }
+            : null,
         }
       : null,
   };

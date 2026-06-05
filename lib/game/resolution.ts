@@ -17,6 +17,18 @@ export interface RollResult {
   hp_change:           number;
   san_change:          number;
   consequence_summary: string;
+  san_check?:          SanCheckResult | null;  // horror-triggered SAN check
+}
+
+export type SanSeverity = "minor" | "obvious" | "strong" | "core" | "final";
+
+export interface SanCheckResult {
+  severity:       SanSeverity;
+  severity_label: string;   // Chinese label for UI/GM
+  pow:            number;    // roll-under target
+  roll:           number;    // d100
+  success:        boolean;   // roll <= pow
+  san_loss:       number;    // points lost this check
 }
 
 export interface CheckCharacter {
@@ -183,6 +195,106 @@ function rollD100(): number {
   return Math.floor(Math.random() * 100) + 1;
 }
 
+function rollDice(sides: number): number {
+  return Math.floor(Math.random() * sides) + 1;
+}
+
+function rollDiceN(n: number, sides: number): number {
+  let sum = 0;
+  for (let i = 0; i < n; i++) sum += rollDice(sides);
+  return sum;
+}
+
+// ─── SAN check system ────────────────────────────────────────────────────────
+// When a character witnesses horror, supernatural, gore, or incomprehensible
+// truths, roll d100 <= POW. Success limits SAN loss; failure inflicts more.
+
+interface SanTier {
+  severity:    SanSeverity;
+  label:       string;
+  keywords:    string[];
+  successLoss: () => number;
+  failLoss:    () => number;
+}
+
+// Ordered from most severe to least so the strongest match wins.
+const SAN_TIERS: SanTier[] = [
+  {
+    severity: "final", label: "終局級恐怖",
+    keywords: [
+      "舊日支配者", "舊神", "克蘇魯", "外神", "神明降臨", "神祇現身",
+      "宇宙的真相", "世界的盡頭", "終焉", "湮滅",
+    ],
+    successLoss: () => rollDiceN(1, 10),
+    failLoss:    () => rollDiceN(1, 20),
+  },
+  {
+    severity: "core", label: "核心真相／邪神",
+    keywords: [
+      "邪神", "儀式", "不可理解", "真相", "異界", "觸手", "祭品", "獻祭",
+      "古老的存在", "禁忌知識", "瘋狂的真相", "扭曲的維度",
+    ],
+    successLoss: () => rollDiceN(1, 3),
+    failLoss:    () => rollDiceN(1, 10),
+  },
+  {
+    severity: "strong", label: "強烈恐怖",
+    keywords: [
+      "血腥", "殘骸", "分屍", "腐爛", "幻覺", "黑白無常", "厲鬼", "怨靈",
+      "支離破碎", "內臟", "斷肢", "精神衝擊", "扭曲的臉", "尖叫",
+    ],
+    successLoss: () => 1,
+    failLoss:    () => rollDiceN(1, 6),
+  },
+  {
+    severity: "obvious", label: "明顯鬼異",
+    keywords: [
+      "鬼", "幽靈", "鬼魂", "屍體", "亡魂", "童鬼", "死屍", "遺體",
+      "靈異", "超自然", "鬼影", "陰魂",
+    ],
+    successLoss: () => 1,
+    failLoss:    () => rollDiceN(1, 3),
+  },
+  {
+    severity: "minor", label: "輕微恐怖",
+    keywords: [
+      "黑暗", "血跡", "怪聲", "陰森", "不安", "詭異", "森冷", "毛骨悚然",
+      "低語", "陰影", "腐臭",
+    ],
+    successLoss: () => 0,
+    failLoss:    () => 1,
+  },
+];
+
+function matchSanTier(text: string): SanTier | null {
+  const t = text.toLowerCase();
+  for (const tier of SAN_TIERS) {
+    if (tier.keywords.some((kw) => t.includes(kw))) return tier;
+  }
+  return null;
+}
+
+// Runs a SAN check if horror content is detected in the given text.
+export function resolveSanCheck(text: string, char: CheckCharacter): SanCheckResult | null {
+  const tier = matchSanTier(text);
+  if (!tier) return null;
+
+  const pow     = char.pow;
+  const roll    = rollD100();
+  const success = roll <= pow;
+  const rawLoss = success ? tier.successLoss() : tier.failLoss();
+  const san_loss = Math.min(rawLoss, char.san); // never below 0
+
+  return {
+    severity:       tier.severity,
+    severity_label: tier.label,
+    pow,
+    roll,
+    success,
+    san_loss,
+  };
+}
+
 function matchSkill(text: string): SkillRule | null {
   const t = text.toLowerCase();
   let best: { rule: SkillRule; score: number } | null = null;
@@ -242,7 +354,20 @@ function consequences(category: Category, outcome: Outcome): { hp: number; san: 
   }
 }
 
-export function resolveAction(actionText: string, char: CheckCharacter): RollResult {
+// `sceneContext` lets horror in the surrounding scene (e.g. recent GM narration)
+// also trigger a SAN check, not just the player's own action wording.
+export function resolveAction(
+  actionText: string,
+  char: CheckCharacter,
+  sceneContext = "",
+): RollResult {
+  // SAN check runs independently and STACKS on top of any action check.
+  const sanCheck = resolveSanCheck(`${actionText}\n${sceneContext}`, char);
+  const sanLoss  = sanCheck ? sanCheck.san_loss : 0;
+  const sanNote  = sanCheck
+    ? ` ｜理智檢定（${sanCheck.severity_label}）：d100 ${sanCheck.roll} vs POW ${sanCheck.pow} → ${sanCheck.success ? "撐住" : "失守"}，SAN −${sanCheck.san_loss}。`
+    : "";
+
   // 1. Try skill-first match
   const skillRule = matchSkill(actionText);
   if (skillRule) {
@@ -255,8 +380,9 @@ export function resolveAction(actionText: string, char: CheckCharacter): RollRes
       stat_used:  skillRule.displayName,
       target, d100_roll: roll, outcome,
       hp_change:  Math.max(cons.hp,  -char.hp),
-      san_change: Math.max(cons.san, -char.san),
-      consequence_summary: cons.flavor,
+      san_change: Math.max(cons.san - sanLoss, -char.san),
+      consequence_summary: cons.flavor + sanNote,
+      san_check: sanCheck,
     };
   }
 
@@ -272,17 +398,32 @@ export function resolveAction(actionText: string, char: CheckCharacter): RollRes
       stat_used:  statRule.stat.toUpperCase(),
       target, d100_roll: roll, outcome,
       hp_change:  Math.max(cons.hp,  -char.hp),
-      san_change: Math.max(cons.san, -char.san),
-      consequence_summary: cons.flavor,
+      san_change: Math.max(cons.san - sanLoss, -char.san),
+      consequence_summary: cons.flavor + sanNote,
+      san_check: sanCheck,
     };
   }
 
-  // 3. No check needed
+  // 3. No action check — but a SAN check alone may still apply.
+  if (sanCheck) {
+    return {
+      requires_check: true,
+      stat_used: "理智", target: sanCheck.pow, d100_roll: sanCheck.roll,
+      outcome: sanCheck.success ? "success" : "failure",
+      hp_change: 0,
+      san_change: Math.max(-sanLoss, -char.san),
+      consequence_summary: `面對${sanCheck.severity_label}。${sanNote.trim()}`,
+      san_check: sanCheck,
+    };
+  }
+
+  // 4. No check needed
   return {
     requires_check: false,
     stat_used: null, target: null, d100_roll: null, outcome: null,
     hp_change: 0, san_change: 0,
     consequence_summary: "No dice check required.",
+    san_check: null,
   };
 }
 

@@ -49,6 +49,13 @@ export interface GMAIInput {
     sanChange: number;
     actorDied: boolean;
     actorBroke: boolean;
+    sanCheck?: {
+      severityLabel: string;
+      pow: number;
+      roll: number;
+      success: boolean;
+      sanLoss: number;
+    } | null;
   } | null;
 }
 
@@ -326,11 +333,16 @@ function buildDiceDirective(input: GMAIInput): string {
     ? `\n- CRITICAL NARRATION GUIDE: ${criticalGuidance(r.outcome as "critical_success" | "critical_failure", r.statUsed)}`
     : "";
 
+  const sc = r.sanCheck;
+  const sanLine = sc
+    ? `\n- SAN CHECK (${sc.severityLabel}): ${input.actingCharacterName} rolled d100 ${sc.roll} vs POW ${sc.pow} → ${sc.success ? "held their nerve" : "FAILED"}, losing ${sc.sanLoss} SAN. Narrate the psychological impact of witnessing this horror: ${sc.success ? "shaken but composed" : "a visible crack in their sanity — trembling, nausea, dread, or a brief loss of composure"}. Do NOT downplay the horror.`
+    : "";
+
   return `
 DICE RESULT (THIS IS FINAL — YOU MUST OBEY IT):
 - ${input.actingCharacterName} attempted an action requiring a ${r.statUsed?.toUpperCase()} check.
 - d100 roll: ${r.d100} vs target ${r.target}% → OUTCOME: ${r.outcome?.replace(/_/g, " ").toUpperCase()}
-- Mechanical consequence: ${r.consequenceSummary}${r.hpChange ? ` HP ${r.hpChange}.` : ""}${r.sanChange ? ` SAN ${r.sanChange}.` : ""}${deathNote}${critLine}
+- Mechanical consequence: ${r.consequenceSummary}${r.hpChange ? ` HP ${r.hpChange}.` : ""}${r.sanChange ? ` SAN ${r.sanChange}.` : ""}${deathNote}${critLine}${sanLine}
 
 STRICT DICE RULE: The dice result is final. Do NOT change a failure into a success. Do NOT rescue ${input.actingCharacterName} with a lucky coincidence unless the outcome itself is a success. Narrate exactly what the outcome dictates, and describe the consequences clearly and concretely. A failure must visibly cost ${input.actingCharacterName} something.
 INFORMATION RULE: If the outcome is FAILURE or CRITICAL FAILURE on an investigation/search check, ${input.actingCharacterName} finds NOTHING useful. Do not reveal any clue, secret, or hidden information. Describe only the fruitless attempt and the cost.
