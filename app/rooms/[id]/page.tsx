@@ -115,7 +115,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   const [skillsOpen, setSkillsOpen] = useState<Record<string, boolean>>({});
   const logEndRef = useRef<HTMLDivElement>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
-  const prevLogLenRef = useRef(0);
+  const [atBottom, setAtBottom] = useState(true);
   function toggleSkills(id: string) { setSkillsOpen((p) => ({ ...p, [id]: !p[id] })); }
 
   const fetchAll = useCallback(async () => {
@@ -152,22 +152,18 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     return () => clearInterval(interval);
   }, [fetchAll]);
 
-  // Auto-scroll only when a NEW entry arrives AND the player is already near the
-  // bottom. This lets the player freely scroll up to read older messages without
-  // the 3s poll yanking them back down.
-  useEffect(() => {
-    const grew = storyLog.length > prevLogLenRef.current;
-    prevLogLenRef.current = storyLog.length;
+  // No auto-scroll — the player controls the scroll position entirely. A manual
+  // "jump to latest" button (below) lets them return to the bottom on demand.
+  const scrollToBottom = useCallback(() => {
+    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    setAtBottom(true);
+  }, []);
 
+  const onLogScroll = useCallback(() => {
     const el = logContainerRef.current;
-    const nearBottom = el
-      ? el.scrollHeight - el.scrollTop - el.clientHeight < 120
-      : true;
-
-    if ((grew || gmThinking) && nearBottom) {
-      logEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [storyLog, gmThinking]);
+    if (!el) return;
+    setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 120);
+  }, []);
 
   async function initializeTurns() {
     if (!room || initializing) return;
@@ -308,7 +304,8 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
         </div>
 
         {/* Story log */}
-        <div ref={logContainerRef} className="flex-1 bg-slate-900/50 border border-slate-700 rounded-xl p-4 overflow-y-auto min-h-0 flex flex-col gap-3">
+        <div className="relative flex-1 min-h-0 flex flex-col">
+        <div ref={logContainerRef} onScroll={onLogScroll} className="flex-1 bg-slate-900/50 border border-slate-700 rounded-xl p-4 overflow-y-auto min-h-0 flex flex-col gap-3">
           {storyLog.length === 0 && (
             <p className="text-slate-500 text-sm italic text-center mt-8">
               {needsInit ? "準備就緒 — 點擊下方「開始冒險」！" : "等待所有玩家選擇角色卡..."}
@@ -343,6 +340,17 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
             </div>
           )}
           <div ref={logEndRef} />
+        </div>
+
+        {/* Jump-to-latest button — appears only when scrolled away from the bottom */}
+        {!atBottom && (
+          <button
+            onClick={scrollToBottom}
+            className="absolute bottom-3 right-3 bg-purple-600 hover:bg-purple-500 text-white text-xs font-medium px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1 transition-colors"
+          >
+            ↓ 最新訊息
+          </button>
+        )}
         </div>
 
         {/* Suggested choices — only shown if they were generated FOR the current turn player */}
