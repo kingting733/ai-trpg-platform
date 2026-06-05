@@ -41,7 +41,7 @@ export async function POST() {
     // past the check above still fails here, which we surface cleanly.
     if (error.code === "23505") {
       return NextResponse.json(
-        { error: "You have already opened a character card today. Come back tomorrow!" },
+        { error: `今日已達每日上限（${DAILY_LIMIT} 張）。明天（UTC）再來！` },
         { status: 429 }
       );
     }

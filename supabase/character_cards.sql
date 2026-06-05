@@ -22,10 +22,7 @@ CREATE TABLE IF NOT EXISTS public.character_cards (
 
 ALTER TABLE public.character_cards ENABLE ROW LEVEL SECURITY;
 
--- Database-level daily limit: at most one card per user per UTC day.
--- (created_at AT TIME ZONE 'UTC')::date is immutable, so it can be indexed.
-CREATE UNIQUE INDEX IF NOT EXISTS uniq_character_card_per_user_per_utc_day
-  ON public.character_cards (user_id, ((created_at AT TIME ZONE 'UTC')::date));
+-- Daily limit (3/day) is enforced in the API layer, not by a unique index.
 
 CREATE INDEX IF NOT EXISTS idx_character_cards_user ON public.character_cards(user_id);
 
