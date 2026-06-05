@@ -14,15 +14,12 @@ interface Character {
 
 interface RollResult {
   requires_check: boolean;
-  stat_used: string | null;
-  stat_value: number | null;
-  modifier: number | null;
-  d20_roll: number | null;
-  dc: number | null;
-  total: number | null;
-  outcome: string | null;
-  hp_change: number;
-  san_change: number;
+  stat_used:      string | null;
+  target:         number | null;  // roll-under value (skill or stat %)
+  d100_roll:      number | null;
+  outcome:        string | null;
+  hp_change:      number;
+  san_change:     number;
   consequence_summary: string;
 }
 
@@ -560,22 +557,20 @@ function EndingScreen({
 // ─── Dice Result ─────────────────────────────────────────────────────────────
 
 const OUTCOME_STYLES: Record<string, { label: string; cls: string }> = {
-  critical_success: { label: "大成功",   cls: "text-emerald-300 border-emerald-700 bg-emerald-900/30" },
-  success:          { label: "成功",     cls: "text-green-300 border-green-700 bg-green-900/30" },
-  partial_success:  { label: "部分成功", cls: "text-yellow-300 border-yellow-700 bg-yellow-900/30" },
-  failure:          { label: "失敗",     cls: "text-orange-300 border-orange-700 bg-orange-900/30" },
-  critical_failure: { label: "大失敗",   cls: "text-red-300 border-red-700 bg-red-900/30" },
+  critical_success: { label: "大成功", cls: "text-emerald-300 border-emerald-700 bg-emerald-900/30" },
+  success:          { label: "成功",   cls: "text-green-300 border-green-700 bg-green-900/30" },
+  failure:          { label: "失敗",   cls: "text-orange-300 border-orange-700 bg-orange-900/30" },
+  critical_failure: { label: "大失敗", cls: "text-red-300 border-red-700 bg-red-900/30" },
 };
 
 function DiceResult({ roll }: { roll: RollResult }) {
   const style = roll.outcome ? OUTCOME_STYLES[roll.outcome] : null;
-  const mod = roll.modifier ?? 0;
   return (
     <div className={`ml-6 rounded-lg border px-3 py-2 text-xs ${style?.cls ?? "border-slate-700 bg-slate-900/40"}`}>
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="font-bold uppercase tracking-wider">🎲 {roll.stat_used?.toUpperCase()} Check</span>
+        <span className="font-bold uppercase tracking-wider">🎲 {roll.stat_used?.toUpperCase()}</span>
         <span className="opacity-90">
-          d20({roll.d20_roll}) {mod >= 0 ? "+" : "−"} {Math.abs(mod)} = <b>{roll.total}</b> vs DC {roll.dc}
+          d100 = <b>{roll.d100_roll}</b> vs {roll.target}%
         </span>
         <span className="font-bold">→ {style?.label ?? roll.outcome}</span>
       </div>

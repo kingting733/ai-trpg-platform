@@ -41,10 +41,8 @@ export interface GMAIInput {
   resolution?: {
     requiresCheck: boolean;
     statUsed: string | null;
-    d20: number | null;
-    modifier: number | null;
-    dc: number | null;
-    total: number | null;
+    target: number | null;   // roll-under value (skill or stat %)
+    d100: number | null;
     outcome: string | null;
     consequenceSummary: string;
     hpChange: number;
@@ -270,8 +268,7 @@ function buildDiceDirective(input: GMAIInput): string {
   return `
 DICE RESULT (THIS IS FINAL — YOU MUST OBEY IT):
 - ${input.actingCharacterName} attempted an action requiring a ${r.statUsed?.toUpperCase()} check.
-- Roll: d20(${r.d20}) + modifier(${(r.modifier ?? 0) >= 0 ? "+" : ""}${r.modifier}) = ${r.total} vs DC ${r.dc}
-- OUTCOME: ${r.outcome?.replace("_", " ").toUpperCase()}
+- d100 roll: ${r.d100} vs target ${r.target}% → OUTCOME: ${r.outcome?.replace(/_/g, " ").toUpperCase()}
 - Mechanical consequence: ${r.consequenceSummary}${r.hpChange ? ` HP ${r.hpChange}.` : ""}${r.sanChange ? ` SAN ${r.sanChange}.` : ""}${deathNote}
 
 STRICT DICE RULE: The dice result is final. Do NOT change a failure into a success. Do NOT rescue ${input.actingCharacterName} with a lucky coincidence unless the outcome itself is a success. Narrate exactly what the outcome dictates, and describe the consequences clearly and concretely. A failure must visibly cost ${input.actingCharacterName} something.

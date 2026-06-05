@@ -187,10 +187,8 @@ export async function POST(request: Request) {
       ? {
           requiresCheck: roll.requires_check,
           statUsed: roll.stat_used,
-          d20: roll.d20_roll,
-          modifier: roll.modifier,
-          dc: roll.dc,
-          total: roll.total,
+          target: roll.target,
+          d100: roll.d100_roll,
           outcome: roll.outcome,
           consequenceSummary: roll.consequence_summary,
           hpChange: roll.hp_change,
