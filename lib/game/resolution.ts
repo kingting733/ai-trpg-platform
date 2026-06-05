@@ -20,7 +20,7 @@ export interface RollResult {
   san_check?:          SanCheckResult | null;  // horror-triggered SAN check
 }
 
-export type SanSeverity = "minor" | "obvious" | "strong" | "core" | "final";
+export type SanSeverity = "obvious" | "strong" | "core" | "final";
 
 export interface SanCheckResult {
   severity:       SanSeverity;
@@ -254,15 +254,6 @@ const SAN_TIERS: SanTier[] = [
     ],
     successLoss: () => 1,
     failLoss:    () => rollDiceN(1, 3),
-  },
-  {
-    severity: "minor", label: "輕微恐怖",
-    keywords: [
-      "黑暗", "血跡", "怪聲", "陰森", "不安", "詭異", "森冷", "毛骨悚然",
-      "低語", "陰影", "腐臭",
-    ],
-    successLoss: () => 0,
-    failLoss:    () => 1,
   },
 ];
 
