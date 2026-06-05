@@ -141,7 +141,16 @@ function SkillAllocator({
       const res = await fetch(`/api/characters/${card.id}/skills`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ skills: allocated }),
+        // Store base+allocated as the full final skill value
+        body: JSON.stringify({
+          skills: Object.fromEntries(
+            SKILLS.map((s) => {
+              const base = baseForSkill(s, card.dex);
+              const add = allocated[s.key] ?? 0;
+              return [s.key, base + add];
+            })
+          ),
+        }),
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error ?? "儲存失敗"); setSaving(false); return; }
@@ -331,7 +340,7 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
         )}
 
         {phase === "rolling" && (
-          <button onClick={onDone} className="mt-4 w-full text-xs text-slate-500 hover:text-slate-300">
+          <button onClick={() => setPhase("summary")} className="mt-4 w-full text-xs text-slate-500 hover:text-slate-300">
             跳過動畫
           </button>
         )}
