@@ -124,6 +124,16 @@ function SkillAllocator({
     });
   }
 
+  function setDirect(key: SkillKey, raw: string) {
+    const n = parseInt(raw, 10);
+    if (isNaN(n) || n < 0) { setAllocated((prev) => ({ ...prev, [key]: 0 })); return; }
+    const base = baseForSkill(SKILLS.find((s) => s.key === key)!, card.dex);
+    const cur = allocated[key] ?? 0;
+    const headroom = remaining + cur; // points we can reassign from this skill
+    const capped = Math.min(n, headroom, 99 - base);
+    setAllocated((prev) => ({ ...prev, [key]: capped }));
+  }
+
   async function save() {
     setSaving(true);
     setErr(null);
@@ -150,7 +160,7 @@ function SkillAllocator({
           剩餘 {remaining} / {totalPool}
         </span>
       </div>
-      <div className="grid grid-cols-1 gap-1.5 max-h-64 overflow-y-auto pr-1">
+      <div className="grid grid-cols-1 gap-1.5 max-h-72 overflow-y-auto pr-1">
         {SKILLS.map((s) => {
           const base = baseForSkill(s, card.dex);
           const add  = allocated[s.key] ?? 0;
@@ -158,20 +168,28 @@ function SkillAllocator({
           return (
             <div key={s.key} className="flex items-center gap-2 bg-slate-800/60 rounded px-2 py-1.5">
               <span className="flex-1 text-xs text-slate-200">{s.zh}</span>
-              <span className="text-xs text-slate-500 w-7 text-right">{base}</span>
+              <span className="text-xs text-slate-500 w-6 text-right shrink-0">{base}</span>
               <span className="text-xs text-slate-600">+</span>
               <button
                 onClick={() => adjust(s.key, -1)}
                 disabled={add <= 0}
-                className="w-5 h-5 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-30 text-white text-xs flex items-center justify-center"
+                className="w-5 h-5 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-30 text-white text-xs flex items-center justify-center shrink-0"
               >−</button>
-              <span className="w-5 text-center text-xs text-slate-400">{add}</span>
+              <input
+                type="number"
+                min={0}
+                max={99 - base}
+                value={add === 0 ? "" : add}
+                placeholder="0"
+                onChange={(e) => setDirect(s.key, e.target.value)}
+                className="w-10 bg-slate-900 border border-slate-700 focus:border-purple-500 rounded text-center text-xs text-white py-0.5 focus:outline-none"
+              />
               <button
                 onClick={() => adjust(s.key, 1)}
                 disabled={remaining <= 0 || base + add >= 99}
-                className="w-5 h-5 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-30 text-white text-xs flex items-center justify-center"
+                className="w-5 h-5 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-30 text-white text-xs flex items-center justify-center shrink-0"
               >+</button>
-              <span className={`w-8 text-right text-xs font-bold ${total >= 80 ? "text-amber-300" : total >= 60 ? "text-green-300" : "text-slate-200"}`}>
+              <span className={`w-8 text-right text-xs font-bold shrink-0 ${total >= 80 ? "text-amber-300" : total >= 60 ? "text-green-300" : "text-slate-200"}`}>
                 {total}%
               </span>
             </div>

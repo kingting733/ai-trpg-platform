@@ -14,7 +14,7 @@ export async function PATCH(
 
   const { data: card } = await supabase
     .from("character_cards")
-    .select("id, user_id, skills, skill_points, edu, int")
+    .select("id, user_id, skills, edu, int")
     .eq("id", params.id)
     .single();
 
