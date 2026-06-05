@@ -179,8 +179,7 @@ function SkillAllocator({
                 type="number"
                 min={0}
                 max={99 - base}
-                value={add === 0 ? "" : add}
-                placeholder="0"
+                value={add}
                 onChange={(e) => setDirect(s.key, e.target.value)}
                 className="w-10 bg-slate-900 border border-slate-700 focus:border-purple-500 rounded text-center text-xs text-white py-0.5 focus:outline-none"
               />
