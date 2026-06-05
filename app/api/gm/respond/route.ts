@@ -80,9 +80,12 @@ export async function POST(request: Request) {
 
   let actorDied = false;
   let actorBroke = false;
-  if (roll && resolvedActor && roll.requires_check && (roll.hp_change !== 0 || roll.san_change !== 0)) {
+  // Total SAN change = action's own SAN change + horror SAN-check loss (separate roll).
+  const sanCheckLoss = roll?.san_check?.san_loss ?? 0;
+  const totalSanChange = (roll?.san_change ?? 0) - sanCheckLoss;
+  if (roll && resolvedActor && roll.requires_check && (roll.hp_change !== 0 || totalSanChange !== 0)) {
     const newHp = Math.max(0, resolvedActor.hp + roll.hp_change);
-    const newSan = Math.max(0, resolvedActor.san + roll.san_change);
+    const newSan = Math.max(0, resolvedActor.san + totalSanChange);
     actorDied = newHp <= 0;
     actorBroke = newSan <= 0;
     await supabase.from("characters")

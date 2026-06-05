@@ -22,6 +22,13 @@ interface RollResult {
   hp_change:      number;
   san_change:     number;
   consequence_summary: string;
+  san_check?: {
+    severity_label: string;
+    pow:            number;
+    roll:           number;
+    success:        boolean;
+    san_loss:       number;
+  } | null;
 }
 
 interface StoryLogEntry {
@@ -621,20 +628,41 @@ const OUTCOME_STYLES: Record<string, { label: string; cls: string }> = {
 
 function DiceResult({ roll }: { roll: RollResult }) {
   const style = roll.outcome ? OUTCOME_STYLES[roll.outcome] : null;
+  const sc = roll.san_check;
   return (
-    <div className={`ml-6 rounded-lg border px-3 py-2 text-xs ${style?.cls ?? "border-slate-700 bg-slate-900/40"}`}>
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="font-bold uppercase tracking-wider">🎲 {roll.stat_used?.toUpperCase()}</span>
-        <span className="opacity-90">
-          d100 = <b>{roll.d100_roll}</b> vs {roll.target}%
-        </span>
-        <span className="font-bold">→ {style?.label ?? roll.outcome}</span>
-      </div>
-      {(roll.hp_change !== 0 || roll.san_change !== 0 || roll.consequence_summary) && (
-        <div className="mt-1 opacity-90">
-          {roll.consequence_summary}
-          {roll.hp_change !== 0 && <span className="ml-1 font-semibold">HP {roll.hp_change}</span>}
-          {roll.san_change !== 0 && <span className="ml-1 font-semibold">SAN {roll.san_change}</span>}
+    <div className="ml-6 space-y-1.5">
+      {/* Action check box — only when an action roll happened */}
+      {roll.d100_roll != null && (
+        <div className={`rounded-lg border px-3 py-2 text-xs ${style?.cls ?? "border-slate-700 bg-slate-900/40"}`}>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-bold uppercase tracking-wider">🎲 {roll.stat_used?.toUpperCase()}</span>
+            <span className="opacity-90">
+              d100 = <b>{roll.d100_roll}</b> vs {roll.target}%
+            </span>
+            <span className="font-bold">→ {style?.label ?? roll.outcome}</span>
+          </div>
+          {(roll.hp_change !== 0 || roll.san_change !== 0 || roll.consequence_summary) && (
+            <div className="mt-1 opacity-90">
+              {roll.consequence_summary}
+              {roll.hp_change !== 0 && <span className="ml-1 font-semibold">HP {roll.hp_change}</span>}
+              {roll.san_change !== 0 && <span className="ml-1 font-semibold">SAN {roll.san_change}</span>}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SAN check box — separate roll for facing horror */}
+      {sc && (
+        <div className={`rounded-lg border px-3 py-2 text-xs ${sc.success ? "text-fuchsia-200 border-fuchsia-800 bg-fuchsia-950/30" : "text-rose-300 border-rose-700 bg-rose-950/40"}`}>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-bold uppercase tracking-wider">🧠 理智檢定</span>
+            <span className="opacity-80">{sc.severity_label}</span>
+            <span className="opacity-90">d100 = <b>{sc.roll}</b> vs POW {sc.pow}</span>
+            <span className="font-bold">→ {sc.success ? "撐住" : "失守"}</span>
+          </div>
+          {sc.san_loss > 0 && (
+            <div className="mt-1 font-semibold">SAN −{sc.san_loss}</div>
+          )}
         </div>
       )}
     </div>

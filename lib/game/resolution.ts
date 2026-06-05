@@ -167,10 +167,13 @@ interface StatRule {
 
 const STAT_RULES: StatRule[] = [
   { stat: "str", category: "physical", keywords: [
-    "attack", "fight", "strike", "hit", "punch", "smash", "break", "force",
-    "push", "lift", "bash", "swing", "slam", "kill", "stab", "shoot",
-    "tackle", "wrestle", "tear", "rip",
-    "攻擊", "打擊", "揮拳", "格鬥", "扭打", "推開", "舉起", "砸",
+    // Combat & clearly forceful actions only — trivial pushes/lifts should NOT
+    // trigger a check, so generic "push"/"lift"/"推開"/"舉起" are excluded.
+    "attack", "fight", "strike", "punch", "smash", "bash", "slam",
+    "kill", "stab", "shoot", "tackle", "wrestle",
+    "break down", "force open", "force the door", "pry open",
+    "攻擊", "打擊", "揮拳", "格鬥", "扭打", "砸", "撞開", "破門",
+    "用力推", "強行推", "用力扳", "踹開", "猛拉", "扯開",
   ]},
   { stat: "con", category: "physical", keywords: [
     "endure", "withstand", "tough out", "ignore the pain", "resist the poison",
@@ -353,11 +356,10 @@ export function resolveAction(
   sceneContext = "",
 ): RollResult {
   // SAN check runs independently and STACKS on top of any action check.
+  // SAN check is a SEPARATE roll. Its loss lives ONLY in `san_check` (not folded
+  // into san_change) so the UI can show it as its own dice box. The route applies
+  // both san_change (action) and san_check.san_loss to the character.
   const sanCheck = resolveSanCheck(`${actionText}\n${sceneContext}`, char);
-  const sanLoss  = sanCheck ? sanCheck.san_loss : 0;
-  const sanNote  = sanCheck
-    ? ` ｜理智檢定（${sanCheck.severity_label}）：d100 ${sanCheck.roll} vs POW ${sanCheck.pow} → ${sanCheck.success ? "撐住" : "失守"}，SAN −${sanCheck.san_loss}。`
-    : "";
 
   // 1. Try skill-first match
   const skillRule = matchSkill(actionText);
@@ -371,8 +373,8 @@ export function resolveAction(
       stat_used:  skillRule.displayName,
       target, d100_roll: roll, outcome,
       hp_change:  Math.max(cons.hp,  -char.hp),
-      san_change: Math.max(cons.san - sanLoss, -char.san),
-      consequence_summary: cons.flavor + sanNote,
+      san_change: Math.max(cons.san, -char.san),
+      consequence_summary: cons.flavor,
       san_check: sanCheck,
     };
   }
@@ -389,21 +391,19 @@ export function resolveAction(
       stat_used:  statRule.stat.toUpperCase(),
       target, d100_roll: roll, outcome,
       hp_change:  Math.max(cons.hp,  -char.hp),
-      san_change: Math.max(cons.san - sanLoss, -char.san),
-      consequence_summary: cons.flavor + sanNote,
+      san_change: Math.max(cons.san, -char.san),
+      consequence_summary: cons.flavor,
       san_check: sanCheck,
     };
   }
 
-  // 3. No action check — but a SAN check alone may still apply.
+  // 3. No action check — but a SAN check alone may still apply (only the SAN box).
   if (sanCheck) {
     return {
       requires_check: true,
-      stat_used: "理智", target: sanCheck.pow, d100_roll: sanCheck.roll,
-      outcome: sanCheck.success ? "success" : "failure",
-      hp_change: 0,
-      san_change: Math.max(-sanLoss, -char.san),
-      consequence_summary: `面對${sanCheck.severity_label}。${sanNote.trim()}`,
+      stat_used: null, target: null, d100_roll: null, outcome: null,
+      hp_change: 0, san_change: 0,
+      consequence_summary: `面對${sanCheck.severity_label}。`,
       san_check: sanCheck,
     };
   }
