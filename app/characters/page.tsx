@@ -58,7 +58,9 @@ export default function CharactersPage() {
 
   useEffect(() => { loadCards(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const openedToday = cards.some((c) => isSameUtcDay(c.created_at));
+  const DAILY_LIMIT = 3;
+  const todayCount = cards.filter((c) => isSameUtcDay(c.created_at)).length;
+  const openedToday = todayCount >= DAILY_LIMIT;
 
   async function openCard() {
     setOpening(true);
@@ -99,7 +101,7 @@ export default function CharactersPage() {
       <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white">我的角色卡</h1>
-          <p className="text-slate-400 text-sm mt-1">每天可抽取一張新卡。屬性由骰子決定，永久鎖定。</p>
+          <p className="text-slate-400 text-sm mt-1">每天最多可抽取 {DAILY_LIMIT} 張卡。屬性由骰子決定，永久鎖定。</p>
         </div>
         <div className="flex flex-col items-end gap-1">
           <button
@@ -107,10 +109,10 @@ export default function CharactersPage() {
             disabled={opening || openedToday}
             className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-lg font-medium transition-colors"
           >
-            {opening ? "擲骰中..." : openedToday ? "今日已抽卡 ✓" : "抽取今日角色卡"}
+            {opening ? "擲骰中..." : openedToday ? `今日已達上限 (${todayCount}/${DAILY_LIMIT}) ✓` : `抽取角色卡 (${todayCount}/${DAILY_LIMIT})`}
           </button>
           {openedToday && (
-            <span className="text-xs text-slate-500">明天（UTC）再來抽取下一張卡。</span>
+            <span className="text-xs text-slate-500">明天（UTC）再來抽取。</span>
           )}
         </div>
       </div>
@@ -164,6 +166,7 @@ function CardView({
   const [draft, setDraft] = useState(card.name);
   const [saving, setSaving] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
+  const [showSkills, setShowSkills] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   function startEdit() {
@@ -260,28 +263,42 @@ function CardView({
         ))}
       </div>
 
-      {card.skills && Object.keys(card.skills).length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-1">
-          {Object.entries(card.skills)
-            .filter(([, v]) => v > 0)
-            .sort(([, a], [, b]) => b - a)
-            .slice(0, 5)
-            .map(([k, v]) => (
-              <span key={k} className="text-[10px] bg-slate-900/80 border border-slate-700 rounded px-1.5 py-0.5 text-slate-400">
-                {k.replace(/_/g, " ")} {v}%
-              </span>
-            ))}
-        </div>
-      )}
-
-      <div className="flex items-center justify-between text-xs border-t border-slate-700 pt-2">
+      <div className="flex items-center justify-between text-xs border-t border-slate-700 pt-2 mt-1">
         <span className="text-slate-400">
           合計 <span className="text-white font-bold">{card.total_stats}</span>
         </span>
-        <span className="text-slate-600">
-          {new Date(card.created_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
-        </span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowSkills((v) => !v)}
+            className="text-xs text-purple-400 hover:text-purple-300 underline underline-offset-2"
+          >
+            {showSkills ? "收起技能 ▲" : "查看技能 ▼"}
+          </button>
+          <span className="text-slate-600">
+            {new Date(card.created_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+          </span>
+        </div>
       </div>
+
+      {showSkills && (
+        <div className="mt-2 border-t border-slate-700 pt-2">
+          {card.skills && Object.keys(card.skills).filter((k) => (card.skills![k] ?? 0) > 0).length > 0 ? (
+            <div className="grid grid-cols-2 gap-1">
+              {Object.entries(card.skills)
+                .filter(([, v]) => (v ?? 0) > 0)
+                .sort(([, a], [, b]) => b - a)
+                .map(([k, v]) => (
+                  <div key={k} className="flex justify-between bg-slate-900/50 rounded px-2 py-1">
+                    <span className="text-slate-400 text-xs">{k.replace(/_/g, " ")}</span>
+                    <span className="text-purple-300 text-xs font-bold">{v}%</span>
+                  </div>
+                ))}
+            </div>
+          ) : (
+            <p className="text-slate-500 text-xs text-center py-2">尚未分配技能點數</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

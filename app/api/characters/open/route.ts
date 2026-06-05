@@ -7,7 +7,8 @@ export async function POST() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // Server-side daily limit: has the user already opened a card today (UTC)?
+  // Server-side daily limit: max 3 cards per UTC day.
+  const DAILY_LIMIT = 3;
   const startOfUtcDay = new Date();
   startOfUtcDay.setUTCHours(0, 0, 0, 0);
 
@@ -15,12 +16,11 @@ export async function POST() {
     .from("character_cards")
     .select("id")
     .eq("user_id", user.id)
-    .gte("created_at", startOfUtcDay.toISOString())
-    .limit(1);
+    .gte("created_at", startOfUtcDay.toISOString());
 
-  if (existing && existing.length > 0) {
+  if (existing && existing.length >= DAILY_LIMIT) {
     return NextResponse.json(
-      { error: "You have already opened a character card today. Come back tomorrow!" },
+      { error: `今日已達每日上限（${DAILY_LIMIT} 張）。明天（UTC）再來！` },
       { status: 429 }
     );
   }
