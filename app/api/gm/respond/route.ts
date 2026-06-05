@@ -106,8 +106,8 @@ export async function POST(request: Request) {
     roll_result: roll,
   });
 
-  // Advance turn — skip characters who are down (HP<=0). nextActor = now-active character.
-  const isDown = (c: any) => c.hp <= 0;
+  // Advance turn — skip characters who are dead (HP<=0 or SAN<=0). nextActor = now-active character.
+  const isDown = (c: any) => c.hp <= 0 || c.san <= 0;
   let nextRound = room.current_round;
   let nextPlayerId: string;
   let nextActor = sortedByDex[0];
@@ -235,7 +235,7 @@ export async function POST(request: Request) {
 
     // === ENDING DETECTION ===
     // Check 1: all party members dead → forced failure ending (pure code).
-    const allDead = sortedByDex.every((c: any) => c.hp <= 0);
+    const allDead = sortedByDex.every((c: any) => c.hp <= 0 || c.san <= 0);
 
     const isZh = scenario?.language === "zh-TW" || scenario?.language === "zh-CN";
     const tpdTitle = isZh ? "全員陣亡" : "Total Party Defeat";

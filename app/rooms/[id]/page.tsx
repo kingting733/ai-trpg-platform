@@ -247,9 +247,10 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   }
 
   const iAmDown = (myCharacter?.hp ?? 1) <= 0;
-  const iAmBroken = (myCharacter?.san ?? 1) <= 0;
-  // A downed character cannot act; the turn flow skips them server-side.
-  const isMyTurn = room.current_turn_player_id === currentUserId && !iAmDown;
+  const iAmInsane = (myCharacter?.san ?? 1) <= 0;
+  const iAmDead = iAmDown || iAmInsane;
+  // A dead/insane character cannot act; the turn flow skips them server-side.
+  const isMyTurn = room.current_turn_player_id === currentUserId && !iAmDead;
   // Choices must belong to the current turn player — guards against stale one-turn-lag choices
   const choicesAreForMe = room.current_choices_for_player_id === currentUserId;
   const sortedByDex = [...characters].sort((a, b) => b.dex - a.dex);
@@ -357,17 +358,14 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           >
             {initializing ? "開始中..." : "開始冒險"}
           </button>
-        ) : hasStarted && iAmDown ? (
-          <div className="text-center text-red-300 text-sm py-3 shrink-0 border border-red-900/50 bg-red-900/20 rounded-xl">
-            {myCharacter?.name ?? "你的角色"} 已在此倒下，無法再行動。
+        ) : hasStarted && iAmDead ? (
+          <div className={`text-center text-sm py-3 shrink-0 border rounded-xl ${iAmInsane ? "text-fuchsia-300 border-fuchsia-900/50 bg-fuchsia-900/20" : "text-red-300 border-red-900/50 bg-red-900/20"}`}>
+            {iAmInsane && !iAmDown
+              ? `${myCharacter?.name ?? "你的角色"} 的精神已完全崩潰，永遠迷失在黑暗中。`
+              : `${myCharacter?.name ?? "你的角色"} 已在此倒下，無法再行動。`}
           </div>
         ) : hasStarted ? (
           <div className="flex flex-col gap-2 shrink-0">
-            {iAmBroken && (
-              <div className="text-center text-fuchsia-300 text-xs py-1.5 border border-fuchsia-900/50 bg-fuchsia-900/20 rounded-lg">
-                {myCharacter?.name ?? "你的角色"} 的精神已崩潰 — 行動可能異常。
-              </div>
-            )}
           <div className="flex gap-3">
             <input
               value={actionText}
@@ -434,13 +432,14 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
         {sortedByDex.map((c) => {
           const isActive = c.user_id === room.current_turn_player_id && hasStarted;
           const down = c.hp <= 0;
-          const broken = c.san <= 0;
+          const insane = c.san <= 0;
+          const dead = down || insane;
           return (
-            <div key={c.id} className={`bg-slate-800/50 border rounded-xl p-4 shrink-0 ${down ? "border-red-900/70 opacity-60" : isActive ? "border-purple-700" : "border-slate-700"}`}>
+            <div key={c.id} className={`bg-slate-800/50 border rounded-xl p-4 shrink-0 ${dead ? "border-red-900/70 opacity-60" : isActive ? "border-purple-700" : "border-slate-700"}`}>
               <div className="flex items-center justify-between mb-2 gap-2">
                 <h4 className="font-medium text-white text-sm truncate">{c.name}</h4>
                 {down && <span className="text-[10px] bg-red-900/60 text-red-300 border border-red-800 px-1.5 py-0.5 rounded shrink-0">陣亡</span>}
-                {!down && broken && <span className="text-[10px] bg-fuchsia-900/60 text-fuchsia-300 border border-fuchsia-800 px-1.5 py-0.5 rounded shrink-0">崩潰</span>}
+                {!down && insane && <span className="text-[10px] bg-fuchsia-900/60 text-fuchsia-300 border border-fuchsia-800 px-1.5 py-0.5 rounded shrink-0">發瘋</span>}
               </div>
               <div className="grid grid-cols-2 gap-1 mb-1">
                 {(["hp","san","mp"] as const).map((k) => (
