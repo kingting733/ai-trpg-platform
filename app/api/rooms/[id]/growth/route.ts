@@ -19,13 +19,15 @@ async function computeEligible(
   roomId: string,
   userId: string,
 ) {
-  // Room must be completed before any growth is allowed.
+  // Room must be completed AND ended with a good/normal ending.
   const { data: room } = await supabase
     .from("rooms")
-    .select("status")
+    .select("status, ending_type")
     .eq("id", roomId)
     .single();
   if (!room || room.status !== "completed") return { error: "本場冒險尚未結束。", status: 400 as const };
+  const isGoodEnding = room.ending_type === "good" || room.ending_type === "normal";
+  if (!isGoodEnding) return { error: "只有在成功結局（勝利）中，角色才能成長。失敗結局不開放成長檢定。", status: 403 as const };
 
   // The user's in-room character → its source card.
   const { data: character } = await supabase

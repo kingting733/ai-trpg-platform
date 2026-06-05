@@ -528,6 +528,7 @@ function EndingScreen({
 }) {
   const hasEnding = !!room.ending_title;
   const meta = ENDING_META[room.ending_type ?? ""] ?? ENDING_META.normal;
+  const canGrow = room.ending_type === "good" || room.ending_type === "normal";
 
   return (
     <div className="flex flex-col items-center justify-start min-h-[70vh] gap-6 py-10 max-w-2xl mx-auto">
@@ -583,13 +584,19 @@ function EndingScreen({
         </div>
       </div>
 
-      {/* Character growth — experience check on skills used this story */}
-      <button
-        onClick={onGrowth}
-        className="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
-      >
-        📈 角色成長 — 對本局成功使用過的技能進行成長檢定
-      </button>
+      {/* Character growth — only available on good/normal endings */}
+      {canGrow ? (
+        <button
+          onClick={onGrowth}
+          className="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+        >
+          📈 角色成長 — 對本局成功使用過的技能進行成長檢定
+        </button>
+      ) : (
+        <div className="w-full text-center text-slate-500 text-sm py-2 border border-slate-800 rounded-lg">
+          失敗結局不開放角色成長
+        </div>
+      )}
 
       {/* Action buttons */}
       <div className="flex gap-3 w-full">
