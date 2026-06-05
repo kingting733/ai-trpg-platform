@@ -270,68 +270,42 @@ Narrate the outcome of ${input.actingCharacterName}'s action (6-8 sentences, thi
 // Context-sensitive guidance for critical outcomes, keyed by stat and action text.
 function criticalGuidance(
   outcome: "critical_success" | "critical_failure",
-  stat: string | null,
-  action: string,
+  skillOrStat: string | null,
 ): string {
-  const t = action.toLowerCase();
-  const has = (...kws: string[]) => kws.some((k) => t.includes(k));
+  const s = (skillOrStat ?? "").toLowerCase();
 
   if (outcome === "critical_success") {
-    switch (stat) {
-      case "int":
-        if (has("search","spot","investigate","inspect","examine","notice","observe"))
-          return "Found the clue AND an extra hidden detail — reveal a bonus piece of information the character noticed.";
-        if (has("library","research","archives","look it up"))
-          return "Found the information faster AND more completely — an unexpected related detail surfaces as well.";
-        return "Gained deeper insight than expected — include an extra detail, pattern, or hidden truth the character perceived.";
-      case "edu":
-        if (has("heal","first aid","bandage","treat"))
-          return "Treatment was exceptionally effective — restore 1 extra HP and avoid any follow-up complications.";
-        return "Knowledge applied masterfully — the character recalled a crucial detail that creates a clear advantage.";
-      case "app":
-        return "The NPC is fully won over — they not only comply but volunteer extra help, information, or goodwill.";
-      case "dex":
-        if (has("sneak","hide","stealth","crawl","quietly"))
-          return "Moved without any trace — also noticed a useful route, hiding spot, or opportunity along the way.";
-        if (has("dodge","evade","duck"))
-          return "Evaded with such precision that a counter-opening appears for the character or an ally.";
-        if (has("lock","lockpick","pick the lock"))
-          return "Lock opened quickly and cleanly — no noise, no damage, no trace left behind.";
-        if (has("drive","steer"))
-          return "Executed the maneuver flawlessly — perfect positioning, faster pace, no attention drawn.";
-        return "The action was executed flawlessly — describe an unexpected positional or tactical bonus.";
-      case "str":
-        return "Hit a vital spot or weak point — describe an impactful blow that grants a meaningful tactical advantage.";
-      default:
-        return "Achieved the goal exceptionally — describe a clear extra benefit or discovery beyond what was expected.";
-    }
+    if (s === "偵查")         return "找到線索，且額外發現一個隱藏細節——向玩家揭示一條額外資訊。";
+    if (s === "聆聽")         return "聽到了異常聲音，並得知其確切方向或來源。";
+    if (s === "圖書館使用")   return "找到資料，並意外發現一個相關的額外線索。";
+    if (s === "心理學")       return "完全看穿對方——揭示NPC隱藏的動機或祕密。";
+    if (s === "說服")         return "對方完全被說服，主動提供額外幫助、資訊或善意。";
+    if (s === "話術")         return "謊言天衣無縫，對方完全相信並配合。";
+    if (s === "魅惑")         return "對方深受吸引，主動提供協助、資訊或額外好感。";
+    if (s === "恐嚇")         return "對方被嚇到完全屈服，甚至主動洩露資訊。";
+    if (s === "閃避")         return "完美閃避，並發現一個反擊或脫逃的機會。";
+    if (s === "急救")         return "治療效果極佳——額外恢復1 HP，且無後遺症。";
+    if (s === "潛行")         return "毫無痕跡——同時發現一條有用的隱蔽路線或藏身處。";
+    if (s === "開鎖")         return "無聲無息開鎖，無損壞，無痕跡。";
+    if (s === "駕駛汽車")     return "完美操控——最佳位置，加快速度，未引起注意。";
+    if (s === "str")          return "命中要害——描述一次有效打擊，給予明顯戰術優勢。";
+    return "超乎預期——描述一個超過原本目標的額外收益或發現。";
   } else {
-    switch (stat) {
-      case "int":
-        if (has("search","spot","investigate","inspect","examine"))
-          return "Missed a key clue AND mistook a red herring for real evidence — misdirection now threatens the investigation.";
-        if (has("library","research","archives"))
-          return "Found wrong or misleading data — the character believes it is correct, setting up a false trail.";
-        return "Analysis went badly wrong — a false conclusion was reached that will cause problems.";
-      case "edu":
-        if (has("heal","first aid","bandage","treat"))
-          return "Made the wound worse OR wasted critical medical supplies — describe the painful setback.";
-        return "Knowledge was dangerously mis-applied — an embarrassing or costly error with lasting consequence.";
-      case "app":
-        return "The NPC is now hostile or deeply suspicious — they may warn others, refuse further contact, or take action.";
-      case "dex":
-        if (has("sneak","hide","stealth","crawl","quietly"))
-          return "Made a loud noise, triggered a hazard, or fully exposed their position — describe the exposure.";
-        if (has("lock","lockpick","pick the lock"))
-          return "Tool snapped, lock jammed, or visible damage was left — the entry point is now compromised.";
-        if (has("drive","steer"))
-          return "Lost control — crash, spin-out, or drew loud unwanted attention.";
-        return "The action went badly wrong — a stumble, misfire, or harmful accident resulted.";
-      case "str":
-        return "The attack backfired — weapon jammed, lost footing, or struck the wrong target. Describe the dangerous setback.";
-      default:
-        return "Not only failed, but a complication arose — describe a new danger, exposure, misreading, or consequence.";
-    }
+    if (s === "偵查")         return "不但什麼都沒找到，還把假線索當真——誤導調查方向。";
+    if (s === "聆聽")         return "什麼都沒聽到，甚至因為動作暴露了自己的位置。";
+    if (s === "圖書館使用")   return "找到錯誤資料，角色信以為真——設下一條錯誤的軌跡。";
+    if (s === "心理學")       return "完全誤判對方——產生錯誤結論，後患無窮。";
+    if (s === "說服")         return "對方不但不信，還對角色產生敵意或懷疑。";
+    if (s === "話術")         return "謊言被識破，對方現在戒心大增或準備反擊。";
+    if (s === "魅惑")         return "對方反感，可能向他人散播負面印象或拒絕進一步接觸。";
+    if (s === "恐嚇")         return "對方非但不怕，反而更加憤怒或決心對抗。";
+    if (s === "閃避")         return "閃避失敗，承受全部傷害，並陷入不利的位置。";
+    if (s === "急救")         return "讓傷勢更嚴重，或浪費了關鍵醫療物資。";
+    if (s === "潛行")         return "發出聲響或完全暴露位置——描述被察覺的後果。";
+    if (s === "開鎖")         return "工具斷裂或鎖被卡死，入口已無法再使用。";
+    if (s === "駕駛汽車")     return "失控——撞車、打滑，或引起嘈雜的注意。";
+    if (s === "str")          return "攻擊反噬——武器卡住、失去平衡或誤傷。";
+    return "不但失敗，還帶來新的危機——描述一個新的危險、暴露或連鎖後果。";
   }
 }
 
@@ -349,7 +323,7 @@ function buildDiceDirective(input: GMAIInput): string {
 
   const isCrit = r.outcome === "critical_success" || r.outcome === "critical_failure";
   const critLine = isCrit
-    ? `\n- CRITICAL NARRATION GUIDE: ${criticalGuidance(r.outcome as "critical_success" | "critical_failure", r.statUsed, input.playerAction)}`
+    ? `\n- CRITICAL NARRATION GUIDE: ${criticalGuidance(r.outcome as "critical_success" | "critical_failure", r.statUsed)}`
     : "";
 
   return `

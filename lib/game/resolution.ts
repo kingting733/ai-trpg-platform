@@ -1,5 +1,6 @@
 // Rule-based action resolution — CoC d100 roll-under system.
-// The SYSTEM decides outcomes via dice + skills/stats; the AI GM only narrates.
+// Skill-first: match action to a named skill and roll against its full stored
+// value. Raw stats are fallbacks only when no skill applies.
 
 import type { SkillPoints } from "@/lib/cards/dice";
 
@@ -9,8 +10,8 @@ export type Outcome = "critical_success" | "success" | "failure" | "critical_fai
 
 export interface RollResult {
   requires_check:      boolean;
-  stat_used:           StatKey | null;
-  target:              number | null;  // roll-under value (skill or raw stat)
+  stat_used:           string | null;   // skill name or stat key, for display
+  target:              number | null;   // roll-under value
   d100_roll:           number | null;
   outcome:             Outcome | null;
   hp_change:           number;
@@ -25,70 +26,156 @@ export interface CheckCharacter {
   skills?: SkillPoints | null;
 }
 
+// ─── Skill rules (checked first, in priority order) ──────────────────────────
+
+interface SkillRule {
+  skillKey:     string;           // key in char.skills
+  displayName:  string;           // shown in dice result UI & GM prompt
+  category:     Category;
+  baseValue:    (c: CheckCharacter) => number;  // fallback when skill not allocated
+  keywords:     string[];
+}
+
+const SKILL_RULES: SkillRule[] = [
+  {
+    skillKey: "spot_hidden", displayName: "偵查", category: "mental",
+    baseValue: () => 10,
+    keywords: [
+      "search", "investigate", "spot", "notice", "observe", "inspect", "examine",
+      "look for", "look around", "look through",
+      "搜查", "搜索", "調查", "偵查", "察看", "觀察", "檢查", "審視",
+      "尋找", "找線索", "找證據", "找東西", "翻找",
+    ],
+  },
+  {
+    skillKey: "listen", displayName: "聆聽", category: "mental",
+    baseValue: () => 10,
+    keywords: [
+      "listen", "hear", "eavesdrop",
+      "聆聽", "傾聽", "聽聲音", "聽動靜",
+    ],
+  },
+  {
+    skillKey: "library_use", displayName: "圖書館使用", category: "mental",
+    baseValue: () => 10,
+    keywords: [
+      "library", "research", "archives", "look it up", "look up",
+      "圖書館", "查資料", "查閱", "翻閱資料", "研究資料",
+    ],
+  },
+  {
+    skillKey: "psychology", displayName: "心理學", category: "mental",
+    baseValue: () => 1,
+    keywords: [
+      "psychology", "read the person", "sense motive", "read their expression",
+      "心理學", "讀人", "判斷對方", "觀察對方神情",
+    ],
+  },
+  {
+    skillKey: "persuade", displayName: "說服", category: "social",
+    baseValue: () => 5,
+    keywords: [
+      "persuade", "convince", "negotiate", "bargain", "plead", "appeal",
+      "說服", "勸說", "勸導", "談判", "懇求",
+    ],
+  },
+  {
+    skillKey: "fast_talk", displayName: "話術", category: "social",
+    baseValue: () => 5,
+    keywords: [
+      "bluff", "lie", "deceive", "fast talk", "trick", "mislead",
+      "話術", "欺騙", "撒謊", "虛張聲勢", "哄騙",
+    ],
+  },
+  {
+    skillKey: "charm", displayName: "魅惑", category: "social",
+    baseValue: (c) => Math.floor((c.app ?? 50) / 2),
+    keywords: [
+      "charm", "seduce", "flatter", "impress", "comfort", "reassure",
+      "魅惑", "奉承", "吹捧", "哄", "安慰",
+    ],
+  },
+  {
+    skillKey: "intimidate", displayName: "恐嚇", category: "social",
+    baseValue: (c) => Math.floor((100 - (c.app ?? 50)) / 5),
+    keywords: [
+      "intimidate", "threaten", "scare", "menace",
+      "恐嚇", "威脅", "嚇", "恫嚇",
+    ],
+  },
+  {
+    skillKey: "dodge", displayName: "閃避", category: "physical",
+    baseValue: (c) => Math.floor((c.dex ?? 50) / 2),
+    keywords: [
+      "dodge", "evade", "duck", "sidestep",
+      "閃避", "躲避", "閃開",
+    ],
+  },
+  {
+    skillKey: "first_aid", displayName: "急救", category: "mental",
+    baseValue: () => 1,
+    keywords: [
+      "first aid", "heal", "bandage", "treat", "patch up",
+      "急救", "治療", "包紮", "處理傷口",
+    ],
+  },
+  {
+    skillKey: "stealth", displayName: "潛行", category: "physical",
+    baseValue: () => 1,
+    keywords: [
+      "sneak", "hide", "stealth", "move quietly", "creep", "tiptoe",
+      "潛行", "潛入", "偷偷", "悄悄",
+    ],
+  },
+  {
+    skillKey: "lockpick", displayName: "開鎖", category: "physical",
+    baseValue: () => 1,
+    keywords: [
+      "lockpick", "pick the lock", "pick the door", "open the lock",
+      "開鎖", "撬鎖", "撬門",
+    ],
+  },
+  {
+    skillKey: "drive_auto", displayName: "駕駛汽車", category: "physical",
+    baseValue: () => 0,
+    keywords: [
+      "drive", "steer", "pilot the car",
+      "駕駛", "開車",
+    ],
+  },
+];
+
+// ─── Raw stat fallback rules (used when no skill matches) ─────────────────────
+
 interface StatRule {
-  stat: StatKey;
+  stat:     StatKey;
   category: Category;
   keywords: string[];
 }
 
 const STAT_RULES: StatRule[] = [
   { stat: "str", category: "physical", keywords: [
-    "attack", "fight", "strike", "hit", "punch", "smash", "break", "force", "pry",
-    "push", "lift", "bash", "swing", "slam", "kill", "slay", "stab", "shoot",
+    "attack", "fight", "strike", "hit", "punch", "smash", "break", "force",
+    "push", "lift", "bash", "swing", "slam", "kill", "stab", "shoot",
     "tackle", "wrestle", "tear", "rip",
-    // Chinese
-    "攻擊", "打擊", "撞", "揮", "格鬥", "扭打", "推開", "舉起", "撬", "砸",
+    "攻擊", "打擊", "揮拳", "格鬥", "扭打", "推開", "舉起", "砸",
   ]},
   { stat: "con", category: "physical", keywords: [
-    "endure", "withstand", "tough out", "hold on", "stay conscious", "ignore the pain",
-    "survive the", "outlast", "steel my body", "resist the poison", "resist the disease",
-    // Chinese
-    "硬撐", "撐住", "忍痛", "抵抗毒", "抵抗疾病",
+    "endure", "withstand", "tough out", "ignore the pain", "resist the poison",
+    "硬撐", "忍痛", "抵抗毒", "撐住",
   ]},
   { stat: "dex", category: "physical", keywords: [
-    "dodge", "sneak", "climb", "run", "escape", "flee", "jump", "evade", "slip",
-    "dash", "sprint", "duck", "tumble", "leap", "crawl", "hide", "chase",
-    "intercept", "react", "catch", "lockpick", "pick the lock", "open the lock",
-    "drive", "steer", "move quietly",
-    // Chinese
-    "閃避", "躲避", "潛行", "潛入", "偷偷", "攀爬", "奔跑", "逃跑", "逃走", "逃離",
-    "跳躍", "爬行", "追趕", "駕駛", "開鎖", "撬鎖",
-  ]},
-  { stat: "app", category: "social", keywords: [
-    "persuade", "convince", "lie", "deceive", "intimidate", "threaten", "negotiate",
-    "bargain", "comfort", "charm", "seduce", "plead", "bluff", "reassure",
-    "impress", "flatter",
-    // Chinese
-    "說服", "勸說", "欺騙", "撒謊", "恐嚇", "威脅", "談判", "協商", "魅惑",
-    "安慰", "哄", "吹捧", "奉承", "討好", "虛張聲勢",
-  ]},
-  { stat: "int", category: "mental", keywords: [
-    "investigate", "inspect", "analyze", "solve", "decipher", "study", "figure out",
-    "search", "understand", "examine", "decode", "translate", "deduce",
-    "spot", "notice", "observe",
-    // Chinese
-    "搜查", "搜索", "調查", "偵查", "察看", "檢查", "觀察", "審視", "分析",
-    "解謎", "破解", "研究線索", "尋找", "找線索", "找證據", "注意",
+    "climb", "run", "escape", "flee", "jump", "leap", "dash", "sprint",
+    "tumble", "crawl", "chase",
+    "攀爬", "奔跑", "逃跑", "逃走", "逃離", "跳躍", "爬行", "追趕",
   ]},
   { stat: "pow", category: "sanity", keywords: [
-    "resist the horror", "withstand the fear", "steel my mind", "calm mind",
-    "endure the darkness", "face the horror", "fight the fear", "keep sane",
-    "hold sanity", "resist insanity",
-    // Chinese
-    "抵抗恐懼", "面對恐懼", "保持冷靜", "穩住心神", "抵抗瘋狂",
-  ]},
-  { stat: "edu", category: "mental", keywords: [
-    "recall", "remember", "identify", "recognize", "know about", "expertise",
-    "diagnose", "research", "library", "archives", "look it up",
-    "first aid", "heal", "bandage", "treat the wound",
-    // Chinese
-    "回想", "記憶", "辨識", "識別", "了解", "診斷", "圖書館", "查找資料",
-    "急救", "治療", "包紮", "處理傷口",
+    "resist the horror", "withstand the fear", "steel my mind", "face the horror",
+    "抵抗恐懼", "面對恐懼", "穩住心神", "抵抗瘋狂",
   ]},
   { stat: "luck", category: "luck", keywords: [
-    "gamble", "bet", "guess", "random", "by chance", "pray", "hope", "take a risk",
-    // Chinese
-    "賭", "猜", "祈禱", "碰運氣", "冒險",
+    "gamble", "bet", "guess", "by chance", "pray", "hope", "take a risk",
+    "賭", "猜", "祈禱", "碰運氣",
   ]},
 ];
 
@@ -96,7 +183,20 @@ function rollD100(): number {
   return Math.floor(Math.random() * 100) + 1;
 }
 
-function classify(text: string): { stat: StatKey; category: Category } | null {
+function matchSkill(text: string): SkillRule | null {
+  const t = text.toLowerCase();
+  let best: { rule: SkillRule; score: number } | null = null;
+  for (const rule of SKILL_RULES) {
+    let score = 0;
+    for (const kw of rule.keywords) {
+      if (t.includes(kw)) score++;
+    }
+    if (score > 0 && (!best || score > best.score)) best = { rule, score };
+  }
+  return best?.rule ?? null;
+}
+
+function matchStat(text: string): StatRule | null {
   const t = text.toLowerCase();
   let best: { rule: StatRule; score: number } | null = null;
   for (const rule of STAT_RULES) {
@@ -106,125 +206,83 @@ function classify(text: string): { stat: StatKey; category: Category } | null {
     }
     if (score > 0 && (!best || score > best.score)) best = { rule, score };
   }
-  return best ? { stat: best.rule.stat, category: best.rule.category } : null;
+  return best?.rule ?? null;
 }
 
-// Returns the roll-under target: named skill value (base + allocated) when
-// applicable, otherwise the raw stat value. Capped at 99.
-function getTarget(actionText: string, stat: StatKey, char: CheckCharacter): number {
-  const t  = char[stat as keyof CheckCharacter] as number;
-  const s  = char.skills ?? {};
-  const tx = actionText.toLowerCase();
-  const dex = char.dex ?? 50;
-
-  const candidate = (() => {
-    switch (stat) {
-      case "dex":
-        if (tx.includes("dodge") || tx.includes("evade") || tx.includes("duck") || tx.includes("閃避") || tx.includes("躲避"))
-          return Math.floor(dex / 2) + (s.dodge ?? 0);
-        if (tx.includes("sneak") || tx.includes("hide") || tx.includes("stealth") || tx.includes("quietly") || tx.includes("潛行") || tx.includes("潛入") || tx.includes("偷偷"))
-          return 1 + (s.stealth ?? 0);
-        if (tx.includes("drive") || tx.includes("steer") || tx.includes("駕駛"))
-          return 0 + (s.drive_auto ?? 0);
-        if (tx.includes("lock") || tx.includes("lockpick") || tx.includes("pick the lock") || tx.includes("開鎖") || tx.includes("撬鎖"))
-          return 1 + (s.lockpick ?? 0);
-        return null;
-
-      case "app":
-        if (tx.includes("intimidate") || tx.includes("threaten") || tx.includes("scare") || tx.includes("恐嚇") || tx.includes("威脅"))
-          return Math.floor((100 - (char.app ?? 50)) / 5) + (s.intimidate ?? 0);
-        if (tx.includes("charm") || tx.includes("seduce") || tx.includes("flatter") || tx.includes("魅惑") || tx.includes("奉承") || tx.includes("吹捧"))
-          return Math.floor((char.app ?? 50) / 2) + (s.charm ?? 0);
-        if (tx.includes("bluff") || tx.includes("lie") || tx.includes("deceive") || tx.includes("欺騙") || tx.includes("撒謊") || tx.includes("虛張聲勢"))
-          return 5 + (s.fast_talk ?? 0);
-        return 5 + (s.persuade ?? 0); // default social
-
-      case "int":
-        if (tx.includes("library") || tx.includes("research") || tx.includes("archives") || tx.includes("圖書館") || tx.includes("查找資料"))
-          return 10 + (s.library_use ?? 0);
-        if (tx.includes("psychology") || tx.includes("read the person") || tx.includes("sense motive") || tx.includes("心理"))
-          return 1 + (s.psychology ?? 0);
-        return 10 + (s.spot_hidden ?? 0); // default investigation/搜查
-
-      case "edu":
-        if (tx.includes("heal") || tx.includes("bandage") || tx.includes("treat") || tx.includes("first aid") || tx.includes("急救") || tx.includes("治療") || tx.includes("包紮"))
-          return 1 + (s.first_aid ?? 0);
-        return 10 + (s.library_use ?? 0);
-
-      default:
-        return null; // str, con, pow, luck → use raw stat
-    }
-  })();
-
-  return Math.min(99, candidate ?? t);
+// Skills are stored as full values (base+allocated). If not allocated (null),
+// fall back to the skill's base formula.
+function skillTarget(rule: SkillRule, char: CheckCharacter): number {
+  const stored = (char.skills ?? {})[rule.skillKey as keyof SkillPoints] as number | undefined;
+  const value = (stored != null && stored > 0) ? stored : rule.baseValue(char);
+  return Math.min(99, value);
 }
 
-// d100 roll-under: roll ≤ target/5 → crit success, roll ≤ target → success,
-// roll ≥ 96 → crit failure (always, regardless of skill), else → failure.
 function decideOutcome(roll: number, target: number): Outcome {
-  if (roll >= 96)                          return "critical_failure";
-  if (roll <= Math.floor(target / 5))     return "critical_success";
-  if (roll <= target)                      return "success";
+  if (roll >= 96)                      return "critical_failure";
+  if (roll <= Math.floor(target / 5)) return "critical_success";
+  if (roll <= target)                  return "success";
   return "failure";
 }
 
-function consequences(
-  category: Category,
-  outcome: Outcome,
-): { hp: number; san: number; flavor: string } {
-  const mental = category === "sanity";
+function consequences(category: Category, outcome: Outcome): { hp: number; san: number; flavor: string } {
+  const isSanity = category === "sanity";
   switch (outcome) {
     case "critical_success":
-      return { hp: 0, san: 0, flavor: "A flawless result — momentum is yours." };
+      return { hp: 0, san: 0, flavor: "大成功 — 超乎預期的完美結果。" };
     case "success":
-      return { hp: 0, san: 0, flavor: "The action succeeds." };
+      return { hp: 0, san: 0, flavor: "成功。" };
     case "failure":
-      return mental
-        ? { hp: 0, san: -2, flavor: failFlavor(category) + " (SAN −2)." }
-        : { hp: -2, san: 0,  flavor: failFlavor(category) + " (HP −2)." };
+      return isSanity
+        ? { hp: 0, san: -2, flavor: "失敗 — 恐懼侵蝕心神（SAN −2）。" }
+        : { hp: -2, san: 0,  flavor: "失敗 — 行動受挫，付出代價（HP −2）。" };
     case "critical_failure":
-      return mental
-        ? { hp: 0, san: -4, flavor: "Disaster — the mind nearly shatters (SAN −4)." }
-        : { hp: -4, san: 0,  flavor: "Disaster — a grievous setback (HP −4)." };
-  }
-}
-
-function failFlavor(category: Category): string {
-  switch (category) {
-    case "physical": return "The attempt fails and danger strikes back";
-    case "mental":   return "The clue is misread and the moment is wasted";
-    case "social":   return "The words fall flat and trust erodes";
-    case "luck":     return "Luck abandons the attempt";
-    case "sanity":   return "Dread floods in";
+      return isSanity
+        ? { hp: 0, san: -4, flavor: "大失敗 — 心神瀕臨崩潰（SAN −4）。" }
+        : { hp: -4, san: 0,  flavor: "大失敗 — 嚴重失誤，後果慘重（HP −4）。" };
   }
 }
 
 export function resolveAction(actionText: string, char: CheckCharacter): RollResult {
-  const classified = classify(actionText);
-  if (!classified) {
+  // 1. Try skill-first match
+  const skillRule = matchSkill(actionText);
+  if (skillRule) {
+    const target  = skillTarget(skillRule, char);
+    const roll    = rollD100();
+    const outcome = decideOutcome(roll, target);
+    const cons    = consequences(skillRule.category, outcome);
     return {
-      requires_check: false,
-      stat_used: null, target: null, d100_roll: null, outcome: null,
-      hp_change: 0, san_change: 0,
-      consequence_summary: "No dice check required.",
+      requires_check: true,
+      stat_used:  skillRule.displayName,
+      target, d100_roll: roll, outcome,
+      hp_change:  Math.max(cons.hp,  -char.hp),
+      san_change: Math.max(cons.san, -char.san),
+      consequence_summary: cons.flavor,
     };
   }
 
-  const { stat, category } = classified;
-  const target   = getTarget(actionText, stat, char);
-  const roll     = rollD100();
-  const outcome  = decideOutcome(roll, target);
-  const cons     = consequences(category, outcome);
+  // 2. Fallback to raw stat
+  const statRule = matchStat(actionText);
+  if (statRule) {
+    const target  = Math.min(99, char[statRule.stat as keyof CheckCharacter] as number);
+    const roll    = rollD100();
+    const outcome = decideOutcome(roll, target);
+    const cons    = consequences(statRule.category, outcome);
+    return {
+      requires_check: true,
+      stat_used:  statRule.stat.toUpperCase(),
+      target, d100_roll: roll, outcome,
+      hp_change:  Math.max(cons.hp,  -char.hp),
+      san_change: Math.max(cons.san, -char.san),
+      consequence_summary: cons.flavor,
+    };
+  }
 
+  // 3. No check needed
   return {
-    requires_check: true,
-    stat_used:  stat,
-    target,
-    d100_roll:  roll,
-    outcome,
-    hp_change:  Math.max(cons.hp,  -char.hp),
-    san_change: Math.max(cons.san, -char.san),
-    consequence_summary: cons.flavor,
+    requires_check: false,
+    stat_used: null, target: null, d100_roll: null, outcome: null,
+    hp_change: 0, san_change: 0,
+    consequence_summary: "No dice check required.",
   };
 }
 
