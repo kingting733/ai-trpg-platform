@@ -13,7 +13,6 @@ interface CharacterCard {
   total_stats: number;
   rarity: "Common" | "Rare" | "Epic" | "Legendary";
   roll_details: RevealCard["roll_details"];
-  skill_points: number;
   skills: Record<string, number> | null;
   created_at: string;
 }

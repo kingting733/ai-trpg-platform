@@ -27,9 +27,12 @@ export async function POST() {
 
   const rolled = rollCharacterCard();
 
+  // skill_points is computed (EDU×2 + INT×2) and never stored in the DB.
+  const { skill_points, ...cardData } = rolled;
+
   const { data: card, error } = await supabase
     .from("character_cards")
-    .insert({ user_id: user.id, ...rolled })
+    .insert({ user_id: user.id, ...cardData })
     .select("*")
     .single();
 

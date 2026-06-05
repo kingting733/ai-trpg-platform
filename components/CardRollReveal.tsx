@@ -25,7 +25,7 @@ export interface RevealCard {
   total_stats: number;
   rarity:      Rarity;
   roll_details: RollDetails | null;
-  skill_points: number; // EDU×2 + INT×2
+  // skill_points is computed on the fly as EDU×2 + INT×2, not stored in DB
 }
 
 const RARITY_TEXT: Record<Rarity, string> = {
@@ -104,7 +104,7 @@ function SkillAllocator({
   card: RevealCard;
   onSaved: () => void;
 }) {
-  const totalPool = card.skill_points;
+  const totalPool = card.edu * 2 + card.int * 2;
   const [allocated, setAllocated] = useState<Partial<Record<SkillKey, number>>>({});
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -284,7 +284,7 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
               ))}
             </div>
             <p className="text-xs text-slate-400 mb-1">
-              技能點：<span className="text-purple-300 font-bold">{card.skill_points}</span>
+              技能點：<span className="text-purple-300 font-bold">{card.edu * 2 + card.int * 2}</span>
               <span className="text-slate-500"> (EDU×2 + INT×2)</span>
             </p>
             <button
