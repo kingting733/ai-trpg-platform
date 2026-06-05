@@ -74,6 +74,7 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
       .insert({
         user_id: user.id,
         room_id: params.id,
+        source_card_id: card.id,
         name: card.name,
         hp: card.hp,
         san: card.san,

@@ -254,7 +254,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
 
   // Ending screen
   if (room.status === "completed") {
-    return <EndingScreen room={room} storyLog={storyLog} onHub={() => router.push("/play/hub")} onScenarios={() => router.push("/scenarios")} onDashboard={() => router.push("/dashboard")} />;
+    return <EndingScreen room={room} storyLog={storyLog} onGrowth={() => router.push(`/rooms/${room.id}/growth`)} onHub={() => router.push("/play/hub")} onScenarios={() => router.push("/scenarios")} onDashboard={() => router.push("/dashboard")} />;
   }
 
   const iAmDown = (myCharacter?.hp ?? 1) <= 0;
@@ -517,10 +517,11 @@ const ENDING_META: Record<string, { icon: string; badge: string; badgeCls: strin
 };
 
 function EndingScreen({
-  room, storyLog, onHub, onScenarios, onDashboard,
+  room, storyLog, onGrowth, onHub, onScenarios, onDashboard,
 }: {
   room: Room;
   storyLog: StoryLogEntry[];
+  onGrowth: () => void;
   onHub: () => void;
   onScenarios: () => void;
   onDashboard: () => void;
@@ -581,6 +582,14 @@ function EndingScreen({
             ))}
         </div>
       </div>
+
+      {/* Character growth — experience check on skills used this story */}
+      <button
+        onClick={onGrowth}
+        className="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+      >
+        📈 角色成長 — 對本局成功使用過的技能進行成長檢定
+      </button>
 
       {/* Action buttons */}
       <div className="flex gap-3 w-full">
