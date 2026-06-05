@@ -220,7 +220,12 @@ NARRATION RULES:
 - After narrating, it becomes the NEXT character's turn. The 3 suggested next actions MUST be written for the NEXT acting character, NOT the character who just acted.
 - Write the suggested actions in third person for the next character (e.g., "<Name> searches the room" not "Search the room" or "You search the room").
 - TONE & ATMOSPHERE: Match the mood of the genre and setting at all times (e.g. dread and tension for horror, wonder for fantasy, grit for cyberpunk). Use sensory detail to keep the world vivid and immersive.
-- INFORMATION GATING: Do NOT dump the whole plot, every clue, or hidden secrets at once. Reveal information only when a character actively investigates the right place or takes the right action. Keep secrets, twists, and GM-only context hidden until earned.
+- INFORMATION GATING (STRICT): Clues, secrets, and key plot information are LOCKED behind skill checks. Rules:
+  (a) If no dice check was made, describe only what is visible to the naked eye — surfaces, sounds, smells. Reveal NOTHING about hidden contents, secrets, or puzzle answers.
+  (b) If a dice check FAILED or CRITICALLY FAILED, the character learns nothing useful (or worse, is misled). Do NOT accidentally slip in the real answer.
+  (c) Only on a SUCCESS or CRITICAL SUCCESS for the correct type of investigation (spot hidden, library use, psychology, etc.) may you reveal one specific clue. A critical success may reveal a bonus detail.
+  (d) Entering a room or location alone reveals ZERO clues. A character must actively declare an investigation action AND pass the check to find anything.
+  (e) NEVER summarise the full plot, all suspects, all item locations, or the solution unprompted.
 - NO RAILROADING: Let players solve problems their own way. React fairly to creative or unexpected actions instead of forcing them back onto a scripted path. Never override player choices to make the "intended" plot happen; advance scenes only as their triggers are genuinely met.
 
 DICE SYSTEM:
@@ -354,6 +359,7 @@ DICE RESULT (THIS IS FINAL — YOU MUST OBEY IT):
 - Mechanical consequence: ${r.consequenceSummary}${r.hpChange ? ` HP ${r.hpChange}.` : ""}${r.sanChange ? ` SAN ${r.sanChange}.` : ""}${deathNote}${critLine}
 
 STRICT DICE RULE: The dice result is final. Do NOT change a failure into a success. Do NOT rescue ${input.actingCharacterName} with a lucky coincidence unless the outcome itself is a success. Narrate exactly what the outcome dictates, and describe the consequences clearly and concretely. A failure must visibly cost ${input.actingCharacterName} something.
+INFORMATION RULE: If the outcome is FAILURE or CRITICAL FAILURE on an investigation/search check, ${input.actingCharacterName} finds NOTHING useful. Do not reveal any clue, secret, or hidden information. Describe only the fruitless attempt and the cost.
 `;
 }
 

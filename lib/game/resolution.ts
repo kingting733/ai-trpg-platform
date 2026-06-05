@@ -36,39 +36,59 @@ const STAT_RULES: StatRule[] = [
     "attack", "fight", "strike", "hit", "punch", "smash", "break", "force", "pry",
     "push", "lift", "bash", "swing", "slam", "kill", "slay", "stab", "shoot",
     "tackle", "wrestle", "tear", "rip",
+    // Chinese
+    "攻擊", "打擊", "撞", "揮", "格鬥", "扭打", "推開", "舉起", "撬", "砸",
   ]},
   { stat: "con", category: "physical", keywords: [
     "endure", "withstand", "tough out", "hold on", "stay conscious", "ignore the pain",
     "survive the", "outlast", "steel my body", "resist the poison", "resist the disease",
+    // Chinese
+    "硬撐", "撐住", "忍痛", "抵抗毒", "抵抗疾病",
   ]},
   { stat: "dex", category: "physical", keywords: [
     "dodge", "sneak", "climb", "run", "escape", "flee", "jump", "evade", "slip",
     "dash", "sprint", "duck", "tumble", "leap", "crawl", "hide", "chase",
     "intercept", "react", "catch", "lockpick", "pick the lock", "open the lock",
     "drive", "steer", "move quietly",
+    // Chinese
+    "閃避", "躲避", "潛行", "潛入", "偷偷", "攀爬", "奔跑", "逃跑", "逃走", "逃離",
+    "跳躍", "爬行", "追趕", "駕駛", "開鎖", "撬鎖",
   ]},
   { stat: "app", category: "social", keywords: [
     "persuade", "convince", "lie", "deceive", "intimidate", "threaten", "negotiate",
     "bargain", "comfort", "charm", "seduce", "plead", "bluff", "reassure",
     "impress", "flatter",
+    // Chinese
+    "說服", "勸說", "欺騙", "撒謊", "恐嚇", "威脅", "談判", "協商", "魅惑",
+    "安慰", "哄", "吹捧", "奉承", "討好", "虛張聲勢",
   ]},
   { stat: "int", category: "mental", keywords: [
     "investigate", "inspect", "analyze", "solve", "decipher", "study", "figure out",
     "search", "understand", "examine", "decode", "translate", "deduce",
     "spot", "notice", "observe",
+    // Chinese
+    "搜查", "搜索", "調查", "偵查", "察看", "檢查", "觀察", "審視", "分析",
+    "解謎", "破解", "研究線索", "尋找", "找線索", "找證據", "注意",
   ]},
   { stat: "pow", category: "sanity", keywords: [
     "resist the horror", "withstand the fear", "steel my mind", "calm mind",
     "endure the darkness", "face the horror", "fight the fear", "keep sane",
     "hold sanity", "resist insanity",
+    // Chinese
+    "抵抗恐懼", "面對恐懼", "保持冷靜", "穩住心神", "抵抗瘋狂",
   ]},
   { stat: "edu", category: "mental", keywords: [
     "recall", "remember", "identify", "recognize", "know about", "expertise",
     "diagnose", "research", "library", "archives", "look it up",
     "first aid", "heal", "bandage", "treat the wound",
+    // Chinese
+    "回想", "記憶", "辨識", "識別", "了解", "診斷", "圖書館", "查找資料",
+    "急救", "治療", "包紮", "處理傷口",
   ]},
   { stat: "luck", category: "luck", keywords: [
     "gamble", "bet", "guess", "random", "by chance", "pray", "hope", "take a risk",
+    // Chinese
+    "賭", "猜", "祈禱", "碰運氣", "冒險",
   ]},
 ];
 
@@ -100,36 +120,36 @@ function getTarget(actionText: string, stat: StatKey, char: CheckCharacter): num
   const candidate = (() => {
     switch (stat) {
       case "dex":
-        if (tx.includes("dodge") || tx.includes("evade") || tx.includes("duck"))
+        if (tx.includes("dodge") || tx.includes("evade") || tx.includes("duck") || tx.includes("閃避") || tx.includes("躲避"))
           return Math.floor(dex / 2) + (s.dodge ?? 0);
-        if (tx.includes("sneak") || tx.includes("hide") || tx.includes("stealth") || tx.includes("quietly"))
-          return 20 + (s.stealth ?? 0);
-        if (tx.includes("drive") || tx.includes("steer"))
-          return 20 + (s.drive_auto ?? 0);
-        if (tx.includes("lock") || tx.includes("lockpick") || tx.includes("pick the lock"))
+        if (tx.includes("sneak") || tx.includes("hide") || tx.includes("stealth") || tx.includes("quietly") || tx.includes("潛行") || tx.includes("潛入") || tx.includes("偷偷"))
+          return 1 + (s.stealth ?? 0);
+        if (tx.includes("drive") || tx.includes("steer") || tx.includes("駕駛"))
+          return 0 + (s.drive_auto ?? 0);
+        if (tx.includes("lock") || tx.includes("lockpick") || tx.includes("pick the lock") || tx.includes("開鎖") || tx.includes("撬鎖"))
           return 1 + (s.lockpick ?? 0);
         return null;
 
       case "app":
-        if (tx.includes("intimidate") || tx.includes("threaten") || tx.includes("scare"))
-          return 15 + (s.intimidate ?? 0);
-        if (tx.includes("charm") || tx.includes("seduce") || tx.includes("flatter"))
-          return 15 + (s.charm ?? 0);
-        if (tx.includes("bluff") || tx.includes("lie") || tx.includes("deceive"))
+        if (tx.includes("intimidate") || tx.includes("threaten") || tx.includes("scare") || tx.includes("恐嚇") || tx.includes("威脅"))
+          return Math.floor((100 - (char.app ?? 50)) / 5) + (s.intimidate ?? 0);
+        if (tx.includes("charm") || tx.includes("seduce") || tx.includes("flatter") || tx.includes("魅惑") || tx.includes("奉承") || tx.includes("吹捧"))
+          return Math.floor((char.app ?? 50) / 2) + (s.charm ?? 0);
+        if (tx.includes("bluff") || tx.includes("lie") || tx.includes("deceive") || tx.includes("欺騙") || tx.includes("撒謊") || tx.includes("虛張聲勢"))
           return 5 + (s.fast_talk ?? 0);
-        return 25 + (s.persuade ?? 0); // default social
+        return 5 + (s.persuade ?? 0); // default social
 
       case "int":
-        if (tx.includes("library") || tx.includes("research") || tx.includes("archives"))
-          return 20 + (s.library_use ?? 0);
-        if (tx.includes("psychology") || tx.includes("read the person") || tx.includes("sense motive"))
-          return 10 + (s.psychology ?? 0);
-        return 25 + (s.spot_hidden ?? 0); // default investigation
+        if (tx.includes("library") || tx.includes("research") || tx.includes("archives") || tx.includes("圖書館") || tx.includes("查找資料"))
+          return 10 + (s.library_use ?? 0);
+        if (tx.includes("psychology") || tx.includes("read the person") || tx.includes("sense motive") || tx.includes("心理"))
+          return 1 + (s.psychology ?? 0);
+        return 10 + (s.spot_hidden ?? 0); // default investigation/搜查
 
       case "edu":
-        if (tx.includes("heal") || tx.includes("bandage") || tx.includes("treat") || tx.includes("first aid"))
-          return 30 + (s.first_aid ?? 0);
-        return 20 + (s.library_use ?? 0);
+        if (tx.includes("heal") || tx.includes("bandage") || tx.includes("treat") || tx.includes("first aid") || tx.includes("急救") || tx.includes("治療") || tx.includes("包紮"))
+          return 1 + (s.first_aid ?? 0);
+        return 10 + (s.library_use ?? 0);
 
       default:
         return null; // str, con, pow, luck → use raw stat
