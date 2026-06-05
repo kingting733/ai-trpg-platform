@@ -2,11 +2,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 // Base skill values (mirrors CardRollReveal.tsx SKILLS list).
-// "dex2" means floor(dex/2) — resolved after fetching the card.
-const SKILL_BASES: Record<string, number | "dex2"> = {
-  spot_hidden: 25, listen: 20, library_use: 20, psychology: 10,
-  persuade: 25, fast_talk: 5, charm: 15, intimidate: 15,
-  dodge: "dex2", first_aid: 30, stealth: 20, lockpick: 1, drive_auto: 20,
+const SKILL_BASES: Record<string, number | "dex2" | "app2" | "inv_app"> = {
+  spot_hidden: 10, listen: 10, library_use: 10, psychology: 1,
+  persuade: 5, fast_talk: 5, charm: "app2", intimidate: "inv_app",
+  dodge: "dex2", first_aid: 1, stealth: 1, lockpick: 1, drive_auto: 0,
 };
 
 export async function PATCH(
@@ -19,7 +18,7 @@ export async function PATCH(
 
   const { data: card } = await supabase
     .from("character_cards")
-    .select("id, user_id, skills, edu, int, dex")
+    .select("id, user_id, skills, edu, int, dex, app")
     .eq("id", params.id)
     .single();
 
@@ -43,7 +42,12 @@ export async function PATCH(
       return NextResponse.json({ error: `Invalid value for skill ${key}.` }, { status: 400 });
     }
     const rawBase = SKILL_BASES[key];
-    const base = rawBase === "dex2" ? Math.floor((card.dex ?? 50) / 2) : (rawBase ?? 0);
+    const dex = card.dex ?? 50;
+    const app = card.app ?? 50;
+    const base = rawBase === "dex2" ? Math.floor(dex / 2)
+               : rawBase === "app2" ? Math.floor(app / 2)
+               : rawBase === "inv_app" ? Math.floor((100 - app) / 5)
+               : (rawBase ?? 0);
     const allocated = val - base;
     if (allocated < 0) {
       return NextResponse.json({ error: `Value for ${key} is below its base of ${base}.` }, { status: 400 });

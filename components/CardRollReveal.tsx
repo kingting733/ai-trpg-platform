@@ -77,24 +77,27 @@ function buildSteps(card: RevealCard): Step[] {
 
 // ─── Skill system ─────────────────────────────────────────────────────────────
 
-const SKILLS: { key: SkillKey; zh: string; base: number | "dex2" }[] = [
-  { key: "spot_hidden",  zh: "偵查",      base: 25 },
-  { key: "listen",       zh: "聆聽",      base: 20 },
-  { key: "library_use",  zh: "圖書館使用", base: 20 },
-  { key: "psychology",   zh: "心理學",    base: 10 },
-  { key: "persuade",     zh: "說服",      base: 25 },
+const SKILLS: { key: SkillKey; zh: string; base: number | "dex2" | "app2" | "inv_app" }[] = [
+  { key: "spot_hidden",  zh: "偵查",      base: 10 },
+  { key: "listen",       zh: "聆聽",      base: 10 },
+  { key: "library_use",  zh: "圖書館使用", base: 10 },
+  { key: "psychology",   zh: "心理學",    base:  1 },
+  { key: "persuade",     zh: "說服",      base:  5 },
   { key: "fast_talk",    zh: "話術",      base:  5 },
-  { key: "charm",        zh: "魅惑",      base: 15 },
-  { key: "intimidate",   zh: "恐嚇",      base: 15 },
-  { key: "dodge",        zh: "閃避",      base: "dex2" },
-  { key: "first_aid",    zh: "急救",      base: 30 },
-  { key: "stealth",      zh: "潛行",      base: 20 },
+  { key: "charm",        zh: "魅惑",      base: "app2" },     // floor(APP÷2)
+  { key: "intimidate",   zh: "恐嚇",      base: "inv_app" },  // floor((100−APP)÷5)
+  { key: "dodge",        zh: "閃避",      base: "dex2" },     // floor(DEX÷2)
+  { key: "first_aid",    zh: "急救",      base:  1 },
+  { key: "stealth",      zh: "潛行",      base:  1 },
   { key: "lockpick",     zh: "開鎖",      base:  1 },
-  { key: "drive_auto",   zh: "駕駛汽車",  base: 20 },
+  { key: "drive_auto",   zh: "駕駛汽車",  base:  0 },
 ];
 
-function baseForSkill(s: typeof SKILLS[number], dex: number): number {
-  return s.base === "dex2" ? Math.floor(dex / 2) : s.base;
+function baseForSkill(s: typeof SKILLS[number], dex: number, app: number = 50): number {
+  if (s.base === "dex2")    return Math.floor(dex / 2);
+  if (s.base === "app2")    return Math.floor(app / 2);
+  if (s.base === "inv_app") return Math.floor((100 - app) / 5);
+  return s.base;
 }
 
 function SkillAllocator({
@@ -118,7 +121,7 @@ function SkillAllocator({
       const next = cur + delta;
       if (next < 0) return prev;
       if (delta > 0 && remaining <= 0) return prev;
-      const base = baseForSkill(SKILLS.find((s) => s.key === key)!, card.dex);
+      const base = baseForSkill(SKILLS.find((s) => s.key === key)!, card.dex, card.app);
       if (base + next > 99) return prev;
       return { ...prev, [key]: next };
     });
@@ -127,7 +130,7 @@ function SkillAllocator({
   function setDirect(key: SkillKey, raw: string) {
     const n = parseInt(raw, 10);
     if (isNaN(n) || n < 0) { setAllocated((prev) => ({ ...prev, [key]: 0 })); return; }
-    const base = baseForSkill(SKILLS.find((s) => s.key === key)!, card.dex);
+    const base = baseForSkill(SKILLS.find((s) => s.key === key)!, card.dex, card.app);
     const cur = allocated[key] ?? 0;
     const headroom = remaining + cur; // points we can reassign from this skill
     const capped = Math.min(n, headroom, 99 - base);
@@ -145,7 +148,7 @@ function SkillAllocator({
         body: JSON.stringify({
           skills: Object.fromEntries(
             SKILLS.map((s) => {
-              const base = baseForSkill(s, card.dex);
+              const base = baseForSkill(s, card.dex, card.app);
               const add = allocated[s.key] ?? 0;
               return [s.key, base + add];
             })
@@ -171,7 +174,7 @@ function SkillAllocator({
       </div>
       <div className="grid grid-cols-1 gap-1.5 max-h-72 overflow-y-auto pr-1">
         {SKILLS.map((s) => {
-          const base = baseForSkill(s, card.dex);
+          const base = baseForSkill(s, card.dex, card.app);
           const add  = allocated[s.key] ?? 0;
           const total = base + add;
           return (
