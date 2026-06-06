@@ -268,16 +268,36 @@ NARRATION FORMAT:
 - Last paragraph: what the characters notice or feel as the scene settles.
 - Do NOT use bullet points or numbered lists inside the narration.
 
-OUTPUT: Respond ONLY with valid JSON as specified in the user message each turn.`;
+INJURY REPORTING RULE:
+- If — and ONLY if — your narration depicts a character (any roster member, OR an NPC) being physically struck, wounded, bitten, burned, or otherwise harmed by an EXTERNAL force (an enemy, monster, trap, hazard, gunfire, fall, explosion, etc.), report it via the "injury" field so the system can roll the actual damage.
+- Do NOT report an injury for the acting character's own declared check simply failing — that consequence is already handled by the dice system. Injury reporting is ONLY for harm coming from something/someone OTHER than the actor's own attempted action.
+- "target" must be the EXACT roster character name, or a clearly-named NPC the narration introduced.
+- "severity": minor (輕微 graze/bruise) | moderate (中度 solid hit/cut) | serious (重度 deep wound/heavy blow) | severe (致命 life-threatening trauma).
+- "npc_max_hp": ONLY set this the FIRST time you put a specific NPC in physical danger — give them a sensible max HP (8-20 for a person, higher for monsters/larger threats).
+- If nobody was harmed this turn, omit "injury" or set it to null. Do not invent injuries that didn't happen in your narration.
+
+OUTPUT FORMAT — every turn, respond ONLY with valid JSON, no markdown, no extra text:
+{"narration":"<paragraphs separated by \\n\\n, **bold** for emphasis>","choices":["<next character action 1>","<next character action 2>","<next character action 3>"],"memory":["<0 to 2 short player-visible facts worth remembering, e.g. found a key, met an NPC. Omit if nothing notable happened.>"],"injury":{"target":"<exact roster name or NPC name>","is_npc":<true|false>,"severity":"<minor|moderate|serious|severe>","reason":"<short cause>","npc_max_hp":<only for new NPCs, omit otherwise>} }`;
 }
+
+/**
+ * How many of the MOST RECENT ledger entries to send to the GM each turn.
+ * The ledger grows ~1-3 entries per turn and is part of the (uncacheable)
+ * per-turn user message, so sending it in full makes the cache-miss token cost
+ * climb without bound as a game gets longer. Older key facts are already folded
+ * into the rolling story summary, so only the recent tail needs to be sent raw.
+ */
+export const LEDGER_TURN_LIMIT = 12;
 
 /**
  * DYNAMIC per-turn user message — everything that changes each turn. Placed
  * AFTER the cached static system prefix so the cacheable portion stays stable.
+ * Static instructions (narration rules, injury reporting, output format) live in
+ * the SYSTEM prompt, not here, so they are billed at the cheap cache-hit rate.
  *
- * Memory architecture keeps this message small:
+ * Memory architecture keeps this message small AND bounded:
  *   - storySummary: 2 sentences covering everything older than the last few turns
- *   - storyLedger: structured list of key facts (clues, deaths, objectives)
+ *   - storyLedger: ONLY the last LEDGER_TURN_LIMIT key facts (rest is in summary)
  *   - storyLogSoFar: only the last 3 raw turns for immediate continuity
  */
 export function buildTurnMessage(input: GMAIInput): string {
@@ -289,8 +309,9 @@ export function buildTurnMessage(input: GMAIInput): string {
     ? `STORY SO FAR:\n${input.storySummary}\n`
     : "";
 
-  const ledgerBlock = input.storyLedger.length
-    ? `KEY FACTS (clues found, deaths, important events — never forget these):\n${input.storyLedger.map((e) => `[Turn ${e.turn}] ${e.character}: ${e.fact}`).join("\n")}\n`
+  const recentLedger = input.storyLedger.slice(-LEDGER_TURN_LIMIT);
+  const ledgerBlock = recentLedger.length
+    ? `KEY FACTS (clues found, deaths, important events — never forget these):\n${recentLedger.map((e) => `[Turn ${e.turn}] ${e.character}: ${e.fact}`).join("\n")}\n`
     : "";
 
   return `CURRENT PARTY STATUS (Round ${input.currentRound}):
@@ -304,18 +325,7 @@ ${recentLog || "(Adventure just started)"}
 
 ${input.actingCharacterName} declares: "${input.playerAction}"
 
-Narrate the outcome of ${input.actingCharacterName}'s action (6-8 sentences, third person, rich in atmosphere and sensory detail; reveal information only as it is actively uncovered), then suggest 3 next actions for ${input.nextCharacterName} (whose turn is now active).
-
-INJURY REPORTING RULE:
-- If — and ONLY if — your narration depicts a character (any roster member, OR an NPC) being physically struck, wounded, bitten, burned, or otherwise harmed by an EXTERNAL force (an enemy, monster, trap, hazard, gunfire, fall, explosion, etc.), report it via the "injury" field so the system can roll the actual damage.
-- Do NOT report an injury for the acting character's own declared check simply failing — that consequence is already handled by the dice system above. Injury reporting is ONLY for harm coming from something/someone OTHER than the actor's own attempted action.
-- "target" must be the EXACT roster character name, or a clearly-named NPC the narration introduced.
-- "severity": minor (轻微 graze/bruise) | moderate (中度 solid hit/cut) | serious (重度 deep wound/heavy blow) | severe (致命 life-threatening trauma).
-- "npc_max_hp": ONLY set this the FIRST time you put a specific NPC in physical danger — give them a sensible max HP (8-20 for a person, higher for monsters/larger threats).
-- If nobody was harmed this turn, omit "injury" or set it to null. Do not invent injuries that didn't happen in your narration.
-
-OUTPUT FORMAT — Respond ONLY with valid JSON, no markdown, no extra text:
-{"narration":"<paragraphs separated by \\n\\n, **bold** for emphasis>","choices":["<next character action 1>","<next character action 2>","<next character action 3>"],"memory":["<0 to 2 short player-visible facts worth remembering, e.g. found a key, met an NPC. Omit if nothing notable happened.>"],"injury":{"target":"<exact roster name or NPC name>","is_npc":<true|false>,"severity":"<minor|moderate|serious|severe>","reason":"<short cause>","npc_max_hp":<only for new NPCs, omit otherwise>} }`;
+Narrate the outcome of ${input.actingCharacterName}'s action (6-8 sentences, third person, rich in atmosphere and sensory detail; reveal information only as it is actively uncovered), then suggest 3 next actions for ${input.nextCharacterName} (whose turn is now active). Respond ONLY with the JSON object specified in the system prompt (narration, choices, memory, injury).`;
 }
 
 // Context-sensitive guidance for critical outcomes, keyed by stat and action text.

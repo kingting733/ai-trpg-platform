@@ -380,7 +380,14 @@ export async function POST(request: Request) {
     const finalLedger = [...updatedLedger, ...injuryLedgerEntries, ...aiMemoryEntries];
 
     // Refresh the rolling summary at every round boundary (cheap call, infrequent).
+    // The summary absorbs the FULL ledger into 2-sentence prose, so once it has
+    // refreshed we prune the STORED ledger down to a recent tail. This keeps both
+    // the DB row and the per-turn prompt bounded no matter how long the game runs
+    // (older facts survive in the summary), which is the main lever on DeepSeek
+    // cache-miss cost — an unbounded ledger is re-sent uncached every single turn.
+    const LEDGER_STORE_LIMIT = 30;
     let finalSummary = storySummary;
+    let ledgerToStore = finalLedger;
     if (nextRound !== room.current_round) {
       finalSummary = await refreshStorySummary(
         storySummary,
@@ -389,10 +396,11 @@ export async function POST(request: Request) {
         scenario?.title ?? "the adventure",
         scenario?.language ?? null,
       );
+      ledgerToStore = finalLedger.slice(-LEDGER_STORE_LIMIT);
     }
 
     // Persist updated ledger and (if refreshed) summary.
-    const memoryUpdate: Record<string, any> = { story_ledger: finalLedger };
+    const memoryUpdate: Record<string, any> = { story_ledger: ledgerToStore };
     if (finalSummary !== storySummary) memoryUpdate.story_summary = finalSummary;
     if (Object.keys(memoryUpdate).length > 0) {
       await supabase.from("rooms").update(memoryUpdate).eq("id", roomId);
