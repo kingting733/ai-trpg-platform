@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { generateGMResponse, GMAIInput, ScenarioGMContext, LedgerEntry } from "@/lib/ai/gm";
 import { createClient } from "@/lib/supabase/server";
-import { resolveAction } from "@/lib/game/resolution";
+import { resolveAction, rollInjuryDamage, rollFirstAidHeal, InjurySeverity } from "@/lib/game/resolution";
 import { refreshStorySummary } from "@/lib/ai/summarize";
 import { detectEnding } from "@/lib/ai/detect-ending";
 import {
@@ -106,6 +106,45 @@ export async function POST(request: Request) {
     content: actionText,
     roll_result: roll,
   });
+
+  // === FIRST AID — heals a TARGET (any roster member, including self) ===
+  // Tied to the 急救 skill check the actor just rolled. Each character may only
+  // be healed once per "scene" (approximated by round number — resets when the
+  // round advances), preventing chain-healing from trivializing damage.
+  if (roll?.stat_used === "急救" && (roll.outcome === "success" || roll.outcome === "critical_success")) {
+    const actingName2 = resolvedActor?.name ?? "Unknown";
+    const targetChar =
+      sortedByDex.find((c: any) => c.name !== actingName2 && actionText.includes(c.name)) ?? resolvedActor;
+
+    if (targetChar && targetChar.hp > 0) {
+      const rawLog = room.first_aid_log as { round: number; healed: string[] } | null;
+      const healedThisScene = rawLog && rawLog.round === room.current_round ? rawLog.healed : [];
+      let firstAidNote: string;
+
+      if (healedThisScene.includes(targetChar.name)) {
+        firstAidNote = `${targetChar.name} 在這個場景已經接受過急救，這次沒有額外效果。`;
+      } else {
+        const healAmount = rollFirstAidHeal(roll.outcome);
+        const maxHp = Math.floor((targetChar.con + targetChar.siz) / 10);
+        const newHp = Math.min(maxHp, targetChar.hp + healAmount);
+        await supabase.from("characters").update({ hp: newHp }).eq("id", targetChar.id);
+        targetChar.hp = newHp;
+
+        await supabase.from("rooms").update({
+          first_aid_log: { round: room.current_round, healed: [...healedThisScene, targetChar.name] },
+        }).eq("id", roomId);
+
+        firstAidNote = `🩹 ${actingName2} 為 ${targetChar.name} 進行急救，恢復 ${healAmount} HP（${newHp}/${maxHp}）。`;
+      }
+
+      await supabase.from("story_logs").insert({
+        room_id: roomId,
+        round_number: room.current_round,
+        entry_type: "system",
+        content: firstAidNote,
+      });
+    }
+  }
 
   // Advance turn — skip characters who are dead (HP<=0 or SAN<=0). nextActor = now-active character.
   const isDown = (c: any) => c.hp <= 0 || c.san <= 0;
@@ -271,6 +310,66 @@ export async function POST(request: Request) {
       content: gmResponse.narration,
     });
 
+    // === GM-FLAGGED INJURY — server rolls & applies the actual damage ===
+    // The GM only classifies WHO got hurt and HOW BADLY; the dice math and HP
+    // writes are entirely server-side, preserving tamper-resistance.
+    const injuryLedgerEntries: LedgerEntry[] = [];
+    const injury = gmResponse.injury;
+    if (injury && injury.target && injury.severity) {
+      const validSeverities: InjurySeverity[] = ["minor", "moderate", "serious", "severe"];
+      const severity = validSeverities.includes(injury.severity) ? injury.severity : "minor";
+      const dmg = rollInjuryDamage(severity);
+
+      if (injury.is_npc) {
+        const npcStates: Record<string, { hp: number; max_hp: number; alive: boolean }> =
+          (room.npc_states && typeof room.npc_states === "object") ? { ...room.npc_states } : {};
+        let npc = npcStates[injury.target];
+        if (!npc) {
+          const maxHp = Math.max(1, Math.min(30, Math.floor(injury.npc_max_hp ?? 10)));
+          npc = { hp: maxHp, max_hp: maxHp, alive: true };
+        }
+        if (npc.alive) {
+          npc = { ...npc, hp: Math.max(0, npc.hp - dmg.amount) };
+          if (npc.hp <= 0) npc.alive = false;
+          npcStates[injury.target] = npc;
+          await supabase.from("rooms").update({ npc_states: npcStates }).eq("id", roomId);
+
+          await supabase.from("story_logs").insert({
+            room_id: roomId,
+            round_number: room.current_round,
+            entry_type: "system",
+            content: npc.alive
+              ? `💢 ${injury.target} 受到${dmg.label}傷害（−${dmg.amount} HP，剩餘 ${npc.hp}/${npc.max_hp}）`
+              : `☠ ${injury.target} 傷重不治，已死亡。`,
+          });
+          injuryLedgerEntries.push({
+            turn: turnLabel, type: npc.alive ? "event" : "death", character: injury.target,
+            fact: npc.alive ? `受到攻擊（${dmg.label}，${injury.reason ?? ""}）` : `傷重死亡（${injury.reason ?? ""}）`,
+          });
+        }
+      } else {
+        const targetChar = sortedByDex.find((c: any) => c.name === injury.target);
+        if (targetChar && targetChar.hp > 0) {
+          const newHp = Math.max(0, targetChar.hp - dmg.amount);
+          await supabase.from("characters").update({ hp: newHp }).eq("id", targetChar.id);
+          targetChar.hp = newHp; // keep in sync for the all-dead check below
+
+          await supabase.from("story_logs").insert({
+            room_id: roomId,
+            round_number: room.current_round,
+            entry_type: "system",
+            content: newHp > 0
+              ? `💢 ${injury.target} 受到${dmg.label}傷害（−${dmg.amount} HP，剩餘 ${newHp}）`
+              : `☠ ${injury.target} 傷重倒下。`,
+          });
+          injuryLedgerEntries.push({
+            turn: turnLabel, type: newHp <= 0 ? "death" : "event", character: injury.target,
+            fact: newHp <= 0 ? `傷重倒下陣亡（${injury.reason ?? ""}）` : `受到攻擊（${dmg.label}，${injury.reason ?? ""}），HP −${dmg.amount}`,
+          });
+        }
+      }
+    }
+
     // === MEMORY UPDATE ===
     // Append AI-emitted memory items to the ledger (player-visible facts only).
     const aiMemoryEntries: LedgerEntry[] = (gmResponse.memory ?? [])
@@ -278,7 +377,7 @@ export async function POST(request: Request) {
       .slice(0, 2)
       .map((fact) => ({ turn: turnLabel, type: "event", character: actorName, fact: fact.trim() }));
 
-    const finalLedger = [...updatedLedger, ...aiMemoryEntries];
+    const finalLedger = [...updatedLedger, ...injuryLedgerEntries, ...aiMemoryEntries];
 
     // Refresh the rolling summary at every round boundary (cheap call, infrequent).
     let finalSummary = storySummary;

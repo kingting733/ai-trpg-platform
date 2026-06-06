@@ -208,6 +208,32 @@ function rollDiceN(n: number, sides: number): number {
   return sum;
 }
 
+// ─── Injury system (GM flags target+severity; SERVER rolls & applies) ───────
+// Separate from the deterministic action-check consequences above. Lets the AI
+// narrate "hit by an enemy / trap / monster" injuries to ANY roster member or
+// NPC, while keeping the actual HP math (and thus tamper-resistance) server-side.
+
+export type InjurySeverity = "minor" | "moderate" | "serious" | "severe";
+
+const INJURY_TIERS: Record<InjurySeverity, { label: string; roll: () => number }> = {
+  minor:    { label: "輕微", roll: () => rollDiceN(1, 2) },
+  moderate: { label: "中度", roll: () => rollDiceN(1, 3) },
+  serious:  { label: "重度", roll: () => rollDiceN(1, 6) },
+  severe:   { label: "致命", roll: () => rollDiceN(1, 8) },
+};
+
+export function rollInjuryDamage(severity: InjurySeverity): { amount: number; label: string } {
+  const tier = INJURY_TIERS[severity] ?? INJURY_TIERS.minor;
+  return { amount: tier.roll(), label: tier.label };
+}
+
+/** First-aid heal amount — tied to the 急救 skill check outcome. */
+export function rollFirstAidHeal(outcome: Outcome): number {
+  if (outcome === "critical_success") return rollDiceN(1, 3) + 1;
+  if (outcome === "success") return rollDiceN(1, 3);
+  return 0;
+}
+
 // ─── SAN check system ────────────────────────────────────────────────────────
 // When a character witnesses horror, supernatural, gore, or incomprehensible
 // truths, roll d100 <= POW. Success limits SAN loss; failure inflicts more.

@@ -74,6 +74,20 @@ export interface GMResponseWithChoices {
   choices: [string, string, string];
   /** 0-2 short player-visible facts to persist in the story ledger (e.g. "found the key"). */
   memory?: string[];
+  /**
+   * Report ONE physical injury your narration depicted this turn — to a player
+   * character OR an NPC — caused by an EXTERNAL force (enemy, trap, hazard,
+   * monster, accident). The server rolls the actual damage; you only classify it.
+   * Do NOT use this for the acting character's own check failing — that is
+   * already handled by the dice system. Set to null/omit if nobody was harmed.
+   */
+  injury?: {
+    target: string;       // exact roster character name, OR a clearly named NPC
+    is_npc: boolean;
+    severity: "minor" | "moderate" | "serious" | "severe";
+    reason: string;       // short cause, e.g. "clawed by the creature"
+    npc_max_hp?: number;  // ONLY when introducing a new NPC into danger (suggest 8-20)
+  } | null;
 }
 
 export async function generateGMResponse(input: GMAIInput): Promise<GMResponseWithChoices> {
@@ -292,8 +306,16 @@ ${input.actingCharacterName} declares: "${input.playerAction}"
 
 Narrate the outcome of ${input.actingCharacterName}'s action (6-8 sentences, third person, rich in atmosphere and sensory detail; reveal information only as it is actively uncovered), then suggest 3 next actions for ${input.nextCharacterName} (whose turn is now active).
 
+INJURY REPORTING RULE:
+- If — and ONLY if — your narration depicts a character (any roster member, OR an NPC) being physically struck, wounded, bitten, burned, or otherwise harmed by an EXTERNAL force (an enemy, monster, trap, hazard, gunfire, fall, explosion, etc.), report it via the "injury" field so the system can roll the actual damage.
+- Do NOT report an injury for the acting character's own declared check simply failing — that consequence is already handled by the dice system above. Injury reporting is ONLY for harm coming from something/someone OTHER than the actor's own attempted action.
+- "target" must be the EXACT roster character name, or a clearly-named NPC the narration introduced.
+- "severity": minor (轻微 graze/bruise) | moderate (中度 solid hit/cut) | serious (重度 deep wound/heavy blow) | severe (致命 life-threatening trauma).
+- "npc_max_hp": ONLY set this the FIRST time you put a specific NPC in physical danger — give them a sensible max HP (8-20 for a person, higher for monsters/larger threats).
+- If nobody was harmed this turn, omit "injury" or set it to null. Do not invent injuries that didn't happen in your narration.
+
 OUTPUT FORMAT — Respond ONLY with valid JSON, no markdown, no extra text:
-{"narration":"<paragraphs separated by \\n\\n, **bold** for emphasis>","choices":["<next character action 1>","<next character action 2>","<next character action 3>"],"memory":["<0 to 2 short player-visible facts worth remembering, e.g. found a key, met an NPC. Omit if nothing notable happened.>"]}`;
+{"narration":"<paragraphs separated by \\n\\n, **bold** for emphasis>","choices":["<next character action 1>","<next character action 2>","<next character action 3>"],"memory":["<0 to 2 short player-visible facts worth remembering, e.g. found a key, met an NPC. Omit if nothing notable happened.>"],"injury":{"target":"<exact roster name or NPC name>","is_npc":<true|false>,"severity":"<minor|moderate|serious|severe>","reason":"<short cause>","npc_max_hp":<only for new NPCs, omit otherwise>} }`;
 }
 
 // Context-sensitive guidance for critical outcomes, keyed by stat and action text.
