@@ -65,7 +65,7 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-bold text-white">創作者後台</h1>
           <p className="text-slate-400 mt-1">管理你的劇本</p>
         </div>
-        <Link href="/scenarios/new" className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg font-medium">
+        <Link href="/scenarios/new" className="bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded-lg font-medium">
           + 新增劇本
         </Link>
       </div>
@@ -93,7 +93,7 @@ export default function DashboardPage() {
           <div className="p-12 text-center text-slate-500">
             <div className="text-4xl mb-3">📖</div>
             <p>尚無劇本，建立你的第一個吧！</p>
-            <Link href="/scenarios/new" className="text-purple-400 hover:text-purple-300 text-sm mt-2 inline-block">
+            <Link href="/scenarios/new" className="text-zinc-100 hover:text-white text-sm mt-2 inline-block">
               建立劇本 →
             </Link>
           </div>
@@ -133,7 +133,7 @@ export default function DashboardPage() {
                     className={`text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 ${
                       s.status === "published"
                         ? "bg-slate-700 hover:bg-red-900/40 text-slate-300 hover:text-red-300"
-                        : "bg-purple-700 hover:bg-purple-600 text-white"
+                        : "bg-zinc-700 hover:bg-zinc-800 text-white"
                     }`}
                   >
                     {toggling === s.id ? "..." : s.status === "published" ? "取消發佈" : "發佈"}

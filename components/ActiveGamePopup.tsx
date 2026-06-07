@@ -62,7 +62,7 @@ export function ActiveGamePopup() {
 
   return (
     <div className="fixed bottom-6 right-6 z-50 w-80 animate-in">
-      <div className="bg-slate-900 border border-purple-600 rounded-xl shadow-2xl shadow-purple-900/40 p-4">
+      <div className="bg-slate-900 border border-zinc-500 rounded-xl shadow-2xl shadow-black/50 p-4">
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse shrink-0 mt-1" />
@@ -81,7 +81,7 @@ export function ActiveGamePopup() {
         <p className="text-slate-400 text-xs mb-3">你有一場冒險正在進行中。</p>
         <button
           onClick={() => router.push(`/rooms/${room.id}`)}
-          className="w-full bg-purple-600 hover:bg-purple-500 text-white py-2 rounded-lg text-sm font-medium transition-colors"
+          className="w-full bg-zinc-800 hover:bg-zinc-700 text-white py-2 rounded-lg text-sm font-medium transition-colors"
         >
           返回遊戲 →
         </button>

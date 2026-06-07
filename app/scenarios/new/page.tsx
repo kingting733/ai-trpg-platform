@@ -21,7 +21,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   );
 }
 
-const inputCls = "w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500";
+const inputCls = "w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-zinc-500";
 const taCls = `${inputCls} resize-none`;
 
 function emptyLocation(): LocationEntry { return { name: "", clues: "", items: "" }; }
@@ -215,7 +215,7 @@ export default function NewScenarioPage() {
       <p className="text-slate-400 mb-6">建立新的 TRPG 冒險 — 手動填寫表格，或匯入故事文件快速預填。</p>
 
       {/* AI Import */}
-      <div className="bg-gradient-to-r from-purple-900/30 to-slate-800/30 border border-purple-800/50 rounded-xl p-5 mb-6">
+      <div className="bg-gradient-to-r from-zinc-800/40 to-slate-800/30 border border-zinc-700/50 rounded-xl p-5 mb-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex-1 min-w-[220px]">
             <h2 className="text-white font-semibold flex items-center gap-2">
@@ -231,7 +231,7 @@ export default function NewScenarioPage() {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={importing}
-            className="bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white px-4 py-2 rounded-lg font-medium whitespace-nowrap"
+            className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-60 text-white px-4 py-2 rounded-lg font-medium whitespace-nowrap"
           >
             {importing ? "分析中..." : "上傳文件"}
           </button>
@@ -244,7 +244,7 @@ export default function NewScenarioPage() {
           />
         </div>
         {importing && (
-          <p className="text-purple-300 text-xs mt-3">正在讀取文件並詢問 AI，這可能需要幾秒鐘。</p>
+          <p className="text-white text-xs mt-3">正在讀取文件並詢問 AI，這可能需要幾秒鐘。</p>
         )}
         {importError && (
           <div className="mt-3 bg-red-900/30 border border-red-700 text-red-300 text-sm rounded-lg px-3 py-2">{importError}</div>
@@ -260,7 +260,7 @@ export default function NewScenarioPage() {
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === tab.id ? "bg-purple-600 text-white" : "text-slate-400 hover:text-white"
+              activeTab === tab.id ? "bg-zinc-800 text-white" : "text-slate-400 hover:text-white"
             }`}
           >
             {tab.id !== "player" && <span className="mr-1 opacity-60">🔒</span>}
@@ -394,7 +394,7 @@ export default function NewScenarioPage() {
                   </div>
                 ))}
                 <button type="button" onClick={() => setLocations([...locations, emptyLocation()])}
-                  className="text-sm text-purple-400 hover:text-purple-300 border border-dashed border-slate-600 hover:border-purple-500 rounded-lg py-2 transition-colors">
+                  className="text-sm text-zinc-100 hover:text-white border border-dashed border-slate-600 hover:border-zinc-400 rounded-lg py-2 transition-colors">
                   + 新增地點
                 </button>
               </div>
@@ -438,7 +438,7 @@ export default function NewScenarioPage() {
                   </div>
                 ))}
                 <button type="button" onClick={() => setNpcs([...npcs, emptyNpc()])}
-                  className="text-sm text-purple-400 hover:text-purple-300 border border-dashed border-slate-600 hover:border-purple-500 rounded-lg py-2 transition-colors">
+                  className="text-sm text-zinc-100 hover:text-white border border-dashed border-slate-600 hover:border-zinc-400 rounded-lg py-2 transition-colors">
                   + 新增 NPC
                 </button>
               </div>
@@ -453,7 +453,7 @@ export default function NewScenarioPage() {
           {saving ? "儲存中..." : "儲存為草稿"}
         </button>
         <button onClick={() => handleSave("published")} disabled={saving}
-          className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white py-2.5 rounded-lg font-medium">
+          className="flex-1 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white py-2.5 rounded-lg font-medium">
           {saving ? "發佈中..." : "發佈"}
         </button>
       </div>

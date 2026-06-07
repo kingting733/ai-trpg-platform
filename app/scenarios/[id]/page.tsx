@@ -110,7 +110,7 @@ export default function ScenarioDetailPage({ params }: { params: { id: string } 
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <p className="text-slate-400 text-lg">找不到此劇本。</p>
-        <Link href="/scenarios" className="text-purple-400 hover:text-purple-300 text-sm">
+        <Link href="/scenarios" className="text-zinc-100 hover:text-white text-sm">
           ← 返回劇本庫
         </Link>
       </div>
@@ -135,7 +135,7 @@ export default function ScenarioDetailPage({ params }: { params: { id: string } 
 
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-8 mb-4">
         <div className="flex flex-wrap items-center gap-2 mb-4">
-          <span className="text-xs bg-purple-900/50 text-purple-300 border border-purple-800 px-2 py-0.5 rounded">
+          <span className="text-xs bg-zinc-800/70 text-white border border-zinc-700 px-2 py-0.5 rounded">
             {scenario.genre}
           </span>
           {scenario.difficulty && (
@@ -181,7 +181,7 @@ export default function ScenarioDetailPage({ params }: { params: { id: string } 
           className={`flex-1 py-3 rounded-lg font-medium text-center transition-colors ${
             isFallback
               ? "bg-slate-700 text-slate-400 cursor-not-allowed pointer-events-none"
-              : "bg-purple-600 hover:bg-purple-500 text-white"
+              : "bg-zinc-800 hover:bg-zinc-700 text-white"
           }`}
         >
           {isFallback ? "建立房間（請先執行種子 SQL）" : "建立房間"}

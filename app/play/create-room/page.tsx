@@ -97,7 +97,7 @@ function CreateRoomInner() {
               onChange={(e) => setRoomName(e.target.value)}
               placeholder="例：週五夜冒險"
               required
-              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-zinc-500"
             />
           </div>
           <div>
@@ -108,13 +108,13 @@ function CreateRoomInner() {
               onChange={(e) => setMaxPlayers(Number(e.target.value))}
               min={2}
               max={8}
-              className="w-32 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500"
+              className="w-32 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-zinc-500"
             />
           </div>
           <button
             type="submit"
             disabled={loading || !roomName.trim()}
-            className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white py-3 rounded-lg font-medium"
+            className="w-full bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white py-3 rounded-lg font-medium"
           >
             {loading ? "建立中..." : "建立房間"}
           </button>

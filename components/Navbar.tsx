@@ -19,9 +19,9 @@ export async function Navbar() {
   }
 
   return (
-    <nav className="border-b border-slate-800 bg-[#0f0f1a]/95 backdrop-blur sticky top-0 z-50">
+    <nav className="border-b border-slate-800 bg-[#08080a]/95 backdrop-blur sticky top-0 z-50">
       <div className="container mx-auto px-4 max-w-6xl flex items-center justify-between h-14">
-        <Link href="/" className="text-lg font-bold text-purple-400 hover:text-purple-300">
+        <Link href="/" className="text-lg font-bold text-zinc-100 hover:text-white">
           ⚔ TRPG Platform
         </Link>
         <div className="flex items-center gap-4 text-sm">

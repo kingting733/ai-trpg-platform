@@ -79,7 +79,7 @@ function LoginForm() {
               placeholder="you@example.com"
               required
               autoFocus
-              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-zinc-500"
             />
           </div>
           <div>
@@ -90,13 +90,13 @@ function LoginForm() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               required
-              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-zinc-500"
             />
           </div>
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-lg font-medium mt-1"
+            className="w-full bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-lg font-medium mt-1"
           >
             {loading ? "登入中..." : "登入"}
           </button>
@@ -104,7 +104,7 @@ function LoginForm() {
 
         <p className="text-slate-400 text-sm text-center mt-6">
           還沒有帳號？{" "}
-          <Link href="/signup" className="text-purple-400 hover:text-purple-300 font-medium">
+          <Link href="/signup" className="text-zinc-100 hover:text-white font-medium">
             立即註冊
           </Link>
         </p>

@@ -125,12 +125,12 @@ export default function AccountPage() {
             value={newUsername}
             onChange={(e) => { setNewUsername(e.target.value); setError(null); setSuccess(null); }}
             maxLength={30}
-            className="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+            className="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-zinc-500"
           />
           <button
             type="submit"
             disabled={saving || newUsername.trim() === username}
-            className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white px-4 py-2 rounded-lg font-medium"
+            className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 text-white px-4 py-2 rounded-lg font-medium"
           >
             {saving ? "儲存中..." : "儲存"}
           </button>

@@ -69,7 +69,7 @@ export default function JoinRoomPage({ params }: { params: { code: string } }) {
         {status === "error" && (
           <div>
             <p className="text-red-400 text-lg mb-4">{error}</p>
-            <button onClick={() => router.push("/play/hub")} className="text-purple-400 hover:text-purple-300">← 返回大廳</button>
+            <button onClick={() => router.push("/play/hub")} className="text-zinc-100 hover:text-white">← 返回大廳</button>
           </div>
         )}
       </div>

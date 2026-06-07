@@ -31,7 +31,7 @@ export interface RevealCard {
 const RARITY_TEXT: Record<Rarity, string> = {
   Common:    "text-slate-300",
   Rare:      "text-sky-300",
-  Epic:      "text-purple-300",
+  Epic:      "text-white",
   Legendary: "text-amber-300",
 };
 
@@ -168,7 +168,7 @@ function SkillAllocator({
     <div>
       <div className="flex items-center justify-between mb-3">
         <p className="text-sm text-slate-300">分配技能點數</p>
-        <span className={`text-sm font-bold px-2 py-0.5 rounded ${remaining === 0 ? "text-green-300" : "text-purple-300"}`}>
+        <span className={`text-sm font-bold px-2 py-0.5 rounded ${remaining === 0 ? "text-green-300" : "text-white"}`}>
           剩餘 {remaining} / {totalPool}
         </span>
       </div>
@@ -193,7 +193,7 @@ function SkillAllocator({
                 max={95 - base}
                 value={add}
                 onChange={(e) => setDirect(s.key, e.target.value)}
-                className="w-10 bg-slate-900 border border-slate-700 focus:border-purple-500 rounded text-center text-xs text-white py-0.5 focus:outline-none"
+                className="w-10 bg-slate-900 border border-slate-700 focus:border-zinc-500 rounded text-center text-xs text-white py-0.5 focus:outline-none"
               />
               <button
                 onClick={() => adjust(s.key, 1)}
@@ -211,7 +211,7 @@ function SkillAllocator({
       <button
         onClick={save}
         disabled={saving}
-        className="mt-3 w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white py-2.5 rounded-lg font-medium text-sm"
+        className="mt-3 w-full bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white py-2.5 rounded-lg font-medium text-sm"
       >
         {saving ? "儲存中…" : "確認技能並加入收藏"}
       </button>
@@ -236,7 +236,7 @@ function Die({ value, rolling, sides }: { value: number; rolling: boolean; sides
   }, [rolling, value, sides]);
   return (
     <span className={`inline-flex items-center justify-center w-10 h-10 rounded-lg border text-lg font-bold transition-colors ${
-      rolling ? "bg-slate-700 border-slate-500 text-slate-300 animate-pulse" : "bg-purple-900/40 border-purple-500 text-white"
+      rolling ? "bg-slate-700 border-slate-500 text-slate-300 animate-pulse" : "bg-zinc-800/60 border-zinc-500 text-white"
     }`}>
       {display}
     </span>
@@ -269,11 +269,11 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
       onClick={phase === "skills" ? undefined : onDone}
     >
       <div
-        className="bg-slate-900 border border-purple-700 rounded-2xl shadow-2xl shadow-purple-900/50 w-full max-w-md p-6"
+        className="bg-slate-900 border border-zinc-600 rounded-2xl shadow-2xl shadow-black/50 w-full max-w-md p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="text-center mb-4">
-          <p className="text-xs text-purple-400 uppercase tracking-widest">抽取你的角色卡</p>
+          <p className="text-xs text-zinc-100 uppercase tracking-widest">抽取你的角色卡</p>
           <h2 className="text-xl font-bold text-white mt-1">{card.name}</h2>
         </div>
 
@@ -313,12 +313,12 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
               ))}
             </div>
             <p className="text-xs text-slate-400 mb-1">
-              技能點：<span className="text-purple-300 font-bold">{card.edu * 2 + card.int * 2}</span>
+              技能點：<span className="text-white font-bold">{card.edu * 2 + card.int * 2}</span>
               <span className="text-slate-500"> (EDU×2 + INT×2)</span>
             </p>
             <button
               onClick={() => setPhase("skills")}
-              className="mt-2 w-full bg-purple-600 hover:bg-purple-500 text-white py-2.5 rounded-lg font-medium"
+              className="mt-2 w-full bg-zinc-800 hover:bg-zinc-700 text-white py-2.5 rounded-lg font-medium"
             >
               分配技能點數 →
             </button>

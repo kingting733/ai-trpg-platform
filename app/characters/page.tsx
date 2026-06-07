@@ -21,7 +21,7 @@ interface CharacterCard {
 const RARITY_STYLES: Record<CharacterCard["rarity"], { border: string; chip: string; glow: string }> = {
   Common:    { border: "border-slate-600",  chip: "bg-slate-700 text-slate-300 border-slate-600",       glow: "" },
   Rare:      { border: "border-sky-600",    chip: "bg-sky-900/50 text-sky-300 border-sky-700",          glow: "shadow-lg shadow-sky-900/30" },
-  Epic:      { border: "border-purple-600", chip: "bg-purple-900/50 text-purple-300 border-purple-700", glow: "shadow-lg shadow-purple-900/40" },
+  Epic:      { border: "border-zinc-500", chip: "bg-zinc-800/70 text-white border-zinc-600", glow: "shadow-lg shadow-black/50" },
   Legendary: { border: "border-amber-500",  chip: "bg-amber-900/50 text-amber-300 border-amber-600",    glow: "shadow-xl shadow-amber-900/50" },
 };
 
@@ -143,7 +143,7 @@ export default function CharactersPage() {
           <button
             onClick={openCard}
             disabled={opening || openedToday}
-            className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-lg font-medium transition-colors"
+            className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-lg font-medium transition-colors"
           >
             {opening ? "擲骰中..." : openedToday ? `今日已達上限 (${todayCount}/${DAILY_LIMIT}) ✓` : `抽取角色卡 (${todayCount}/${DAILY_LIMIT})`}
           </button>
@@ -159,7 +159,7 @@ export default function CharactersPage() {
 
       {revealed && (
         <div className="mb-8">
-          <p className="text-xs text-purple-400 uppercase tracking-wider mb-2">獲得新角色卡！</p>
+          <p className="text-xs text-zinc-100 uppercase tracking-wider mb-2">獲得新角色卡！</p>
           <div className="max-w-xs">
             <CardView card={revealed} highlight scenarioTitles={scenarioTitles} onNameSaved={handleNameSaved} onDeleted={handleDeleted} />
           </div>
@@ -256,7 +256,7 @@ function CardView({
   }
 
   return (
-    <div className={`bg-slate-800/50 border ${style.border} ${style.glow} rounded-xl p-4 flex flex-col gap-0 ${highlight ? "ring-2 ring-purple-500" : ""}`}>
+    <div className={`bg-slate-800/50 border ${style.border} ${style.glow} rounded-xl p-4 flex flex-col gap-0 ${highlight ? "ring-2 ring-zinc-400" : ""}`}>
       <div className="flex items-start justify-between mb-3 gap-2">
         <div className="flex-1 min-w-0">
           {editing ? (
@@ -270,14 +270,14 @@ function CardView({
                   if (e.key === "Escape") setEditing(false);
                 }}
                 maxLength={40}
-                className="w-full bg-slate-900 border border-purple-500 rounded px-2 py-1 text-white text-sm focus:outline-none"
+                className="w-full bg-slate-900 border border-zinc-500 rounded px-2 py-1 text-white text-sm focus:outline-none"
               />
               {nameError && <span className="text-red-400 text-xs">{nameError}</span>}
               <div className="flex gap-2 mt-0.5">
                 <button
                   onClick={saveName}
                   disabled={saving}
-                  className="text-xs bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white px-2 py-0.5 rounded"
+                  className="text-xs bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white px-2 py-0.5 rounded"
                 >
                   {saving ? "儲存中…" : "儲存"}
                 </button>
@@ -324,7 +324,7 @@ function CardView({
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowSkills((v) => !v)}
-            className="text-xs text-purple-400 hover:text-purple-300 underline underline-offset-2"
+            className="text-xs text-zinc-100 hover:text-white underline underline-offset-2"
           >
             {showSkills ? "收起技能 ▲" : "查看技能 ▼"}
           </button>
@@ -344,7 +344,7 @@ function CardView({
                 .map(([k, v]) => (
                   <div key={k} className="flex justify-between bg-slate-900/50 rounded px-2 py-1">
                     <span className="text-slate-400 text-xs">{SKILL_ZH[k] ?? k.replace(/_/g, " ")}</span>
-                    <span className="text-purple-300 text-xs font-bold">{v}%</span>
+                    <span className="text-white text-xs font-bold">{v}%</span>
                   </div>
                 ))}
             </div>

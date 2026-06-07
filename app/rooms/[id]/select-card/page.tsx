@@ -18,7 +18,7 @@ interface CharacterCard {
 const RARITY_STYLES: Record<CharacterCard["rarity"], { border: string; chip: string; selected: string }> = {
   Common:    { border: "border-slate-600",  chip: "bg-slate-700 text-slate-300 border-slate-600",       selected: "border-slate-400 ring-2 ring-slate-400" },
   Rare:      { border: "border-sky-700",    chip: "bg-sky-900/50 text-sky-300 border-sky-700",          selected: "border-sky-400 ring-2 ring-sky-400" },
-  Epic:      { border: "border-purple-700", chip: "bg-purple-900/50 text-purple-300 border-purple-700", selected: "border-purple-400 ring-2 ring-purple-400" },
+  Epic:      { border: "border-zinc-600", chip: "bg-zinc-800/70 text-white border-zinc-600", selected: "border-zinc-300 ring-2 ring-zinc-400" },
   Legendary: { border: "border-amber-600",  chip: "bg-amber-900/50 text-amber-300 border-amber-600",    selected: "border-amber-400 ring-2 ring-amber-400" },
 };
 
@@ -119,7 +119,7 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
         <p className="text-slate-400 mb-6">你需要至少一張角色卡才能遊玩。請先抽取每日卡。</p>
         <Link
           href="/characters"
-          className="inline-block bg-purple-600 hover:bg-purple-500 text-white px-6 py-3 rounded-lg font-medium"
+          className="inline-block bg-zinc-800 hover:bg-zinc-700 text-white px-6 py-3 rounded-lg font-medium"
         >
           前往我的卡 →
         </Link>

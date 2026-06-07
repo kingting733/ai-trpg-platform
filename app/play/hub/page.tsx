@@ -97,7 +97,7 @@ export default function HubPage() {
           <div className="flex flex-col gap-3">
             {activeRooms.map((r) => (
               <Link key={r.id} href={r.status === "waiting" ? `/rooms/${r.id}/lobby` : `/rooms/${r.id}`}>
-                <div className="bg-purple-900/20 border border-purple-700/60 hover:border-purple-500 rounded-xl p-4 flex items-center justify-between transition-colors cursor-pointer">
+                <div className="bg-zinc-800/50 border border-zinc-600/60 hover:border-zinc-400 rounded-xl p-4 flex items-center justify-between transition-colors cursor-pointer">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-white font-semibold">{r.name}</span>
@@ -115,7 +115,7 @@ export default function HubPage() {
                       <span className="font-mono text-slate-500">{r.room_code}</span>
                     </p>
                   </div>
-                  <span className="text-purple-400 font-medium text-sm shrink-0">
+                  <span className="text-zinc-100 font-medium text-sm shrink-0">
                     {r.status === "in_progress" ? "返回遊戲 →" : "返回大廳 →"}
                   </span>
                 </div>
@@ -135,12 +135,12 @@ export default function HubPage() {
               onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
               placeholder="XXXXX"
               maxLength={6}
-              className="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 font-mono text-lg tracking-widest uppercase focus:outline-none focus:border-purple-500"
+              className="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 font-mono text-lg tracking-widest uppercase focus:outline-none focus:border-zinc-500"
             />
             <button
               onClick={() => joinCode.trim() && router.push(`/play/join/${joinCode.trim()}`)}
               disabled={joinCode.length < 4}
-              className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white px-4 py-2 rounded-lg font-medium"
+              className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 text-white px-4 py-2 rounded-lg font-medium"
             >
               加入
             </button>
@@ -159,8 +159,8 @@ export default function HubPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {scenarios.map((s) => (
             <Link key={s.id} href={`/play/create-room?scenario=${s.id}&title=${encodeURIComponent(s.title)}&genre=${encodeURIComponent(s.genre)}`}>
-              <div className="bg-slate-800/50 border border-slate-700 hover:border-purple-500 rounded-xl p-5 cursor-pointer transition-colors h-full">
-                <span className="text-xs bg-purple-900/50 text-purple-300 border border-purple-800 px-2 py-0.5 rounded">{s.genre}</span>
+              <div className="bg-slate-800/50 border border-slate-700 hover:border-zinc-400 rounded-xl p-5 cursor-pointer transition-colors h-full">
+                <span className="text-xs bg-zinc-800/70 text-white border border-zinc-700 px-2 py-0.5 rounded">{s.genre}</span>
                 <h3 className="text-white font-semibold mt-3 mb-2">{s.title}</h3>
                 <p className="text-slate-400 text-sm">{s.description}</p>
                 <div className="text-xs text-slate-500 mt-3">最多 {s.max_players} 人</div>

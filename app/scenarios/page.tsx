@@ -73,8 +73,8 @@ export default function ScenariosPage() {
             onClick={() => setActiveGenre(ALL_GENRE)}
             className={`px-3 py-1.5 text-sm rounded-md border transition-colors ${
               activeGenre === ALL_GENRE
-                ? "bg-purple-600 border-purple-600 text-white"
-                : "border-slate-600 text-slate-300 hover:border-purple-500 hover:text-white"
+                ? "bg-zinc-800 border-zinc-500 text-white"
+                : "border-slate-600 text-slate-300 hover:border-zinc-400 hover:text-white"
             }`}
           >
             全部
@@ -85,8 +85,8 @@ export default function ScenariosPage() {
               onClick={() => setActiveGenre(g)}
               className={`px-3 py-1.5 text-sm rounded-md border transition-colors ${
                 activeGenre === g
-                  ? "bg-purple-600 border-purple-600 text-white"
-                  : "border-slate-600 text-slate-300 hover:border-purple-500 hover:text-white"
+                  ? "bg-zinc-800 border-zinc-500 text-white"
+                  : "border-slate-600 text-slate-300 hover:border-zinc-400 hover:text-white"
               }`}
             >
               {g}
@@ -105,9 +105,9 @@ export default function ScenariosPage() {
             const diffColor = DIFFICULTY_COLOR[s.difficulty ?? "Normal"] ?? DIFFICULTY_COLOR.Normal;
             return (
               <Link key={s.id} href={`/scenarios/${s.id}`} className="group">
-                <div className="bg-slate-800/50 border border-slate-700 group-hover:border-purple-500 rounded-xl p-6 transition-colors h-full flex flex-col">
+                <div className="bg-slate-800/50 border border-slate-700 group-hover:border-zinc-400 rounded-xl p-6 transition-colors h-full flex flex-col">
                   <div className="flex flex-wrap items-center gap-2 mb-3">
-                    <span className="text-xs bg-purple-900/50 text-purple-300 border border-purple-800 px-2 py-0.5 rounded">
+                    <span className="text-xs bg-zinc-800/70 text-white border border-zinc-700 px-2 py-0.5 rounded">
                       {s.genre}
                     </span>
                     {s.difficulty && (
@@ -131,7 +131,7 @@ export default function ScenariosPage() {
                       ))}
                     </div>
                   )}
-                  <div className="mt-4 text-purple-400 text-sm font-medium group-hover:text-purple-300">
+                  <div className="mt-4 text-zinc-100 text-sm font-medium group-hover:text-white">
                     查看詳情 →
                   </div>
                 </div>

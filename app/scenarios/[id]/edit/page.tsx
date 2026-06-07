@@ -20,7 +20,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   );
 }
 
-const inputCls = "w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500";
+const inputCls = "w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-zinc-500";
 const taCls = `${inputCls} resize-none`;
 
 function emptyLocation(): LocationEntry { return { name: "", clues: "", items: "" }; }
@@ -172,7 +172,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <p className="text-slate-400">找不到劇本或你沒有編輯權限。</p>
-        <button onClick={() => router.push("/dashboard")} className="text-purple-400 hover:text-purple-300 text-sm">
+        <button onClick={() => router.push("/dashboard")} className="text-zinc-100 hover:text-white text-sm">
           ← 返回後台
         </button>
       </div>
@@ -211,7 +211,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === tab.id ? "bg-purple-600 text-white" : "text-slate-400 hover:text-white"
+              activeTab === tab.id ? "bg-zinc-800 text-white" : "text-slate-400 hover:text-white"
             }`}
           >
             {tab.id !== "player" && <span className="mr-1 opacity-60">🔒</span>}
@@ -339,7 +339,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
                   </div>
                 ))}
                 <button type="button" onClick={() => setLocations([...locations, emptyLocation()])}
-                  className="text-sm text-purple-400 hover:text-purple-300 border border-dashed border-slate-600 hover:border-purple-500 rounded-lg py-2 transition-colors">
+                  className="text-sm text-zinc-100 hover:text-white border border-dashed border-slate-600 hover:border-zinc-400 rounded-lg py-2 transition-colors">
                   + 新增地點
                 </button>
               </div>
@@ -383,7 +383,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
                   </div>
                 ))}
                 <button type="button" onClick={() => setNpcs([...npcs, emptyNpc()])}
-                  className="text-sm text-purple-400 hover:text-purple-300 border border-dashed border-slate-600 hover:border-purple-500 rounded-lg py-2 transition-colors">
+                  className="text-sm text-zinc-100 hover:text-white border border-dashed border-slate-600 hover:border-zinc-400 rounded-lg py-2 transition-colors">
                   + 新增 NPC
                 </button>
               </div>
@@ -398,7 +398,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
           {saving ? "儲存中..." : "儲存為草稿"}
         </button>
         <button onClick={() => handleSave("published")} disabled={saving}
-          className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white py-2.5 rounded-lg font-medium">
+          className="flex-1 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white py-2.5 rounded-lg font-medium">
           {saving ? "更新中..." : currentStatus === "published" ? "更新並保持發佈" : "發佈"}
         </button>
       </div>

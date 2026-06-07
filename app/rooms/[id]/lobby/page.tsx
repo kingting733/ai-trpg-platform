@@ -109,7 +109,7 @@ export default function LobbyPage({ params }: { params: { id: string } }) {
 
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 mb-4 text-center">
         <div className="text-xs text-slate-500 mb-1">房間代碼 — 分享給朋友</div>
-        <div className="text-4xl font-mono font-bold text-purple-400 tracking-[0.3em]">{room?.room_code}</div>
+        <div className="text-4xl font-mono font-bold text-zinc-100 tracking-[0.3em]">{room?.room_code}</div>
       </div>
 
       {error && (

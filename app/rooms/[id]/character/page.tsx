@@ -91,7 +91,7 @@ export default function CharacterCreationPage({ params }: { params: { id: string
       <p className="text-slate-400 mb-2 text-sm">輸入名稱即可加入。屬性將使用預設值（均為平均值）。</p>
       <p className="text-slate-500 text-xs mb-6">
         若想使用自己抽到的角色卡，請前往{" "}
-        <Link href={`/rooms/${params.id}/select-card`} className="text-purple-400 hover:text-purple-300 underline">
+        <Link href={`/rooms/${params.id}/select-card`} className="text-zinc-100 hover:text-white underline">
           選擇角色卡
         </Link>
         。
@@ -106,7 +106,7 @@ export default function CharacterCreationPage({ params }: { params: { id: string
               onChange={(e) => setCharName(e.target.value)}
               placeholder="例：木靈·凱拉"
               required
-              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-zinc-500"
             />
           </div>
           <div>
@@ -116,7 +116,7 @@ export default function CharacterCreationPage({ params }: { params: { id: string
               onChange={(e) => setBackground(e.target.value)}
               rows={3}
               placeholder="簡述你角色的過去..."
-              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
+              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-zinc-500 resize-none"
             />
           </div>
         </div>
@@ -128,7 +128,7 @@ export default function CharacterCreationPage({ params }: { params: { id: string
         <button
           type="submit"
           disabled={loading || !charName.trim()}
-          className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 rounded-lg font-medium"
+          className="w-full bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 rounded-lg font-medium"
         >
           {loading ? "建立中..." : "確認角色並進入房間"}
         </button>

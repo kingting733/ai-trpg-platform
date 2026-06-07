@@ -304,7 +304,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
             <span className="text-slate-600">·</span>
             {currentTurnChar ? (
               <span className="text-slate-400">
-                行動者：<span className={`font-bold ${isMyTurn ? "text-green-400" : "text-purple-400"}`}>
+                行動者：<span className={`font-bold ${isMyTurn ? "text-green-400" : "text-zinc-100"}`}>
                   {isMyTurn ? "輪到你了！" : currentTurnChar.name}
                 </span>
               </span>
@@ -342,7 +342,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
               {entry.entry_type === "action" && (
                 <div className="flex flex-col gap-1">
                   <div className="flex gap-2">
-                    <span className="text-purple-400 font-medium text-sm shrink-0">{entry.characters?.name ?? "Player"}:</span>
+                    <span className="text-zinc-100 font-medium text-sm shrink-0">{entry.characters?.name ?? "Player"}:</span>
                     <span className="text-slate-300 text-sm">{entry.content}</span>
                   </div>
                   {entry.roll_result?.requires_check && <DiceResult roll={entry.roll_result} />}
@@ -369,7 +369,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
         {!atBottom && (
           <button
             onClick={scrollToBottom}
-            className="absolute bottom-3 right-3 bg-purple-600 hover:bg-purple-500 text-white text-xs font-medium px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1 transition-colors"
+            className="absolute bottom-3 right-3 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-medium px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1 transition-colors"
           >
             ↓ 最新訊息
           </button>
@@ -386,9 +386,9 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                   key={i}
                   onClick={() => submitAction(c)}
                   disabled={submitting}
-                  className="text-left bg-slate-800 hover:bg-slate-700 border border-slate-600 hover:border-purple-500 text-slate-300 hover:text-white text-sm px-4 py-2.5 rounded-lg transition-colors disabled:opacity-40"
+                  className="text-left bg-slate-800 hover:bg-slate-700 border border-slate-600 hover:border-zinc-400 text-slate-300 hover:text-white text-sm px-4 py-2.5 rounded-lg transition-colors disabled:opacity-40"
                 >
-                  <span className="text-purple-400 font-bold mr-2">{i + 1}.</span>{c}
+                  <span className="text-zinc-100 font-bold mr-2">{i + 1}.</span>{c}
                 </button>
               ))}
             </div>
@@ -405,7 +405,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
             {initializing ? "開始中..." : "開始冒險"}
           </button>
         ) : hasStarted && iAmDead ? (
-          <div className={`text-center text-sm py-3 shrink-0 border rounded-xl ${iAmInsane ? "text-fuchsia-300 border-fuchsia-900/50 bg-fuchsia-900/20" : "text-red-300 border-red-900/50 bg-red-900/20"}`}>
+          <div className={`text-center text-sm py-3 shrink-0 border rounded-xl ${iAmInsane ? "text-teal-300 border-teal-900/50 bg-teal-900/40" : "text-red-300 border-red-900/50 bg-red-900/20"}`}>
             {iAmInsane && !iAmDown
               ? `${myCharacter?.name ?? "你的角色"} 的精神已完全崩潰，永遠迷失在黑暗中。`
               : `${myCharacter?.name ?? "你的角色"} 已在此倒下，無法再行動。`}
@@ -419,12 +419,12 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && isMyTurn && !submitting) { e.preventDefault(); submitAction(); } }}
               placeholder={isMyTurn ? "描述你的行動..." : `等待 ${currentTurnChar?.name ?? "..."} 行動...`}
               disabled={!isMyTurn || submitting}
-              className="flex-1 bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 disabled:opacity-50"
+              className="flex-1 bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-zinc-500 disabled:opacity-50"
             />
             <button
               onClick={() => submitAction()}
               disabled={!isMyTurn || !actionText.trim() || submitting}
-              className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-6 py-3 rounded-xl font-medium shrink-0"
+              className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-6 py-3 rounded-xl font-medium shrink-0"
             >
               {submitting ? "..." : "Submit"}
             </button>
@@ -439,7 +439,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                 return (
                   <button
                     onClick={() => router.push(`/rooms/${params.id}/select-card`)}
-                    className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-2.5 rounded-lg font-medium"
+                    className="bg-zinc-800 hover:bg-zinc-700 text-white px-6 py-2.5 rounded-lg font-medium"
                   >
                     選擇角色卡以繼續 →
                   </button>
@@ -492,10 +492,10 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
               return (
                 <div
                   key={c.id}
-                  className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs ${isActive ? "bg-purple-900/40 border border-purple-700" : ""}`}
+                  className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs ${isActive ? "bg-zinc-800/60 border border-zinc-600" : ""}`}
                 >
                   <span className="text-slate-600 w-3">{i + 1}.</span>
-                  <span className={`flex-1 font-medium truncate ${isActive ? "text-purple-300" : "text-slate-300"}`}>{c.name}</span>
+                  <span className={`flex-1 font-medium truncate ${isActive ? "text-white" : "text-slate-300"}`}>{c.name}</span>
                   <span className="text-slate-500">DEX {c.dex}</span>
                   {isActive && <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />}
                 </div>
@@ -510,11 +510,11 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           const insane = c.san <= 0;
           const dead = down || insane;
           return (
-            <div key={c.id} className={`bg-slate-800/50 border rounded-xl p-4 shrink-0 ${dead ? "border-red-900/70 opacity-60" : isActive ? "border-purple-700" : "border-slate-700"}`}>
+            <div key={c.id} className={`bg-slate-800/50 border rounded-xl p-4 shrink-0 ${dead ? "border-red-900/70 opacity-60" : isActive ? "border-zinc-600" : "border-slate-700"}`}>
               <div className="flex items-center justify-between mb-2 gap-2">
                 <h4 className="font-medium text-white text-sm truncate">{c.name}</h4>
                 {down && <span className="text-[10px] bg-red-900/60 text-red-300 border border-red-800 px-1.5 py-0.5 rounded shrink-0">陣亡</span>}
-                {!down && insane && <span className="text-[10px] bg-fuchsia-900/60 text-fuchsia-300 border border-fuchsia-800 px-1.5 py-0.5 rounded shrink-0">發瘋</span>}
+                {!down && insane && <span className="text-[10px] bg-teal-900/60 text-teal-300 border border-teal-800 px-1.5 py-0.5 rounded shrink-0">發瘋</span>}
               </div>
               {(() => {
                 const maxHp = Math.max(1, Math.floor((c.con + c.siz) / 10));
@@ -528,7 +528,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                     <StatBar label="生命" cur={c.hp} max={maxHp} pct={hpPct}
                       color={c.hp <= 3 ? "bg-red-500" : "bg-emerald-500"} />
                     <StatBar label="理智" cur={c.san} max={maxSan} pct={sanPct}
-                      color={c.san <= 15 ? "bg-amber-500" : "bg-violet-500"} />
+                      color={c.san <= 15 ? "bg-amber-500" : "bg-teal-400"} />
                     <StatBar label="魔力" cur={c.mp} max={maxMp} pct={mpPct}
                       color="bg-sky-500" />
                   </div>
@@ -544,7 +544,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
               </div>
               <button
                 onClick={() => toggleSkills(c.id)}
-                className="mt-2 w-full text-xs text-purple-400 hover:text-purple-300 text-left"
+                className="mt-2 w-full text-xs text-zinc-100 hover:text-white text-left"
               >
                 {skillsOpen[c.id] ? "收起技能 ▲" : "查看技能 ▼"}
               </button>
@@ -553,7 +553,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                   {c.skills && Object.entries(c.skills).filter(([,v]) => (v ?? 0) > 0).sort(([,a],[,b]) => b-a).map(([k,v]) => (
                     <div key={k} className="flex justify-between bg-slate-900/50 rounded px-2 py-0.5">
                       <span className="text-slate-500 text-xs truncate">{SKILL_ZH[k] ?? k.replace(/_/g," ")}</span>
-                      <span className="text-purple-300 text-xs font-bold">{v}%</span>
+                      <span className="text-white text-xs font-bold">{v}%</span>
                     </div>
                   ))}
                   {(!c.skills || Object.values(c.skills).every(v => (v??0) === 0)) && (
@@ -612,7 +612,7 @@ function EndingScreen({
           {hasEnding ? room.ending_title : "冒險結束"}
         </h1>
         <p className="text-slate-400 text-sm">
-          <span className="text-purple-400">{room.name}</span> 的故事已結束。
+          <span className="text-zinc-100">{room.name}</span> 的故事已結束。
         </p>
       </div>
 
@@ -634,7 +634,7 @@ function EndingScreen({
               <div key={entry.id} className="text-sm">
                 {entry.entry_type === "action" && (
                   <p className="text-slate-400">
-                    <span className="text-purple-400">{entry.characters?.name ?? "Player"}:</span>{" "}
+                    <span className="text-zinc-100">{entry.characters?.name ?? "Player"}:</span>{" "}
                     {entry.content}
                   </p>
                 )}
@@ -664,7 +664,7 @@ function EndingScreen({
       <div className="flex gap-3 w-full">
         <button
           onClick={onScenarios}
-          className="flex-1 bg-purple-600 hover:bg-purple-500 text-white py-3 rounded-lg font-medium transition-colors"
+          className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white py-3 rounded-lg font-medium transition-colors"
         >
           瀏覽劇本
         </button>
@@ -721,7 +721,7 @@ function DiceResult({ roll }: { roll: RollResult }) {
 
       {/* SAN check box — separate roll for facing horror */}
       {sc && (
-        <div className={`rounded-lg border px-3 py-2 text-xs ${sc.success ? "text-fuchsia-200 border-fuchsia-800 bg-fuchsia-950/30" : "text-rose-300 border-rose-700 bg-rose-950/40"}`}>
+        <div className={`rounded-lg border px-3 py-2 text-xs ${sc.success ? "text-teal-200 border-teal-800 bg-teal-950/30" : "text-rose-300 border-rose-700 bg-rose-950/40"}`}>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-bold uppercase tracking-wider">🧠 理智檢定</span>
             <span className="opacity-80">{sc.severity_label}</span>

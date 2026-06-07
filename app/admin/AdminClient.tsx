@@ -188,7 +188,7 @@ export function AdminClient({
               key={t}
               onClick={() => setTab(t)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                tab === t ? "bg-purple-600 text-white" : "bg-slate-800 text-slate-400 hover:text-white"
+                tab === t ? "bg-zinc-800 text-white" : "bg-slate-800 text-slate-400 hover:text-white"
               }`}
             >
               {t === "scenarios" ? `劇本 (${scenarios.length})` : `房間 (${rooms.length})`}
@@ -199,7 +199,7 @@ export function AdminClient({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="搜尋標題 / 建立者 / 代碼…"
-          className="flex-1 min-w-[200px] bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+          className="flex-1 min-w-[200px] bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-zinc-500"
         />
         {tab === "rooms" && (
           <button

@@ -87,7 +87,7 @@ export default function SignupPage() {
           </p>
           <Link
             href="/login"
-            className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-2.5 rounded-lg font-medium"
+            className="bg-zinc-800 hover:bg-zinc-700 text-white px-6 py-2.5 rounded-lg font-medium"
           >
             前往登入
           </Link>
@@ -119,7 +119,7 @@ export default function SignupPage() {
               required
               maxLength={30}
               autoFocus
-              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-zinc-500"
             />
             <p className="text-xs text-slate-500 mt-1">
               其他玩家在遊戲中將看到此名稱。
@@ -133,7 +133,7 @@ export default function SignupPage() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
               required
-              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-zinc-500"
             />
           </div>
           <div>
@@ -145,7 +145,7 @@ export default function SignupPage() {
               placeholder="••••••••"
               required
               minLength={6}
-              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-zinc-500"
             />
             <p className="text-xs text-slate-500 mt-1">至少 6 個字元。</p>
           </div>
@@ -157,13 +157,13 @@ export default function SignupPage() {
               onChange={(e) => setConfirm(e.target.value)}
               placeholder="••••••••"
               required
-              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-zinc-500"
             />
           </div>
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-lg font-medium mt-1"
+            className="w-full bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-lg font-medium mt-1"
           >
             {loading ? "建立帳號中..." : "建立帳號"}
           </button>
@@ -171,7 +171,7 @@ export default function SignupPage() {
 
         <p className="text-slate-400 text-sm text-center mt-6">
           已有帳號？{" "}
-          <Link href="/login" className="text-purple-400 hover:text-purple-300 font-medium">
+          <Link href="/login" className="text-zinc-100 hover:text-white font-medium">
             登入
           </Link>
         </p>

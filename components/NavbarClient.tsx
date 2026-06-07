@@ -19,7 +19,7 @@ export function NavbarClient({ user }: Props) {
 
   if (!user) {
     return (
-      <Link href="/login" className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded-md">
+      <Link href="/login" className="bg-zinc-800 hover:bg-zinc-700 text-white px-3 py-1.5 rounded-md">
         登入
       </Link>
     );
