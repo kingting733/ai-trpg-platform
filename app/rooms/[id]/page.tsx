@@ -489,18 +489,18 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
               {(() => {
                 const maxHp = Math.max(1, Math.floor((c.con + c.siz) / 10));
                 const maxSan = Math.max(1, c.pow);
+                const maxMp = Math.max(1, Math.floor(c.pow / 5));
                 const hpPct = Math.min(100, Math.max(0, (c.hp / maxHp) * 100));
                 const sanPct = Math.min(100, Math.max(0, (c.san / maxSan) * 100));
+                const mpPct = Math.min(100, Math.max(0, (c.mp / maxMp) * 100));
                 return (
                   <div className="space-y-1.5 mb-2">
                     <StatBar label="生命" cur={c.hp} max={maxHp} pct={hpPct}
                       color={c.hp <= 3 ? "bg-red-500" : "bg-emerald-500"} />
                     <StatBar label="理智" cur={c.san} max={maxSan} pct={sanPct}
                       color={c.san <= 15 ? "bg-amber-500" : "bg-violet-500"} />
-                    <div className="flex justify-between bg-slate-900/50 rounded px-2 py-0.5">
-                      <span className="text-slate-500 text-xs">魔力</span>
-                      <span className="text-slate-300 text-xs font-medium">{c.mp}</span>
-                    </div>
+                    <StatBar label="魔力" cur={c.mp} max={maxMp} pct={mpPct}
+                      color="bg-sky-500" />
                   </div>
                 );
               })()}
