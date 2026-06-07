@@ -1,3 +1,20 @@
+export interface LocationEntry {
+  name: string;
+  clues: string;   // free-text
+  items: string;   // free-text
+}
+
+export interface NpcEntry {
+  name: string;
+  // stats
+  hp: number; mp: number;
+  str: number; con: number; siz: number; dex: number;
+  app: number; int: number; pow: number; edu: number; luck: number;
+  // roleplay
+  personality: string;
+  goal: string;
+}
+
 export interface LedgerEntry {
   turn: number;
   type: string;
@@ -7,17 +24,12 @@ export interface LedgerEntry {
 
 export interface ScenarioGMContext {
   openingScene: string | null;
-  sceneFlow: string | null;
-  secretRules: string | null;
-  locations: string[];
-  npcs: string[];
-  clues: string[];
-  threats: string[];
-  traps: string[];
-  keyItems: string[];
+  locations: LocationEntry[];
+  npcs: NpcEntry[];
   winningTargets: string | null;
   eachPlayerTargets: string | null;
   failureConditions: string | null;
+  failureTurnLimit: number | null;
   endingConditions: string | null;
   gmNotes: string | null;
   /** The complete original story/module text — canonical source the GM follows. */
@@ -201,17 +213,25 @@ export const ROSTER_CONSTRAINT =
 function buildGMContextBlock(ctx: ScenarioGMContext): string {
   const parts: string[] = [];
   if (ctx.openingScene) parts.push(`Opening Scene Context:\n${ctx.openingScene}`);
-  if (ctx.sceneFlow) parts.push(`Scene Flow & Progression (follow this spine; advance scenes as their triggers are met):\n${ctx.sceneFlow}`);
-  if (ctx.locations.length) parts.push(`Key Locations:\n${ctx.locations.map((l) => `  - ${l}`).join("\n")}`);
-  if (ctx.npcs.length) parts.push(`NPCs (play them per their goals, knowledge, and reactions):\n${ctx.npcs.map((n) => `  - ${n}`).join("\n")}`);
-  if (ctx.clues.length) parts.push(`Clues (reveal when players investigate the right place/way):\n${ctx.clues.map((c) => `  - ${c}`).join("\n")}`);
-  if (ctx.threats.length) parts.push(`Threats & Enemies:\n${ctx.threats.map((t) => `  - ${t}`).join("\n")}`);
-  if (ctx.traps.length) parts.push(`Traps & Hazards:\n${ctx.traps.map((t) => `  - ${t}`).join("\n")}`);
-  if (ctx.keyItems.length) parts.push(`Key Items:\n${ctx.keyItems.map((i) => `  - ${i}`).join("\n")}`);
-  if (ctx.secretRules) parts.push(`GM Rules & Pacing:\n${ctx.secretRules}`);
+  if (ctx.locations.length) {
+    const locLines = ctx.locations.map((l) => {
+      let s = `  - ${l.name}`;
+      if (l.clues) s += `\n    Clues: ${l.clues}`;
+      if (l.items) s += `\n    Items: ${l.items}`;
+      return s;
+    }).join("\n");
+    parts.push(`Key Locations:\n${locLines}`);
+  }
+  if (ctx.npcs.length) {
+    const npcLines = ctx.npcs.map((n) => {
+      return `  - ${n.name} | HP ${n.hp} MP ${n.mp} | STR ${n.str} CON ${n.con} SIZ ${n.siz} DEX ${n.dex} APP ${n.app} INT ${n.int} POW ${n.pow} EDU ${n.edu} LUCK ${n.luck}\n    Personality: ${n.personality}\n    Goal: ${n.goal}`;
+    }).join("\n");
+    parts.push(`NPCs (play them per their goals, knowledge, and reactions):\n${npcLines}`);
+  }
   if (ctx.winningTargets) parts.push(`Winning Targets — any ONE player completing each satisfies it (game ends when all required ones are met):\n${ctx.winningTargets}`);
   if (ctx.eachPlayerTargets) parts.push(`Per-Player Targets — EVERY surviving player must personally complete each of these:\n${ctx.eachPlayerTargets}`);
   if (ctx.failureConditions) parts.push(`Failure Conditions — if any of these occurs, the adventure ends in defeat. Steer outcomes honestly; do not contrive to avoid them:\n${ctx.failureConditions}`);
+  if (ctx.failureTurnLimit != null) parts.push(`Failure Turn Limit: Game ends in defeat if round reaches ${ctx.failureTurnLimit}`);
   if (ctx.endingConditions) parts.push(`Additional Ending Notes:\n${ctx.endingConditions}`);
   if (ctx.gmNotes) parts.push(`Additional GM Notes:\n${ctx.gmNotes}`);
   // The complete original story. It lives in the STATIC system prefix, so it is
@@ -244,7 +264,7 @@ function buildSystemPrompt(input: GMAIInput): string {
   const langBlock = buildLanguageInstruction(input.scenarioLanguage);
 
   return `You are an AI Game Master running a multiplayer TRPG text adventure called "${input.scenarioTitle}".
-${langBlock}${input.scenarioBackground ? `\nBackground: ${input.scenarioBackground}` : ""}
+${langBlock}
 ${input.scenarioObjective ? `\nObjective: ${input.scenarioObjective}` : ""}
 ${input.scenarioRules ? `\nSpecial Rules: ${input.scenarioRules}` : ""}
 ${gmCtxBlock}

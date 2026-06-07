@@ -3,6 +3,7 @@ import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { ImportedScenario } from "@/lib/ai/import-scenario";
+import type { LocationEntry, NpcEntry } from "@/lib/ai/gm";
 
 const GENRES = ["Fantasy", "Cyberpunk", "Horror", "Sci-Fi", "Mystery", "Historical", "Other"];
 const DIFFICULTIES = ["Story", "Normal", "Hard", "Nightmare"] as const;
@@ -22,6 +23,12 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 
 const inputCls = "w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500";
 const taCls = `${inputCls} resize-none`;
+const numCls = "w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white text-center text-sm focus:outline-none focus:border-purple-500";
+
+function emptyLocation(): LocationEntry { return { name: "", clues: "", items: "" }; }
+function emptyNpc(): NpcEntry {
+  return { name: "", hp: 10, mp: 5, str: 50, con: 50, siz: 50, dex: 50, app: 50, int: 50, pow: 50, edu: 50, luck: 50, personality: "", goal: "" };
+}
 
 export default function NewScenarioPage() {
   const router = useRouter();
@@ -36,30 +43,20 @@ export default function NewScenarioPage() {
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [estimatedPlayTime, setEstimatedPlayTime] = useState("");
   const [tags, setTags] = useState("");
+  const [language, setLanguage] = useState("zh-TW");
 
-  // GM-only: World & Story
+  // Tab 2 — 世界與故事
   const [openingScene, setOpeningScene] = useState("");
-  const [background, setBackground] = useState("");
-  const [sceneFlow, setSceneFlow] = useState("");
-  const [locations, setLocations] = useState("");
-  const [npcs, setNpcs] = useState("");
-  const [keyItems, setKeyItems] = useState("");
-
-  // GM-only: GM Toolkit
+  const [sourceDocument, setSourceDocument] = useState("");
   const [winningTargets, setWinningTargets] = useState("");
-  const [secretRules, setSecretRules] = useState("");
-  const [clues, setClues] = useState("");
-  const [threats, setThreats] = useState("");
-  const [traps, setTraps] = useState("");
   const [eachPlayerTargets, setEachPlayerTargets] = useState("");
   const [failureConditions, setFailureConditions] = useState("");
-  const [endingConditions, setEndingConditions] = useState("");
+  const [failureTurnLimit, setFailureTurnLimit] = useState("");
+
+  // Tab 3 — 主持人工具
+  const [locations, setLocations] = useState<LocationEntry[]>([]);
+  const [npcs, setNpcs] = useState<NpcEntry[]>([]);
   const [gmNotes, setGmNotes] = useState("");
-
-  // Full raw story text the AI GM references at play time (set by import, editable).
-  const [sourceDocument, setSourceDocument] = useState("");
-
-  const [language, setLanguage] = useState("zh-TW");
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,10 +68,6 @@ export default function NewScenarioPage() {
   const [importError, setImportError] = useState<string | null>(null);
   const [importNote, setImportNote] = useState<string | null>(null);
 
-  function parseLines(text: string): string[] {
-    return text.split("\n").map((l) => l.trim()).filter(Boolean);
-  }
-
   function applyImport(d: ImportedScenario) {
     setTitle(d.title ?? "");
     setGenre(d.genre ?? "");
@@ -85,19 +78,12 @@ export default function NewScenarioPage() {
     setEstimatedPlayTime(d.estimated_play_time ? String(d.estimated_play_time) : "");
     setTags((d.tags ?? []).join(", "));
     setOpeningScene(d.opening_scene ?? "");
-    setBackground(d.background ?? "");
-    setSceneFlow(d.scene_flow ?? "");
-    setLocations((d.locations ?? []).join("\n"));
-    setNpcs((d.npcs ?? []).join("\n"));
-    setKeyItems((d.key_items ?? []).join("\n"));
-    setSecretRules(d.secret_rules ?? "");
-    setClues((d.clues ?? []).join("\n"));
-    setThreats((d.threats ?? []).join("\n"));
-    setTraps((d.traps ?? []).join("\n"));
+    setLocations(Array.isArray(d.locations) ? (d.locations as LocationEntry[]) : []);
+    setNpcs(Array.isArray(d.npcs) ? (d.npcs as NpcEntry[]) : []);
     setWinningTargets(d.winning_targets ?? "");
     setEachPlayerTargets(d.each_player_targets ?? "");
     setFailureConditions(d.failure_conditions ?? "");
-    setEndingConditions(d.ending_conditions ?? "");
+    setFailureTurnLimit(d.failure_turn_limit != null ? String(d.failure_turn_limit) : "");
     setGmNotes(d.gm_notes ?? "");
     if (d.language) setLanguage(d.language);
     setActiveTab("player");
@@ -105,49 +91,29 @@ export default function NewScenarioPage() {
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    // Allow re-selecting the same file later
     e.target.value = "";
     if (!file) return;
-
-    setImportError(null);
-    setImportNote(null);
-    setSuccess(null);
-    setError(null);
-
-    if (file.size > 2 * 1024 * 1024) {
-      setImportError("File too large. Maximum size is 2MB.");
-      return;
-    }
-
+    setImportError(null); setImportNote(null); setSuccess(null); setError(null);
+    if (file.size > 2 * 1024 * 1024) { setImportError("File too large. Maximum size is 2MB."); return; }
     setImporting(true);
     try {
       const fd = new FormData();
       fd.append("file", file);
       const res = await fetch("/api/scenarios/import", { method: "POST", body: fd });
-
-      // The server may return a non-JSON error page (e.g. a serverless
-      // function timeout / 5xx from the platform). Read the body as text first
-      // and only parse JSON when it actually is JSON — otherwise res.json()
-      // throws "Unexpected token ... is not valid JSON" and hides the cause.
       const ct = res.headers.get("content-type") ?? "";
       const isJson = ct.includes("application/json");
       const json = isJson ? await res.json().catch(() => null) : null;
-
       if (!res.ok || !json) {
-        if (res.status === 504 || res.status === 408 || (!json && res.status >= 500)) {
-          setImportError("匯入逾時：文件太長，AI 分析超過伺服器時間上限。請縮短文件、分段匯入，或稍後再試。");
-        } else {
-          setImportError(json?.error ?? `匯入失敗（HTTP ${res.status}）。請稍後再試或改用手動填寫。`);
-        }
+        setImportError(
+          (res.status === 504 || res.status === 408 || (!json && res.status >= 500))
+            ? "匯入逾時：文件太長，AI 分析超過伺服器時間上限。請縮短文件、分段匯入，或稍後再試。"
+            : json?.error ?? `匯入失敗（HTTP ${res.status}）。請稍後再試或改用手動填寫。`
+        );
         return;
       }
-
       applyImport(json.scenario as ImportedScenario);
       if (typeof json.sourceDocument === "string") setSourceDocument(json.sourceDocument);
-      setImportNote(
-        `已從「${file.name}」匯入。AI 已預填以下欄位 — 請逐一檢閱並編輯，然後選擇儲存為草稿或發佈。` +
-          (json.truncated ? "（文件過長，僅分析了前段內容。）" : "")
-      );
+      setImportNote(`已從「${file.name}」匯入。AI 已預填以下欄位 — 請逐一檢閱並編輯，然後選擇儲存為草稿或發佈。${json.truncated ? "（文件過長，僅分析了前段內容。）" : ""}`);
     } catch (e: any) {
       const msg = e?.message ?? "";
       setImportError(
@@ -168,57 +134,50 @@ export default function NewScenarioPage() {
     if (!objective.trim()) { setActiveTab("player"); setError("目標為必填項目。"); return; }
     const mp = Number(maxPlayers);
     if (mp < 1 || mp > 6) { setActiveTab("player"); setError("玩家人數必須在 1 至 6 之間。"); return; }
-
-    setSaving(true);
-    setError(null);
-    setSuccess(null);
-
+    setSaving(true); setError(null); setSuccess(null);
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push("/login"); return; }
-
     const tagList = tags.split(",").map((t) => t.trim()).filter(Boolean);
-    const ept = estimatedPlayTime ? parseInt(estimatedPlayTime) : null;
-
     const { data, error: insertError } = await supabase
       .from("scenarios")
       .insert({
         creator_id: user.id,
-        title: title.trim(),
-        genre,
-        difficulty,
+        title: title.trim(), genre, difficulty,
         description: description.trim(),
         objective: objective.trim(),
         max_players: mp,
-        estimated_play_time: ept || null,
+        estimated_play_time: estimatedPlayTime ? parseInt(estimatedPlayTime) : null,
         tags: tagList,
         opening_scene: openingScene.trim() || null,
-        background: background.trim() || null,
-        scene_flow: sceneFlow.trim() || null,
-        locations: parseLines(locations),
-        npcs: parseLines(npcs),
-        key_items: parseLines(keyItems),
-        secret_rules: secretRules.trim() || null,
-        clues: parseLines(clues),
-        threats: parseLines(threats),
-        traps: parseLines(traps),
+        source_document: sourceDocument.trim() || null,
+        locations,
+        npcs,
         winning_targets: winningTargets.trim() || null,
         each_player_targets: eachPlayerTargets.trim() || null,
         failure_conditions: failureConditions.trim() || null,
-        ending_conditions: endingConditions.trim() || null,
+        failure_turn_limit: failureTurnLimit ? parseInt(failureTurnLimit) : null,
         gm_notes: gmNotes.trim() || null,
-        source_document: sourceDocument.trim() || null,
-        language,
-        status,
+        language, status,
       })
-      .select("id")
-      .single();
-
+      .select("id").single();
     setSaving(false);
     if (insertError || !data) { setError(insertError?.message ?? "Failed to save"); return; }
     setSuccess(status === "published" ? "劇本已發佈！" : "已儲存為草稿。");
     setTimeout(() => router.push("/dashboard"), 900);
   }
+
+  // Location helpers
+  function updateLocation(i: number, patch: Partial<LocationEntry>) {
+    setLocations((prev) => prev.map((l, idx) => idx === i ? { ...l, ...patch } : l));
+  }
+  function removeLocation(i: number) { setLocations((prev) => prev.filter((_, idx) => idx !== i)); }
+
+  // NPC helpers
+  function updateNpc(i: number, patch: Partial<NpcEntry>) {
+    setNpcs((prev) => prev.map((n, idx) => idx === i ? { ...n, ...patch } : n));
+  }
+  function removeNpc(i: number) { setNpcs((prev) => prev.filter((_, idx) => idx !== i)); }
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "player", label: "玩家資訊" },
@@ -232,6 +191,9 @@ export default function NewScenarioPage() {
     </div>
   );
 
+  const statKeys: (keyof NpcEntry)[] = ["str", "con", "siz", "dex", "app", "int", "pow", "edu", "luck"];
+  const statZh: Record<string, string> = { str:"力量", con:"體質", siz:"體型", dex:"敏捷", app:"外貌", int:"智力", pow:"意志", edu:"教育", luck:"幸運" };
+
   return (
     <div className="max-w-3xl mx-auto">
       <h1 className="text-3xl font-bold text-white mb-2">建立劇本</h1>
@@ -241,51 +203,28 @@ export default function NewScenarioPage() {
       <div className="bg-gradient-to-r from-purple-900/30 to-slate-800/30 border border-purple-800/50 rounded-xl p-5 mb-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex-1 min-w-[220px]">
-            <h2 className="text-white font-semibold flex items-center gap-2">
-              <span>✨</span> 從故事文件匯入
-            </h2>
+            <h2 className="text-white font-semibold flex items-center gap-2"><span>✨</span> 從故事文件匯入</h2>
             <p className="text-slate-400 text-sm mt-1">
               上傳 <span className="text-slate-300">.txt</span>、<span className="text-slate-300">.md</span> 或{" "}
               <span className="text-slate-300">.docx</span>（最大 2MB）。AI 讀取後自動預填表格。
               不會自動儲存或發佈 — 你需逐一確認所有內容。
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={importing}
-            className="bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white px-4 py-2 rounded-lg font-medium whitespace-nowrap"
-          >
+          <button type="button" onClick={() => fileInputRef.current?.click()} disabled={importing}
+            className="bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white px-4 py-2 rounded-lg font-medium whitespace-nowrap">
             {importing ? "分析中..." : "上傳文件"}
           </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".txt,.md,.markdown,.docx"
-            onChange={handleFileSelect}
-            className="hidden"
-          />
+          <input ref={fileInputRef} type="file" accept=".txt,.md,.markdown,.docx" onChange={handleFileSelect} className="hidden" />
         </div>
-        {importing && (
-          <p className="text-purple-300 text-xs mt-3">正在讀取文件並詢問 AI，這可能需要幾秒鐘。</p>
-        )}
-        {importError && (
-          <div className="mt-3 bg-red-900/30 border border-red-700 text-red-300 text-sm rounded-lg px-3 py-2">{importError}</div>
-        )}
-        {importNote && (
-          <div className="mt-3 bg-green-900/30 border border-green-700 text-green-300 text-sm rounded-lg px-3 py-2">{importNote}</div>
-        )}
+        {importing && <p className="text-purple-300 text-xs mt-3">正在讀取文件並詢問 AI，這可能需要幾秒鐘。</p>}
+        {importError && <div className="mt-3 bg-red-900/30 border border-red-700 text-red-300 text-sm rounded-lg px-3 py-2">{importError}</div>}
+        {importNote && <div className="mt-3 bg-green-900/30 border border-green-700 text-green-300 text-sm rounded-lg px-3 py-2">{importNote}</div>}
       </div>
 
       <div className="flex gap-1 mb-6 bg-slate-900 rounded-lg p-1">
         {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === tab.id ? "bg-purple-600 text-white" : "text-slate-400 hover:text-white"
-            }`}
-          >
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+            className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === tab.id ? "bg-purple-600 text-white" : "text-slate-400 hover:text-white"}`}>
             {tab.id !== "player" && <span className="mr-1 opacity-60">🔒</span>}
             {tab.label}
           </button>
@@ -296,6 +235,8 @@ export default function NewScenarioPage() {
       {success && <div className="mb-4 bg-green-900/30 border border-green-700 text-green-300 text-sm rounded-lg px-4 py-3">{success}</div>}
 
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+
+        {/* ── Tab 1: Player Info ── */}
         {activeTab === "player" && (
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-4">
@@ -312,7 +253,7 @@ export default function NewScenarioPage() {
             <div className="grid grid-cols-3 gap-4">
               <Field label="難度 *">
                 <select value={difficulty} onChange={(e) => setDifficulty(e.target.value as Difficulty)} className={inputCls}>
-                  {DIFFICULTIES.map((d) => <option key={d} value={d}>{{ Story: "故事", Normal: "普通", Hard: "困難", Nightmare: "噩夢" }[d] ?? d}</option>)}
+                  {DIFFICULTIES.map((d) => <option key={d} value={d}>{{ Story:"故事", Normal:"普通", Hard:"困難", Nightmare:"噩夢" }[d] ?? d}</option>)}
                 </select>
               </Field>
               <Field label="最多玩家（1–6）">
@@ -343,6 +284,7 @@ export default function NewScenarioPage() {
           </div>
         )}
 
+        {/* ── Tab 2: World & Story ── */}
         {activeTab === "world" && (
           <div className="flex flex-col gap-4">
             {gmBanner}
@@ -351,56 +293,13 @@ export default function NewScenarioPage() {
                 placeholder="夜幕低垂，一行人來到了佈滿苔蘚的古老神廟腳下。火把的光芒在雕刻的石臉上搖曳..."
                 className={taCls} />
             </Field>
-            <Field label="世界背景" hint="AI 主持人需要了解的歷史、傳說與世界背景。">
-              <textarea value={background} onChange={(e) => setBackground(e.target.value)} rows={5}
-                placeholder="在叢林深處，一座被遺忘已久的神廟重見天日。傳說那裡珍藏著永恆碎片..."
+            <Field label="完整故事原文" hint="AI 主持人遊玩時的完整參考故事（匯入時自動填入，亦可手動貼上）。建議 8,000–15,000 字元以內。">
+              <textarea value={sourceDocument} onChange={(e) => setSourceDocument(e.target.value)} rows={8}
+                placeholder="匯入故事文件後，完整原文會顯示於此。也可直接貼上整篇故事。"
                 className={taCls} />
-            </Field>
-            <Field label="場景流程 / 劇情推進" hint="冒險的場景順序與推進邏輯 — 每一幕玩家會遇到什麼、需要做什麼、以及觸發下一幕的條件。這是 AI 主持人依循的主線。">
-              <textarea value={sceneFlow} onChange={(e) => setSceneFlow(e.target.value)} rows={6}
-                placeholder={"第一幕：抵達神廟入口。隊伍需找到開啟石門的方法（解開雕像謎題）。解開後 → 進入大廳。\n第二幕：大廳。守衛巡邏，玩家可潛行或戰鬥。找到地圖後 → 前往圖書館。\n第三幕：圖書館。蒐集三條線索揭示碎片位置。集齊後 → 最終對決。\n最終幕：王座室。擊敗守護者並在神廟崩塌前取回碎片。"}
-                className={taCls} />
-            </Field>
-            <Field label="關鍵地點（每行一個）" hint="AI 主持人可在冒險中描述和引用的地點。">
-              <textarea value={locations} onChange={(e) => setLocations(e.target.value)} rows={4}
-                placeholder={"入口大廳 — 第一個房間，有火坑和雕像\n王座室 — 最終對決\n圖書館 — 古老書卷和線索"}
-                className={taCls} />
-            </Field>
-            <Field label="NPC（每行一個）" hint="非玩家角色及其性格/角色簡述。">
-              <textarea value={npcs} onChange={(e) => setNpcs(e.target.value)} rows={4}
-                placeholder={"莫羅斯長老 — 神秘嚮導，知曉神廟的秘密\n德拉文上尉 — 敵對警衛隊長，STR 16\n西雅 — 被囚告密者，願以情報換取自由"}
-                className={taCls} />
-            </Field>
-            <Field label="關鍵物品（每行一個）" hint="AI 主持人可在玩家探索時引入的物品。">
-              <textarea value={keyItems} onChange={(e) => setKeyItems(e.target.value)} rows={3}
-                placeholder={"永恆碎片 — 主要目標\n鐵鑰匙 — 開啟金庫門\n古代地圖 — 揭示隱藏通道"}
-                className={taCls} />
-            </Field>
-          </div>
-        )}
-
-        {activeTab === "gm" && (
-          <div className="flex flex-col gap-4">
-            {gmBanner}
-            <Field label="秘密規則" hint="AI 主持人的節奏、基調和機制指導。">
-              <textarea value={secretRules} onChange={(e) => setSecretRules(e.target.value)} rows={4}
-                placeholder={"這是恐怖劇本 — 緩慢建立緊張感，起初不要直接展示怪物。\n玩家目睹超自然事件時觸發 SAN 檢定。\n幸運檢定決定隨機遭遇的時機。"}
-                className={taCls} />
-            </Field>
-            <Field label="線索（每行一個）" hint="可被玩家調查發現的資訊 — 內容、在何處／如何取得、以及揭示或解鎖什麼。調查類劇本特別依賴線索。">
-              <textarea value={clues} onChange={(e) => setClues(e.target.value)} rows={4}
-                placeholder={"血跡 — 在大廳地板，往北延伸 → 指向圖書館密門\n撕碎的日記 — 圖書館書架，搜查 INT DC 12 → 揭示碎片藏在王座後\n生鏽鑰匙 — 衛兵屍體上 → 開啟金庫"}
-                className={taCls} />
-            </Field>
-            <Field label="威脅與敵人（每行一個）" hint="AI 主持人可部署的敵人和危險。">
-              <textarea value={threats} onChange={(e) => setThreats(e.target.value)} rows={3}
-                placeholder={"暗影幽靈 — 對物理攻擊免疫，遇光逃跑\n腐化神廟衛兵 — STR 14，AGI 10，成對巡邏\n石製魔像 — 玩家發出噪音時甦醒"}
-                className={taCls} />
-            </Field>
-            <Field label="陷阱與危機（每行一個）" hint="AI 主持人可在玩家探索時描述的陷阱。">
-              <textarea value={traps} onChange={(e) => setTraps(e.target.value)} rows={3}
-                placeholder={"壓力板 — 飛鏢射出，AGI DC 14 躲避\n落石板 — 堵塞通道，STR DC 16 支撐\n毒霧 — 每回合損失 1 SAN 直到離開"}
-                className={taCls} />
+              {sourceDocument && (
+                <p className="text-xs text-slate-500 mt-1">目前長度：{sourceDocument.length.toLocaleString()} 字元{sourceDocument.length > 15000 ? "（較長，首次遊玩的 token 成本會偏高）" : ""}</p>
+              )}
             </Field>
             <Field label="通關條件（任一名玩家完成即可）" hint="達成遊戲勝利的目標——每行一項。只要隊伍中任何一人完成即算達成。這是系統判定獲勝的主要依據。">
               <textarea value={winningTargets} onChange={(e) => setWinningTargets(e.target.value)} rows={4}
@@ -412,23 +311,148 @@ export default function NewScenarioPage() {
                 placeholder={"懺悔自己的罪行\n找到屬於自己的逃生符咒"}
                 className={taCls} />
             </Field>
-            <Field label="失敗條件" hint="一旦發生即判定遊戲失敗的事件——每行一項。系統每回合檢查，若觸發則以失敗結局結束遊戲。">
-              <textarea value={failureConditions} onChange={(e) => setFailureConditions(e.target.value)} rows={3}
-                placeholder={"聖石被敵人奪走\n神廟在隊伍逃出前坍塌"}
-                className={taCls} />
-            </Field>
+            <div className="space-y-3">
+              <Field label="失敗條件" hint="兩者同時生效：任一觸發即判定失敗。">
+                <textarea value={failureConditions} onChange={(e) => setFailureConditions(e.target.value)} rows={3}
+                  placeholder={"聖石被敵人奪走\n神廟在隊伍逃出前坍塌"}
+                  className={taCls} />
+              </Field>
+              <Field label="回合上限" hint="達到此回合數時自動判定失敗。留空則不限制。">
+                <input type="number" value={failureTurnLimit} onChange={(e) => setFailureTurnLimit(e.target.value)}
+                  placeholder="例：20" min={1} className={`${inputCls} max-w-[160px]`} />
+              </Field>
+            </div>
+          </div>
+        )}
+
+        {/* ── Tab 3: GM Tools ── */}
+        {activeTab === "gm" && (
+          <div className="flex flex-col gap-6">
+            {gmBanner}
+
+            {/* Locations */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-sm text-slate-400 font-medium">關鍵地點</p>
+                  <p className="text-xs text-slate-500">每個地點包含其線索與物品，AI 主持人在玩家抵達時可參考。</p>
+                </div>
+                <button onClick={() => setLocations((p) => [...p, emptyLocation()])}
+                  className="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-lg">
+                  + 新增地點
+                </button>
+              </div>
+              {locations.length === 0 && (
+                <p className="text-slate-600 text-xs text-center py-4 border border-dashed border-slate-700 rounded-lg">尚未新增地點</p>
+              )}
+              <div className="space-y-3">
+                {locations.map((loc, i) => (
+                  <div key={i} className="bg-slate-900/60 border border-slate-700 rounded-xl p-4 relative">
+                    <button onClick={() => removeLocation(i)}
+                      className="absolute top-3 right-3 text-slate-600 hover:text-red-400 text-lg leading-none">×</button>
+                    <p className="text-xs text-slate-500 mb-3">地點 {i + 1}</p>
+                    <div className="flex flex-col gap-3">
+                      <Field label="地點名稱">
+                        <input value={loc.name} onChange={(e) => updateLocation(i, { name: e.target.value })}
+                          placeholder="例：入口大廳" className={inputCls} />
+                      </Field>
+                      <Field label="線索" hint="此地點可被調查發現的線索或資訊">
+                        <textarea value={loc.clues} onChange={(e) => updateLocation(i, { clues: e.target.value })}
+                          rows={2} placeholder="血跡指向北方密門；牆上有奇怪抓痕" className={taCls} />
+                      </Field>
+                      <Field label="物品" hint="此地點可找到的物品">
+                        <textarea value={loc.items} onChange={(e) => updateLocation(i, { items: e.target.value })}
+                          rows={2} placeholder="生鏽鑰匙、半張地圖" className={taCls} />
+                      </Field>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {locations.length > 0 && (
+                <button onClick={() => setLocations((p) => [...p, emptyLocation()])}
+                  className="mt-2 text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-lg">
+                  + 新增地點
+                </button>
+              )}
+            </div>
+
+            {/* NPCs */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-sm text-slate-400 font-medium">NPC</p>
+                  <p className="text-xs text-slate-500">填入數值後，系統會直接用於傷害計算，不再由 AI 估算。</p>
+                </div>
+                <button onClick={() => setNpcs((p) => [...p, emptyNpc()])}
+                  className="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-lg">
+                  + 新增 NPC
+                </button>
+              </div>
+              {npcs.length === 0 && (
+                <p className="text-slate-600 text-xs text-center py-4 border border-dashed border-slate-700 rounded-lg">尚未新增 NPC</p>
+              )}
+              <div className="space-y-3">
+                {npcs.map((npc, i) => (
+                  <div key={i} className="bg-slate-900/60 border border-slate-700 rounded-xl p-4 relative">
+                    <button onClick={() => removeNpc(i)}
+                      className="absolute top-3 right-3 text-slate-600 hover:text-red-400 text-lg leading-none">×</button>
+                    <p className="text-xs text-slate-500 mb-3">NPC {i + 1}</p>
+                    <div className="flex flex-col gap-3">
+                      <Field label="姓名">
+                        <input value={npc.name} onChange={(e) => updateNpc(i, { name: e.target.value })}
+                          placeholder="例：守衛隊長" className={inputCls} />
+                      </Field>
+                      {/* HP / MP */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="生命 HP *">
+                          <input type="number" value={npc.hp} min={1} max={999}
+                            onChange={(e) => updateNpc(i, { hp: Math.max(1, parseInt(e.target.value) || 1) })}
+                            className={numCls} />
+                        </Field>
+                        <Field label="魔力 MP">
+                          <input type="number" value={npc.mp} min={0} max={99}
+                            onChange={(e) => updateNpc(i, { mp: Math.max(0, parseInt(e.target.value) || 0) })}
+                            className={numCls} />
+                        </Field>
+                      </div>
+                      {/* Core stats */}
+                      <div>
+                        <p className="text-xs text-slate-500 mb-1.5">基礎數值（CoC ×5 體系）</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          {statKeys.map((k) => (
+                            <div key={k}>
+                              <label className="block text-xs text-slate-500 mb-0.5 text-center">{statZh[k]}</label>
+                              <input type="number" value={npc[k] as number} min={1} max={99}
+                                onChange={(e) => updateNpc(i, { [k]: Math.max(1, Math.min(99, parseInt(e.target.value) || 1)) } as Partial<NpcEntry>)}
+                                className={numCls} />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <Field label="性格" hint="個性、說話方式、行為習慣">
+                        <textarea value={npc.personality} onChange={(e) => updateNpc(i, { personality: e.target.value })}
+                          rows={2} placeholder="冷酷、話不多，對外人充滿戒心，但對同伴十分忠誠" className={taCls} />
+                      </Field>
+                      <Field label="目標 / 動機" hint="他們想要什麼？在意什麼？隱藏著什麼秘密？">
+                        <textarea value={npc.goal} onChange={(e) => updateNpc(i, { goal: e.target.value })}
+                          rows={2} placeholder="保護神廟不受外人入侵；暗中尋找失蹤的長老" className={taCls} />
+                      </Field>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {npcs.length > 0 && (
+                <button onClick={() => setNpcs((p) => [...p, emptyNpc()])}
+                  className="mt-2 text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-lg">
+                  + 新增 NPC
+                </button>
+              )}
+            </div>
+
             <Field label="主持人補充備注" hint="其他背景資訊、氛圍說明或 AI 主持人的特殊指示。">
               <textarea value={gmNotes} onChange={(e) => setGmNotes(e.target.value)} rows={4}
-                placeholder="獎勵有創意的解決方案。若玩家提早找到隱藏通道，可直接推進至最終對決。盡可能引用角色背景..."
+                placeholder="獎勵有創意的解決方案。若玩家提早找到隱藏通道，可直接推進至最終對決。"
                 className={taCls} />
-            </Field>
-            <Field label="完整故事原文 / Full Story" hint="AI 主持人遊玩時可參考的完整故事原文（匯入時自動填入）。保留它能讓主持人掌握全貌，而非僅看摘要。可手動編輯或貼上。">
-              <textarea value={sourceDocument} onChange={(e) => setSourceDocument(e.target.value)} rows={6}
-                placeholder="匯入故事文件後，完整原文會顯示於此。也可直接貼上整篇故事。"
-                className={taCls} />
-              {sourceDocument && (
-                <p className="text-xs text-slate-500 mt-1">目前長度：{sourceDocument.length.toLocaleString()} 字元</p>
-              )}
             </Field>
           </div>
         )}

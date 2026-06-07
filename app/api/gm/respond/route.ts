@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateGMResponse, GMAIInput, ScenarioGMContext, LedgerEntry } from "@/lib/ai/gm";
+import { generateGMResponse, GMAIInput, ScenarioGMContext, LedgerEntry, LocationEntry, NpcEntry } from "@/lib/ai/gm";
 import { createClient } from "@/lib/supabase/server";
 import { resolveAction, rollInjuryDamage, rollFirstAidHeal, InjurySeverity } from "@/lib/game/resolution";
 import { refreshStorySummary } from "@/lib/ai/summarize";
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   // Verify caller is a room participant and it's actually their turn
   const { data: room } = await supabase
     .from("rooms")
-    .select("*, scenarios(title, background, objective, rules, opening_scene, scene_flow, secret_rules, locations, npcs, clues, threats, traps, key_items, winning_targets, each_player_targets, failure_conditions, ending_conditions, gm_notes, source_document, language)")
+    .select("*, scenarios(title, background, objective, rules, opening_scene, locations, npcs, winning_targets, each_player_targets, failure_conditions, failure_turn_limit, ending_conditions, gm_notes, source_document, language)")
     .eq("id", roomId)
     .single();
   if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -218,19 +218,20 @@ export async function POST(request: Request) {
   }));
 
   const scenario = (room as any).scenarios;
+  const structuredLocations: LocationEntry[] = Array.isArray(scenario?.locations)
+    ? scenario.locations.filter((l: any) => l && typeof l === "object" && typeof l.name === "string") as LocationEntry[]
+    : [];
+  const structuredNpcs: NpcEntry[] = Array.isArray(scenario?.npcs)
+    ? scenario.npcs.filter((n: any) => n && typeof n === "object" && typeof n.name === "string" && typeof n.hp === "number") as NpcEntry[]
+    : [];
   const gmContext: ScenarioGMContext | null = scenario ? {
     openingScene: scenario.opening_scene ?? null,
-    sceneFlow: scenario.scene_flow ?? null,
-    secretRules: scenario.secret_rules ?? null,
-    locations: Array.isArray(scenario.locations) ? scenario.locations : [],
-    npcs: Array.isArray(scenario.npcs) ? scenario.npcs : [],
-    clues: Array.isArray(scenario.clues) ? scenario.clues : [],
-    threats: Array.isArray(scenario.threats) ? scenario.threats : [],
-    traps: Array.isArray(scenario.traps) ? scenario.traps : [],
-    keyItems: Array.isArray(scenario.key_items) ? scenario.key_items : [],
+    locations: structuredLocations,
+    npcs: structuredNpcs,
     winningTargets: scenario.winning_targets ?? null,
     eachPlayerTargets: scenario.each_player_targets ?? null,
     failureConditions: scenario.failure_conditions ?? null,
+    failureTurnLimit: scenario.failure_turn_limit ?? null,
     endingConditions: scenario.ending_conditions ?? null,
     gmNotes: scenario.gm_notes ?? null,
     sourceDocument: scenario.source_document ?? null,
@@ -355,7 +356,8 @@ export async function POST(request: Request) {
           (room.npc_states && typeof room.npc_states === "object") ? { ...room.npc_states } : {};
         let npc = npcStates[injury.target];
         if (!npc) {
-          const maxHp = Math.max(1, Math.min(30, Math.floor(injury.npc_max_hp ?? 10)));
+          const declaredNpc = structuredNpcs.find((n: NpcEntry) => n.name === injury.target);
+          const maxHp = declaredNpc ? declaredNpc.hp : Math.max(1, Math.min(30, Math.floor(injury.npc_max_hp ?? 10)));
           npc = { hp: maxHp, max_hp: maxHp, alive: true };
         }
         if (npc.alive) {
@@ -437,6 +439,32 @@ export async function POST(request: Request) {
     }
 
     // === ENDING DETECTION ===
+    // Check 0: failure turn limit reached → forced failure ending.
+    if (scenario?.failure_turn_limit && room.current_round >= scenario.failure_turn_limit) {
+      const isZhTL = scenario?.language === "zh-TW" || scenario?.language === "zh-CN";
+      const tplTitle = isZhTL ? "回合上限已達" : "Turn Limit Reached";
+      const tplSummary = isZhTL
+        ? `冒險已達回合上限（第 ${scenario.failure_turn_limit} 回合），以失敗告終。`
+        : `The adventure reached its turn limit (round ${scenario.failure_turn_limit}) and ends in defeat.`;
+      await supabase.from("story_logs").insert({
+        room_id: roomId,
+        round_number: room.current_round,
+        entry_type: "system",
+        content: `⚑ THE END — ${tplTitle}`,
+      });
+      await supabase.from("rooms").update({
+        status: "completed",
+        ending_type: "failure",
+        ending_title: tplTitle,
+        ending_summary: tplSummary,
+      }).eq("id", roomId);
+      return NextResponse.json({
+        response: gmResponse.narration,
+        gameEnded: true,
+        ending: { type: "failure", title: tplTitle, summary: tplSummary },
+      });
+    }
+
     // Check 1: all party members dead → forced failure ending (pure code).
     const allDead = sortedByDex.every((c: any) => c.hp <= 0 || c.san <= 0);
 

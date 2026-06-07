@@ -1,6 +1,8 @@
 // Server-side only. Analyzes a story document and returns structured scenario
 // fields to PRE-FILL the creation form. It never saves or publishes anything.
 
+import type { LocationEntry, NpcEntry } from "@/lib/ai/gm";
+
 export const IMPORT_GENRES = ["Fantasy", "Cyberpunk", "Horror", "Sci-Fi", "Mystery", "Historical", "Other"];
 export const IMPORT_DIFFICULTIES = ["Story", "Normal", "Hard", "Nightmare"];
 
@@ -15,23 +17,16 @@ export interface ImportedScenario {
   estimated_play_time: number | null;
   tags: string[];
   opening_scene: string | null;
-  background: string | null;
-  /** Act/scene progression + trigger/branch logic — the spine the GM follows. */
-  scene_flow: string | null;
-  locations: string[];
-  npcs: string[];
-  /** Discoverable information: what it is, where/how found, what it unlocks. */
-  clues: string[];
-  key_items: string[];
-  secret_rules: string | null;
-  threats: string[];
-  traps: string[];
+  locations: LocationEntry[];
+  npcs: NpcEntry[];
   /** Explicit victory conditions any ONE player can complete — numbered list. */
   winning_targets: string | null;
   /** Goals EVERY surviving player must complete individually — numbered list. */
   each_player_targets: string | null;
   /** Events that should END the game in failure — numbered list. */
   failure_conditions: string | null;
+  /** Integer round number after which game auto-fails, or null. */
+  failure_turn_limit: number | null;
   ending_conditions: string | null;
   gm_notes: string | null;
   /** BCP-47 language tag auto-detected from the source document. */
@@ -81,6 +76,52 @@ function asStringArray(v: unknown): string[] {
     .slice(0, 25);
 }
 
+function asInt(v: unknown, def: number): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.round(n) : def;
+}
+
+function normalizeLocations(v: unknown): LocationEntry[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((x) => x && typeof x === "object" && typeof x.name === "string" && x.name.trim())
+    .map((x: any) => ({
+      name: asString(x.name),
+      clues: asString(x.clues),
+      items: asString(x.items),
+    }))
+    .slice(0, 15);
+}
+
+function normalizeNpcs(v: unknown): NpcEntry[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((x) => x && typeof x === "object" && typeof x.name === "string" && x.name.trim())
+    .map((x: any) => ({
+      name: asString(x.name),
+      hp: asInt(x.hp, 10),
+      mp: asInt(x.mp, 5),
+      str: asInt(x.str, 50),
+      con: asInt(x.con, 50),
+      siz: asInt(x.siz, 50),
+      dex: asInt(x.dex, 50),
+      app: asInt(x.app, 50),
+      int: asInt(x.int, 50),
+      pow: asInt(x.pow, 50),
+      edu: asInt(x.edu, 50),
+      luck: asInt(x.luck, 50),
+      personality: asString(x.personality),
+      goal: asString(x.goal),
+    }))
+    .slice(0, 20);
+}
+
+function normalizeFailureTurnLimit(v: unknown): number | null {
+  if (v == null) return null;
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 /** Coerce/clamp the AI output into a valid, editable ImportedScenario. */
 export function normalizeImported(raw: any): ImportedScenario {
   const genreRaw = asString(raw?.genre);
@@ -111,18 +152,12 @@ export function normalizeImported(raw: any): ImportedScenario {
     estimated_play_time: ept,
     tags,
     opening_scene: asNullableString(raw?.opening_scene),
-    background: asNullableString(raw?.background),
-    scene_flow: asNullableString(raw?.scene_flow),
-    locations: asStringArray(raw?.locations),
-    npcs: asStringArray(raw?.npcs),
-    clues: asStringArray(raw?.clues),
-    key_items: asStringArray(raw?.key_items),
-    secret_rules: asNullableString(raw?.secret_rules),
-    threats: asStringArray(raw?.threats),
-    traps: asStringArray(raw?.traps),
+    locations: normalizeLocations(raw?.locations),
+    npcs: normalizeNpcs(raw?.npcs),
     winning_targets: asNullableString(raw?.winning_targets),
     each_player_targets: asNullableString(raw?.each_player_targets),
     failure_conditions: asNullableString(raw?.failure_conditions),
+    failure_turn_limit: normalizeFailureTurnLimit(raw?.failure_turn_limit),
     ending_conditions: asNullableString(raw?.ending_conditions),
     gm_notes: asNullableString(raw?.gm_notes),
     language: normalizeLanguage(raw?.language),
@@ -138,19 +173,14 @@ OUTPUT FORMAT: Return ONLY a raw JSON object. No markdown fences, no code blocks
 LANGUAGE: Detect the document's language and write ALL text fields in that same language (do not translate). Set "language" to "zh-TW" for Traditional Chinese, "zh-CN" for Simplified Chinese, "en" for English, "ja" for Japanese, "ko" for Korean.
 
 DEPTH REQUIREMENTS — the most important part. For these fields, PRESERVE the source's detail instead of summarizing it away:
-- scene_flow: the adventure's scenes/acts IN ORDER. For each major scene or beat, capture what the players encounter, what they must do there, what EVENT or CONDITION triggers the next scene, and any branching/optional paths. This is the spine the GM follows — multiple paragraphs are expected.
-- npcs: ONE rich entry per important NPC, each including name, role, personality, their GOAL/motivation, what they KNOW, how they REACT to the players, and any secret they hide or information they hand over.
-- clues: discoverable information. For each clue, state what it is, WHERE / HOW it is found, and what it reveals or unlocks. Investigation-style modules depend on this — extract every clue you can find.
-- traps: for each, give the trigger, how it can be noticed/detected, its effect/consequence, and how to avoid or disarm it.
-- threats: for each enemy/danger, give its behavior, abilities or stats, and weaknesses.
-- locations: for each, give a vivid description, what is found there, what happens there, and how it connects to other locations.
-- key_items: for each, give where it is found, what it does, and what it unlocks.
+- locations: array of objects {"name": "...", "clues": "...", "items": "..."}. For each location give a vivid description in the name field, what clues can be discovered there in clues, and what items can be found in items.
+- npcs: array of objects {"name": "...", "hp": 10, "mp": 5, "str": 50, "con": 50, "siz": 50, "dex": 50, "app": 50, "int": 50, "pow": 50, "edu": 50, "luck": 50, "personality": "...", "goal": "..."}. ONE rich entry per important NPC. Set stats based on the character's described capabilities — default all stats to 50 if not given. personality: their role, how they speak/behave. goal: their motivation, what they want, what secret they hide.
 - winning_targets: VICTORY goals that any ONE player completing satisfies for the whole party, as a numbered list (e.g. "1. 取回聖石並逃出神廟\n2. 消滅守門者"). Do NOT include failure conditions here. null if none.
 - each_player_targets: victory goals that EVERY surviving player must complete individually (signalled by "each player", "everyone must", "both must"), as a numbered list. null if none.
 - failure_conditions: events that should END the adventure in DEFEAT (e.g. "聖石被敵人奪走", "神廟在隊伍逃出前坍塌"), as a numbered list. null if none.
+- failure_turn_limit: if the story specifies a time limit in rounds/turns (e.g. "players have 20 rounds"), extract the integer here; otherwise null.
 - ending_conditions: any remaining ending nuance/branch notes not captured above, or null.
-- secret_rules: pacing, tone, and special mechanics the GM must enforce.
-- gm_notes: anything else needed to run it well (foreshadowing, optional content, scaling, adjudication tips).
+- gm_notes: anything else needed to run it well (foreshadowing, optional content, scaling, adjudication tips, secret mechanics, pacing).
 
 Required JSON keys:
 - language: BCP-47 tag (zh-TW, zh-CN, en, ja, ko)
@@ -163,18 +193,12 @@ Required JSON keys:
 - estimated_play_time: integer minutes or null
 - tags: array of 3-6 short strings
 - opening_scene: vivid opening narration or null
-- background: world lore / history / setting or null
-- scene_flow: detailed in-order scene progression with triggers, or null
-- locations: array of detailed location entries
-- npcs: array of detailed NPC entries
-- clues: array of detailed clue entries
-- key_items: array of detailed item entries
-- secret_rules: GM pacing / tone / mechanics or null
-- threats: array of detailed threat entries
-- traps: array of detailed trap entries
+- locations: array of location objects {name, clues, items}
+- npcs: array of NPC objects {name, hp, mp, str, con, siz, dex, app, int, pow, edu, luck, personality, goal}
 - winning_targets: numbered list of party victory goals (any one player can complete), or null
 - each_player_targets: numbered list of goals every surviving player must do individually, or null
 - failure_conditions: numbered list of events that end the game in defeat, or null
+- failure_turn_limit: integer round limit that triggers auto-failure, or null
 - ending_conditions: remaining ending notes, or null
 - gm_notes: extra GM guidance or null
 

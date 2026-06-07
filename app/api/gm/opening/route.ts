@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { buildPartyRoster, buildLanguageInstruction, ROSTER_CONSTRAINT, ScenarioGMContext } from "@/lib/ai/gm";
+import { buildPartyRoster, buildLanguageInstruction, ROSTER_CONSTRAINT, ScenarioGMContext, LocationEntry, NpcEntry } from "@/lib/ai/gm";
 
 export interface OpeningScene {
   scene: string;
@@ -17,17 +17,25 @@ type PartyMember = {
 function buildGMContextBlock(ctx: ScenarioGMContext): string {
   const parts: string[] = [];
   if (ctx.openingScene) parts.push(`Opening Scene to narrate:\n${ctx.openingScene}`);
-  if (ctx.sceneFlow) parts.push(`Scene Flow & Progression (the adventure's spine):\n${ctx.sceneFlow}`);
-  if (ctx.locations.length) parts.push(`Key Locations:\n${ctx.locations.map((l) => `  - ${l}`).join("\n")}`);
-  if (ctx.npcs.length) parts.push(`NPCs:\n${ctx.npcs.map((n) => `  - ${n}`).join("\n")}`);
-  if (ctx.clues.length) parts.push(`Clues:\n${ctx.clues.map((c) => `  - ${c}`).join("\n")}`);
-  if (ctx.threats.length) parts.push(`Threats & Enemies:\n${ctx.threats.map((t) => `  - ${t}`).join("\n")}`);
-  if (ctx.traps.length) parts.push(`Traps & Hazards:\n${ctx.traps.map((t) => `  - ${t}`).join("\n")}`);
-  if (ctx.keyItems.length) parts.push(`Key Items:\n${ctx.keyItems.map((i) => `  - ${i}`).join("\n")}`);
-  if (ctx.secretRules) parts.push(`GM Rules & Pacing:\n${ctx.secretRules}`);
+  if (ctx.locations.length) {
+    const locLines = ctx.locations.map((l) => {
+      let s = `  - ${l.name}`;
+      if (l.clues) s += `\n    Clues: ${l.clues}`;
+      if (l.items) s += `\n    Items: ${l.items}`;
+      return s;
+    }).join("\n");
+    parts.push(`Key Locations:\n${locLines}`);
+  }
+  if (ctx.npcs.length) {
+    const npcLines = ctx.npcs.map((n) => {
+      return `  - ${n.name} | HP ${n.hp} MP ${n.mp} | STR ${n.str} CON ${n.con} SIZ ${n.siz} DEX ${n.dex} APP ${n.app} INT ${n.int} POW ${n.pow} EDU ${n.edu} LUCK ${n.luck}\n    Personality: ${n.personality}\n    Goal: ${n.goal}`;
+    }).join("\n");
+    parts.push(`NPCs:\n${npcLines}`);
+  }
   if (ctx.winningTargets) parts.push(`Winning Targets — any ONE player completing each satisfies it:\n${ctx.winningTargets}`);
   if (ctx.eachPlayerTargets) parts.push(`Per-Player Targets — EVERY surviving player must personally complete each:\n${ctx.eachPlayerTargets}`);
   if (ctx.failureConditions) parts.push(`Failure Conditions — if any occurs, the adventure ends in defeat:\n${ctx.failureConditions}`);
+  if (ctx.failureTurnLimit != null) parts.push(`Failure Turn Limit: Game ends in defeat if round reaches ${ctx.failureTurnLimit}`);
   if (ctx.endingConditions) parts.push(`Additional Ending Notes:\n${ctx.endingConditions}`);
   if (ctx.gmNotes) parts.push(`Additional GM Notes:\n${ctx.gmNotes}`);
   if (ctx.sourceDocument) {
@@ -41,7 +49,6 @@ function buildGMContextBlock(ctx: ScenarioGMContext): string {
 
 async function generateOpening(
   scenarioTitle: string,
-  background: string | null,
   objective: string | null,
   rules: string | null,
   gmContext: ScenarioGMContext | null,
@@ -64,8 +71,7 @@ async function generateOpening(
     : `Write the opening scene. Describe the environment vividly in 6-8 sentences, rich in atmosphere and sensory detail, placing all party members in the world.`;
 
   const systemPrompt = `You are an AI Game Master starting a multiplayer TRPG adventure called "${scenarioTitle}".
-${langBlock}${background ? `Background: ${background}` : ""}
-${objective ? `Objective: ${objective}` : ""}
+${langBlock}${objective ? `Objective: ${objective}` : ""}
 ${rules ? `Special Rules: ${rules}` : ""}
 ${gmCtxBlock}
 
@@ -90,7 +96,7 @@ Respond ONLY with valid JSON in this exact format (no markdown, no extra text):
 
   if (!apiKey) {
     return {
-      scene: `The adventure begins. ${background ?? `The party stands at the threshold of their quest — ${scenarioTitle}.`} The air is thick with anticipation.`,
+      scene: `The adventure begins. The party stands at the threshold of their quest — ${scenarioTitle}. The air is thick with anticipation.`,
       choices: [
         `${firstCharName} looks around carefully and assesses the surroundings`,
         `${firstCharName} moves forward cautiously`,
@@ -142,7 +148,7 @@ Respond ONLY with valid JSON in this exact format (no markdown, no extra text):
     throw new Error("Invalid shape");
   } catch {
     return {
-      scene: `The adventure begins. ${background ?? ""} The world feels alive with danger and possibility.`.trim(),
+      scene: `The adventure begins. The world feels alive with danger and possibility.`,
       choices: [
         `${firstCharName} looks around carefully, assessing the surroundings`,
         `${firstCharName} moves forward cautiously, staying alert`,
@@ -161,7 +167,7 @@ export async function POST(request: Request) {
 
   const { data: room } = await supabase
     .from("rooms")
-    .select("*, scenarios(title, background, objective, rules, opening_scene, scene_flow, secret_rules, locations, npcs, clues, threats, traps, key_items, winning_targets, each_player_targets, failure_conditions, ending_conditions, gm_notes, source_document, language)")
+    .select("*, scenarios(title, objective, rules, opening_scene, locations, npcs, winning_targets, each_player_targets, failure_conditions, failure_turn_limit, ending_conditions, gm_notes, source_document, language)")
     .eq("id", roomId)
     .single();
   if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -191,19 +197,20 @@ export async function POST(request: Request) {
   }));
 
   const scenario = (room as any).scenarios;
+  const structuredLocations: LocationEntry[] = Array.isArray(scenario?.locations)
+    ? scenario.locations.filter((l: any) => l && typeof l === "object" && typeof l.name === "string") as LocationEntry[]
+    : [];
+  const structuredNpcs: NpcEntry[] = Array.isArray(scenario?.npcs)
+    ? scenario.npcs.filter((n: any) => n && typeof n === "object" && typeof n.name === "string" && typeof n.hp === "number") as NpcEntry[]
+    : [];
   const gmContext: ScenarioGMContext | null = scenario ? {
     openingScene: scenario.opening_scene ?? null,
-    sceneFlow: scenario.scene_flow ?? null,
-    secretRules: scenario.secret_rules ?? null,
-    locations: Array.isArray(scenario.locations) ? scenario.locations : [],
-    npcs: Array.isArray(scenario.npcs) ? scenario.npcs : [],
-    clues: Array.isArray(scenario.clues) ? scenario.clues : [],
-    threats: Array.isArray(scenario.threats) ? scenario.threats : [],
-    traps: Array.isArray(scenario.traps) ? scenario.traps : [],
-    keyItems: Array.isArray(scenario.key_items) ? scenario.key_items : [],
+    locations: structuredLocations,
+    npcs: structuredNpcs,
     winningTargets: scenario.winning_targets ?? null,
     eachPlayerTargets: scenario.each_player_targets ?? null,
     failureConditions: scenario.failure_conditions ?? null,
+    failureTurnLimit: scenario.failure_turn_limit ?? null,
     endingConditions: scenario.ending_conditions ?? null,
     gmNotes: scenario.gm_notes ?? null,
     sourceDocument: scenario.source_document ?? null,
@@ -211,7 +218,6 @@ export async function POST(request: Request) {
 
   const opening = await generateOpening(
     scenario?.title ?? "Unknown Scenario",
-    scenario?.background ?? null,
     scenario?.objective ?? null,
     scenario?.rules ?? null,
     gmContext,
