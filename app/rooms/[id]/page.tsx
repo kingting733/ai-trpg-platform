@@ -66,6 +66,22 @@ interface RoomPlayer {
 }
 
 // Renders GM text with paragraph breaks and **bold** inline formatting
+function StatBar({ label, cur, max, pct, color }: {
+  label: string; cur: number; max: number; pct: number; color: string;
+}) {
+  return (
+    <div>
+      <div className="flex justify-between items-baseline mb-0.5">
+        <span className="text-slate-400 text-xs">{label}</span>
+        <span className="text-slate-300 text-xs font-medium tabular-nums">{cur}<span className="text-slate-600">/{max}</span></span>
+      </div>
+      <div className="h-1.5 w-full bg-slate-900/70 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
 function GmText({ content }: { content: string }) {
   const paragraphs = content.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
   if (paragraphs.length === 0) return null;
@@ -97,6 +113,12 @@ const SKILL_ZH: Record<string, string> = {
   psychology: "心理學", persuade: "說服", fast_talk: "話術",
   charm: "魅惑", intimidate: "恐嚇", dodge: "閃避",
   first_aid: "急救", stealth: "潛行", lockpick: "開鎖", drive_auto: "駕駛汽車",
+};
+
+const STAT_ZH: Record<string, string> = {
+  hp: "生命", san: "理智", mp: "魔力",
+  str: "力量", con: "體質", siz: "體型", dex: "敏捷", app: "外貌",
+  int: "智力", pow: "意志", edu: "教育", luck: "幸運",
 };
 
 export default function RoomPlayPage({ params }: { params: { id: string } }) {
@@ -464,18 +486,28 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                 {down && <span className="text-[10px] bg-red-900/60 text-red-300 border border-red-800 px-1.5 py-0.5 rounded shrink-0">陣亡</span>}
                 {!down && insane && <span className="text-[10px] bg-fuchsia-900/60 text-fuchsia-300 border border-fuchsia-800 px-1.5 py-0.5 rounded shrink-0">發瘋</span>}
               </div>
-              <div className="grid grid-cols-2 gap-1 mb-1">
-                {(["hp","san","mp"] as const).map((k) => (
-                  <div key={k} className="flex justify-between bg-slate-900/50 rounded px-2 py-0.5">
-                    <span className="text-slate-500 text-xs">{k.toUpperCase()}</span>
-                    <span className={`text-xs font-medium ${k === "hp" && c.hp <= 3 ? "text-red-300" : k === "san" && c.san <= 15 ? "text-amber-300" : "text-slate-300"}`}>{c[k]}</span>
+              {(() => {
+                const maxHp = Math.max(1, Math.floor((c.con + c.siz) / 10));
+                const maxSan = Math.max(1, c.pow);
+                const hpPct = Math.min(100, Math.max(0, (c.hp / maxHp) * 100));
+                const sanPct = Math.min(100, Math.max(0, (c.san / maxSan) * 100));
+                return (
+                  <div className="space-y-1.5 mb-2">
+                    <StatBar label="生命" cur={c.hp} max={maxHp} pct={hpPct}
+                      color={c.hp <= 3 ? "bg-red-500" : "bg-emerald-500"} />
+                    <StatBar label="理智" cur={c.san} max={maxSan} pct={sanPct}
+                      color={c.san <= 15 ? "bg-amber-500" : "bg-violet-500"} />
+                    <div className="flex justify-between bg-slate-900/50 rounded px-2 py-0.5">
+                      <span className="text-slate-500 text-xs">魔力</span>
+                      <span className="text-slate-300 text-xs font-medium">{c.mp}</span>
+                    </div>
                   </div>
-                ))}
-              </div>
+                );
+              })()}
               <div className="grid grid-cols-2 gap-1">
                 {(["str","con","siz","dex","app","int","pow","edu","luck"] as const).map((k) => (
                   <div key={k} className="flex justify-between bg-slate-900/50 rounded px-2 py-0.5">
-                    <span className="text-slate-500 text-xs">{k.toUpperCase()}</span>
+                    <span className="text-slate-500 text-xs">{STAT_ZH[k]}</span>
                     <span className="text-slate-300 text-xs font-medium">{c[k]}</span>
                   </div>
                 ))}
@@ -641,7 +673,7 @@ function DiceResult({ roll }: { roll: RollResult }) {
       {roll.d100_roll != null && (
         <div className={`rounded-lg border px-3 py-2 text-xs ${style?.cls ?? "border-slate-700 bg-slate-900/40"}`}>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-bold uppercase tracking-wider">🎲 {roll.stat_used?.toUpperCase()}</span>
+            <span className="font-bold tracking-wider">🎲 {STAT_ZH[roll.stat_used ?? ""] ?? roll.stat_used?.toUpperCase()}</span>
             <span className="opacity-90">
               d100 = <b>{roll.d100_roll}</b> vs {roll.target}%
             </span>
@@ -650,8 +682,8 @@ function DiceResult({ roll }: { roll: RollResult }) {
           {(roll.hp_change !== 0 || roll.san_change !== 0 || roll.consequence_summary) && (
             <div className="mt-1 opacity-90">
               {roll.consequence_summary}
-              {roll.hp_change !== 0 && <span className="ml-1 font-semibold">HP {roll.hp_change}</span>}
-              {roll.san_change !== 0 && <span className="ml-1 font-semibold">SAN {roll.san_change}</span>}
+              {roll.hp_change !== 0 && <span className="ml-1 font-semibold">生命 {roll.hp_change}</span>}
+              {roll.san_change !== 0 && <span className="ml-1 font-semibold">理智 {roll.san_change}</span>}
             </div>
           )}
         </div>
@@ -663,11 +695,11 @@ function DiceResult({ roll }: { roll: RollResult }) {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-bold uppercase tracking-wider">🧠 理智檢定</span>
             <span className="opacity-80">{sc.severity_label}</span>
-            <span className="opacity-90">d100 = <b>{sc.roll}</b> vs POW {sc.pow}</span>
+            <span className="opacity-90">d100 = <b>{sc.roll}</b> vs 意志 {sc.pow}</span>
             <span className="font-bold">→ {sc.success ? "撐住" : "失守"}</span>
           </div>
           {sc.san_loss > 0 && (
-            <div className="mt-1 font-semibold">SAN −{sc.san_loss}</div>
+            <div className="mt-1 font-semibold">理智 −{sc.san_loss}</div>
           )}
         </div>
       )}
