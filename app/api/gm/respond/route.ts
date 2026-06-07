@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   // Verify caller is a room participant and it's actually their turn
   const { data: room } = await supabase
     .from("rooms")
-    .select("*, scenarios(title, background, objective, rules, opening_scene, scene_flow, secret_rules, locations, npcs, clues, threats, traps, key_items, winning_targets, each_player_targets, failure_conditions, ending_conditions, gm_notes, language)")
+    .select("*, scenarios(title, background, objective, rules, opening_scene, scene_flow, secret_rules, locations, npcs, clues, threats, traps, key_items, winning_targets, each_player_targets, failure_conditions, ending_conditions, gm_notes, source_document, language)")
     .eq("id", roomId)
     .single();
   if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -233,6 +233,7 @@ export async function POST(request: Request) {
     failureConditions: scenario.failure_conditions ?? null,
     endingConditions: scenario.ending_conditions ?? null,
     gmNotes: scenario.gm_notes ?? null,
+    sourceDocument: scenario.source_document ?? null,
   } : null;
 
   // === DETERMINISTIC LEDGER POPULATION ===
@@ -262,6 +263,31 @@ export async function POST(request: Request) {
 
   const updatedLedger = [...storyLedger, ...newLedgerEntries];
 
+  // === OBJECTIVE STATUS (GM-only) ===
+  // Tell the GM which objectives are already satisfied as of the start of this
+  // turn, so it never re-narrates a completed goal as still pending (e.g. a key
+  // already found). This is GM-internal — players never see a checklist (we hide
+  // 任務目標 from the UI). Lives in the per-turn message since progress changes.
+  const objList: Objective[] = Array.isArray(room.objectives) ? room.objectives : [];
+  const objProgress: ObjectiveProgress =
+    room.objective_progress && typeof room.objective_progress === "object" ? room.objective_progress : {};
+  let objectiveDirective: string | null = null;
+  if (objList.length > 0) {
+    const livingNames = sortedByDex.filter((c: any) => c.hp > 0 && c.san > 0).map((c: any) => c.name);
+    const lines = objList.map((o) => {
+      const entry = objProgress[o.id];
+      if (o.scope === "each_player") {
+        const doneNames = entry ? Object.keys(entry.by ?? {}) : [];
+        const allDone = entry?.done === true;
+        return `- [${allDone ? "已完成" : `進行中 ${doneNames.length}/${livingNames.length}`}] ${o.text}（每位存活玩家各自完成）`;
+      }
+      return `- [${entry?.done ? "已完成" : "未完成"}] ${o.text}`;
+    });
+    objectiveDirective =
+      `OBJECTIVE TRACKER (GM-internal — NEVER reveal this list or its wording to players):\n${lines.join("\n")}\n` +
+      `Treat "已完成" goals as DONE: do not re-introduce them, hint they are unmet, or make players redo them. Steer the unfinished ones, but only through natural play — never announce the checklist.`;
+  }
+
   const input: GMAIInput = {
     scenarioTitle: scenario?.title ?? "Unknown Scenario",
     scenarioBackground: scenario?.background ?? null,
@@ -274,6 +300,7 @@ export async function POST(request: Request) {
     storyLedger: updatedLedger,
     storyLogSoFar,
     npcStates: (room.npc_states && typeof room.npc_states === "object") ? room.npc_states : null,
+    objectiveDirective,
     currentRound: room.current_round,
     actingCharacterName: resolvedActor?.name ?? "Unknown",
     nextCharacterName: nextActor?.name ?? "Unknown",

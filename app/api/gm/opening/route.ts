@@ -30,7 +30,11 @@ function buildGMContextBlock(ctx: ScenarioGMContext): string {
   if (ctx.failureConditions) parts.push(`Failure Conditions — if any occurs, the adventure ends in defeat:\n${ctx.failureConditions}`);
   if (ctx.endingConditions) parts.push(`Additional Ending Notes:\n${ctx.endingConditions}`);
   if (ctx.gmNotes) parts.push(`Additional GM Notes:\n${ctx.gmNotes}`);
-  // source_document intentionally omitted — curated structured fields capture all needed knowledge.
+  if (ctx.sourceDocument) {
+    parts.push(
+      `FULL STORY — ORIGINAL MODULE TEXT (canonical; open the adventure faithfully to it, but reveal only what the opening scene should show):\n${ctx.sourceDocument}`
+    );
+  }
   if (!parts.length) return "";
   return `\nGM WORLD CONTEXT (never share this with players directly):\n${parts.join("\n\n")}`;
 }
@@ -157,7 +161,7 @@ export async function POST(request: Request) {
 
   const { data: room } = await supabase
     .from("rooms")
-    .select("*, scenarios(title, background, objective, rules, opening_scene, scene_flow, secret_rules, locations, npcs, clues, threats, traps, key_items, winning_targets, each_player_targets, failure_conditions, ending_conditions, gm_notes, language)")
+    .select("*, scenarios(title, background, objective, rules, opening_scene, scene_flow, secret_rules, locations, npcs, clues, threats, traps, key_items, winning_targets, each_player_targets, failure_conditions, ending_conditions, gm_notes, source_document, language)")
     .eq("id", roomId)
     .single();
   if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -202,6 +206,7 @@ export async function POST(request: Request) {
     failureConditions: scenario.failure_conditions ?? null,
     endingConditions: scenario.ending_conditions ?? null,
     gmNotes: scenario.gm_notes ?? null,
+    sourceDocument: scenario.source_document ?? null,
   } : null;
 
   const opening = await generateOpening(
