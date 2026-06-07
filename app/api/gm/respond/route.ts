@@ -273,6 +273,7 @@ export async function POST(request: Request) {
     storySummary,
     storyLedger: updatedLedger,
     storyLogSoFar,
+    npcStates: (room.npc_states && typeof room.npc_states === "object") ? room.npc_states : null,
     currentRound: room.current_round,
     actingCharacterName: resolvedActor?.name ?? "Unknown",
     nextCharacterName: nextActor?.name ?? "Unknown",
