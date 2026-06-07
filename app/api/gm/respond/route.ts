@@ -181,13 +181,15 @@ export async function POST(request: Request) {
     });
   }
 
-  // Fetch last 3 turns for immediate continuity — older history lives in summary+ledger
+  // Fetch last N turns for immediate continuity — older history lives in summary+ledger.
+  // Must cover at least one full round so the GM always sees every player's last action
+  // regardless of party size (a 4-player round has 4 consecutive turns).
   const { data: logs } = await supabase
     .from("story_logs")
     .select("entry_type, content, characters(name)")
     .eq("room_id", roomId)
     .order("created_at", { ascending: false })
-    .limit(6);
+    .limit(8);
 
   const storyLogSoFar = (logs ?? [])
     .reverse()

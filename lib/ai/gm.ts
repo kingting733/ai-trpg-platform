@@ -298,12 +298,12 @@ export const LEDGER_TURN_LIMIT = 12;
  * Memory architecture keeps this message small AND bounded:
  *   - storySummary: 2 sentences covering everything older than the last few turns
  *   - storyLedger: ONLY the last LEDGER_TURN_LIMIT key facts (rest is in summary)
- *   - storyLogSoFar: only the last 3 raw turns for immediate continuity
+ *   - storyLogSoFar: last 4 raw turns (covers one full round for up to 4 players)
  */
 export function buildTurnMessage(input: GMAIInput): string {
   const liveStatus = buildLiveStatus(input.characters, input.actingCharacterName);
   const diceBlock = buildDiceDirective(input);
-  const recentLog = input.storyLogSoFar.slice(-3).join("\n");
+  const recentLog = input.storyLogSoFar.slice(-4).join("\n");
 
   const summaryBlock = input.storySummary
     ? `STORY SO FAR:\n${input.storySummary}\n`
