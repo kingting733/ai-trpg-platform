@@ -25,7 +25,7 @@ export async function Navbar() {
           ⚔ TRPG Platform
         </Link>
         <div className="flex items-center gap-4 text-sm">
-          <Link href="/scenarios" className="text-slate-300 hover:text-white">劇本</Link>
+          <Link href="/" className="text-slate-300 hover:text-white">劇本</Link>
           {user && (
             <Link href="/characters" className="text-slate-300 hover:text-white">角色卡</Link>
           )}
