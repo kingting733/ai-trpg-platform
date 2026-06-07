@@ -14,6 +14,7 @@ interface CharacterCard {
   rarity: "Common" | "Rare" | "Epic" | "Legendary";
   roll_details: RevealCard["roll_details"];
   skills: Record<string, number> | null;
+  cleared_scenarios: string[] | null;
   created_at: string;
 }
 
@@ -58,6 +59,7 @@ export default function CharactersPage() {
   const [error, setError] = useState<string | null>(null);
   const [revealed, setRevealed] = useState<CharacterCard | null>(null);
   const [rolling, setRolling] = useState<CharacterCard | null>(null);
+  const [scenarioTitles, setScenarioTitles] = useState<Record<string, string>>({});
 
   async function loadCards() {
     const supabase = createClient();
@@ -68,8 +70,21 @@ export default function CharactersPage() {
       .select("*")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
-    setCards((data as CharacterCard[]) ?? []);
+    const list = (data as CharacterCard[]) ?? [];
+    setCards(list);
     setLoading(false);
+
+    // Resolve titles for every cleared scenario referenced across the collection.
+    const ids = Array.from(new Set(list.flatMap((c) => c.cleared_scenarios ?? [])));
+    if (ids.length > 0) {
+      const { data: scen } = await supabase
+        .from("scenarios")
+        .select("id, title")
+        .in("id", ids);
+      const map: Record<string, string> = {};
+      for (const s of scen ?? []) map[s.id] = s.title;
+      setScenarioTitles(map);
+    }
   }
 
   useEffect(() => { loadCards(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -146,7 +161,7 @@ export default function CharactersPage() {
         <div className="mb-8">
           <p className="text-xs text-purple-400 uppercase tracking-wider mb-2">獲得新角色卡！</p>
           <div className="max-w-xs">
-            <CardView card={revealed} highlight onNameSaved={handleNameSaved} onDeleted={handleDeleted} />
+            <CardView card={revealed} highlight scenarioTitles={scenarioTitles} onNameSaved={handleNameSaved} onDeleted={handleDeleted} />
           </div>
         </div>
       )}
@@ -164,7 +179,7 @@ export default function CharactersPage() {
           <p className="text-sm text-slate-500 mb-3">共 {cards.length} 張角色卡</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {cards.map((card) => (
-              <CardView key={card.id} card={card} onNameSaved={handleNameSaved} onDeleted={handleDeleted} />
+              <CardView key={card.id} card={card} scenarioTitles={scenarioTitles} onNameSaved={handleNameSaved} onDeleted={handleDeleted} />
             ))}
           </div>
         </>
@@ -176,11 +191,13 @@ export default function CharactersPage() {
 function CardView({
   card,
   highlight,
+  scenarioTitles,
   onNameSaved,
   onDeleted,
 }: {
   card: CharacterCard;
   highlight?: boolean;
+  scenarioTitles?: Record<string, string>;
   onNameSaved?: (id: string, newName: string) => void;
   onDeleted?: (id: string) => void;
 }) {
@@ -334,6 +351,22 @@ function CardView({
           ) : (
             <p className="text-slate-500 text-xs text-center py-2">尚未分配技能點數</p>
           )}
+        </div>
+      )}
+
+      {card.cleared_scenarios && card.cleared_scenarios.length > 0 && (
+        <div className="mt-2 border-t border-slate-700 pt-2">
+          <p className="text-[10px] text-emerald-500 uppercase tracking-wider mb-1">已通關劇本</p>
+          <div className="flex flex-wrap gap-1">
+            {card.cleared_scenarios.map((sid) => (
+              <span
+                key={sid}
+                className="text-[10px] bg-emerald-900/40 text-emerald-300 border border-emerald-800 px-1.5 py-0.5 rounded"
+              >
+                🏆 {scenarioTitles?.[sid] ?? "劇本"}
+              </span>
+            ))}
+          </div>
         </div>
       )}
 

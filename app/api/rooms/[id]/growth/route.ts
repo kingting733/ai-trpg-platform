@@ -22,12 +22,13 @@ async function computeEligible(
   // Room must be completed AND ended with a good/normal ending.
   const { data: room } = await supabase
     .from("rooms")
-    .select("status, ending_type")
+    .select("status, ending_type, scenario_id")
     .eq("id", roomId)
     .single();
   if (!room || room.status !== "completed") return { error: "本場冒險尚未結束。", status: 400 as const };
   const isGoodEnding = room.ending_type === "good" || room.ending_type === "normal";
   if (!isGoodEnding) return { error: "只有在成功結局（勝利）中，角色才能成長。失敗結局不開放成長檢定。", status: 403 as const };
+  const scenarioId: string | null = room.scenario_id ?? null;
 
   // The user's in-room character → its source card.
   const { data: character } = await supabase
@@ -41,19 +42,34 @@ async function computeEligible(
 
   const { data: card } = await supabase
     .from("character_cards")
-    .select("id, user_id, skills, dex, app")
+    .select("id, user_id, skills, dex, app, cleared_scenarios")
     .eq("id", character.source_card_id)
     .single();
   if (!card) return { error: "找不到來源角色卡。", status: 404 as const };
   if (card.user_id !== userId) return { error: "你不擁有此角色卡。", status: 403 as const };
 
-  // Already claimed growth for this room?
-  const { data: claim } = await supabase
+  // Winning the story marks the scenario as cleared on the card — independent of
+  // whether any skill is eligible for growth. Idempotent (dedup the array).
+  if (scenarioId) {
+    const cleared: string[] = Array.isArray(card.cleared_scenarios) ? card.cleared_scenarios : [];
+    if (!cleared.includes(scenarioId)) {
+      await supabase
+        .from("character_cards")
+        .update({ cleared_scenarios: [...cleared, scenarioId] })
+        .eq("id", card.id);
+      card.cleared_scenarios = [...cleared, scenarioId];
+    }
+  }
+
+  // Already claimed growth for this SCENARIO? (locked per story, not per room)
+  let claimQuery = supabase
     .from("card_growth")
     .select("skill_key, d100_roll, old_value, gain, new_value")
-    .eq("card_id", card.id)
-    .eq("room_id", roomId)
-    .maybeSingle();
+    .eq("card_id", card.id);
+  claimQuery = scenarioId
+    ? claimQuery.eq("scenario_id", scenarioId)
+    : claimQuery.eq("room_id", roomId); // legacy rooms with no scenario
+  const { data: claim } = await claimQuery.maybeSingle();
 
   // Successful skill uses by this player in this room.
   const { data: logs } = await supabase
@@ -83,7 +99,7 @@ async function computeEligible(
     .filter((s) => s.current < SKILL_CAP) // already maxed → nothing to gain
     .sort((a, b) => a.current - b.current);
 
-  return { card, character, eligible, claim: claim ?? null, attrs, skills };
+  return { card, character, eligible, claim: claim ?? null, attrs, skills, scenarioId };
 }
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
@@ -112,10 +128,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const result = await computeEligible(supabase, params.id, user.id);
   if ("error" in result) return NextResponse.json({ error: result.error }, { status: result.status });
 
-  const { card, eligible, claim, attrs, skills } = result;
+  const { card, eligible, claim, skills, scenarioId } = result;
 
-  // One growth per card per story.
-  if (claim) return NextResponse.json({ error: "此角色卡已在本場冒險中成長過，無法再次成長。" }, { status: 409 });
+  // One growth per card per SCENARIO (replaying the same story grants nothing).
+  if (claim) return NextResponse.json({ error: "此角色卡已在此劇本中成長過，無法再次成長。" }, { status: 409 });
 
   // The chosen skill must be in the server-computed eligible set.
   const target = eligible.find((s) => s.key === skillKey);
@@ -128,7 +144,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const gain = improved ? d(10) : 0;          // +1d10
   const newValue = Math.min(SKILL_CAP, oldValue + gain);
 
-  // Persist the new skill value onto the card (store FULL value).
+  // Persist the new skill value onto the card (store FULL value). The scenario
+  // was already marked cleared in computeEligible.
   const newSkills = { ...(skills ?? {}), [skillKey]: newValue };
   const { error: updErr } = await supabase
     .from("character_cards")
@@ -136,10 +153,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     .eq("id", card.id);
   if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
 
-  // Record the claim (also enforces the once-per-room unique constraint).
+  // Record the claim (also enforces the once-per-scenario unique constraint).
   const { error: insErr } = await supabase.from("card_growth").insert({
     card_id: card.id,
     room_id: params.id,
+    scenario_id: scenarioId,
     user_id: user.id,
     skill_key: skillKey,
     d100_roll: roll,
@@ -149,7 +167,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   });
   if (insErr) {
     // Unique violation → a concurrent claim won the race. Surface gracefully.
-    return NextResponse.json({ error: "此角色卡已在本場冒險中成長過。" }, { status: 409 });
+    return NextResponse.json({ error: "此角色卡已在此劇本中成長過。" }, { status: 409 });
   }
 
   return NextResponse.json({
