@@ -454,6 +454,35 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
       {/* Sidebar */}
       <div className="flex flex-col gap-3 overflow-y-auto">
 
+        {/* Objective Tracker */}
+        {room.objectives && room.objectives.length > 0 && (
+          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 shrink-0">
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">任務目標</h3>
+            <div className="flex flex-col gap-2">
+              {room.objectives.map((obj) => {
+                const prog = room.objective_progress?.[obj.id];
+                const done = prog?.done === true;
+                return (
+                  <div key={obj.id} className={`flex items-start gap-2 text-xs ${done ? "opacity-60" : ""}`}>
+                    <span className={`shrink-0 mt-0.5 w-4 h-4 rounded flex items-center justify-center font-bold ${done ? "bg-emerald-800/60 text-emerald-300 border border-emerald-700" : "bg-slate-700 text-slate-500 border border-slate-600"}`}>
+                      {done ? "✓" : "○"}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <span className={done ? "text-slate-400 line-through" : "text-slate-200"}>{obj.text}</span>
+                      {obj.scope === "each_player" && !done && (
+                        <span className="ml-1.5 text-[10px] text-slate-500">（各自完成）</span>
+                      )}
+                      {done && prog?.character && (
+                        <span className="ml-1.5 text-[10px] text-emerald-600">by {prog.character}</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
 <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 shrink-0">
           <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">行動順序</h3>
           <div className="flex flex-col gap-1.5">
