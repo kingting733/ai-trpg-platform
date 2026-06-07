@@ -25,6 +25,7 @@ export type SanSeverity = "obvious" | "strong" | "core" | "final";
 export interface SanCheckResult {
   severity:       SanSeverity;
   severity_label: string;   // Chinese label for UI/GM
+  trigger_text:   string;   // the horror keyword that fired this check (what they saw)
   pow:            number;    // roll-under target
   roll:           number;    // d100
   success:        boolean;   // roll <= pow
@@ -286,18 +287,20 @@ const SAN_TIERS: SanTier[] = [
   },
 ];
 
-function matchSanTier(text: string): SanTier | null {
+function matchSanTier(text: string): { tier: SanTier; keyword: string } | null {
   const t = text.toLowerCase();
   for (const tier of SAN_TIERS) {
-    if (tier.keywords.some((kw) => t.includes(kw))) return tier;
+    const hit = tier.keywords.find((kw) => t.includes(kw));
+    if (hit) return { tier, keyword: hit };
   }
   return null;
 }
 
 // Runs a SAN check if horror content is detected in the given text.
 export function resolveSanCheck(text: string, char: CheckCharacter): SanCheckResult | null {
-  const tier = matchSanTier(text);
-  if (!tier) return null;
+  const matched = matchSanTier(text);
+  if (!matched) return null;
+  const { tier, keyword } = matched;
 
   const pow     = char.pow;
   const roll    = rollD100();
@@ -308,6 +311,7 @@ export function resolveSanCheck(text: string, char: CheckCharacter): SanCheckRes
   return {
     severity:       tier.severity,
     severity_label: tier.label,
+    trigger_text:   keyword,
     pow,
     roll,
     success,
@@ -356,6 +360,97 @@ function decideOutcome(roll: number, target: number): Outcome {
   return "failure";
 }
 
+// ─── Result descriptions ─────────────────────────────────────────────────────
+// Plain-language hint of WHAT the check meant, shown in the dice box so players
+// understand the outcome before the GM's full narration loads. Purely rule-based
+// (no AI), keyed by the kind of action so "success" reads as "found something"
+// for investigation but "convinced them" for a social roll, etc.
+
+type ResultKind =
+  | "investigate" | "social" | "evade" | "manipulate" | "heal"
+  | "force" | "physical" | "sanity" | "luck" | "generic";
+
+const SKILL_RESULT_KIND: Record<string, ResultKind> = {
+  spot_hidden: "investigate", listen: "investigate",
+  library_use: "investigate", psychology: "investigate",
+  persuade: "social", fast_talk: "social", charm: "social", intimidate: "social",
+  dodge: "evade", stealth: "evade",
+  first_aid: "heal",
+  lockpick: "manipulate", drive_auto: "manipulate",
+};
+
+const STAT_RESULT_KIND: Record<StatKey, ResultKind> = {
+  str: "force", con: "physical", dex: "evade", pow: "sanity",
+  app: "social", int: "investigate", edu: "investigate", luck: "luck",
+};
+
+const RESULT_HINTS: Record<ResultKind, Record<Outcome, string>> = {
+  investigate: {
+    critical_success: "大成功 — 發現了關鍵線索，看到比預期更多的細節。",
+    success:          "成功 — 找到了有用的線索。",
+    failure:          "失敗 — 仔細查探，但一無所獲。",
+    critical_failure: "大失敗 — 被假象誤導，得出了錯誤的判斷。",
+  },
+  social: {
+    critical_success: "大成功 — 對方完全被打動，超乎預期地配合。",
+    success:          "成功 — 達到了想要的效果。",
+    failure:          "失敗 — 沒能打動對方，毫無進展。",
+    critical_failure: "大失敗 — 適得其反，反而激怒了對方。",
+  },
+  evade: {
+    critical_success: "大成功 — 身手俐落，完美避開。",
+    success:          "成功 — 及時避開了危險。",
+    failure:          "失敗 — 未能及時反應，但未受傷。",
+    critical_failure: "大失敗 — 嚴重失誤，陷入更糟的處境（生命 −4）。",
+  },
+  manipulate: {
+    critical_success: "大成功 — 乾淨俐落地辦到了。",
+    success:          "成功 — 順利完成。",
+    failure:          "失敗 — 嘗試失敗，沒有進展。",
+    critical_failure: "大失敗 — 弄巧成拙，造成了麻煩（生命 −4）。",
+  },
+  heal: {
+    critical_success: "大成功 — 處理得當，傷勢明顯好轉。",
+    success:          "成功 — 止住了血，穩定了傷勢。",
+    failure:          "失敗 — 手忙腳亂，沒能處理好傷口。",
+    critical_failure: "大失敗 — 處理失當，情況更糟了。",
+  },
+  force: {
+    critical_success: "大成功 — 一擊命中，力道完美。",
+    success:          "成功 — 成功施力。",
+    failure:          "失敗 — 用力落空，未能奏效。",
+    critical_failure: "大失敗 — 嚴重失誤，後果慘重（生命 −4）。",
+  },
+  physical: {
+    critical_success: "大成功 — 動作完美，超乎預期。",
+    success:          "成功 — 順利完成。",
+    failure:          "失敗 — 行動受挫，但未受傷。",
+    critical_failure: "大失敗 — 嚴重失誤，後果慘重（生命 −4）。",
+  },
+  sanity: {
+    critical_success: "大成功 — 心神穩固，毫不動搖。",
+    success:          "成功 — 穩住了心神。",
+    failure:          "失敗 — 恐懼侵蝕心神（理智 −2）。",
+    critical_failure: "大失敗 — 心神瀕臨崩潰（理智 −4）。",
+  },
+  luck: {
+    critical_success: "大成功 — 運氣好得驚人。",
+    success:          "成功 — 運氣站在這一邊。",
+    failure:          "失敗 — 運氣不站在這邊。",
+    critical_failure: "大失敗 — 運氣徹底用盡，雪上加霜（生命 −4）。",
+  },
+  generic: {
+    critical_success: "大成功 — 超乎預期的完美結果。",
+    success:          "成功。",
+    failure:          "失敗 — 行動受挫，但未受傷。",
+    critical_failure: "大失敗 — 嚴重失誤，後果慘重（生命 −4）。",
+  },
+};
+
+function describeResult(kind: ResultKind, outcome: Outcome): string {
+  return (RESULT_HINTS[kind] ?? RESULT_HINTS.generic)[outcome];
+}
+
 function consequences(category: Category, outcome: Outcome): { hp: number; san: number; flavor: string } {
   const isSanity = category === "sanity";
   switch (outcome) {
@@ -394,13 +489,14 @@ export function resolveAction(
     const roll    = rollD100();
     const outcome = decideOutcome(roll, target);
     const cons    = consequences(skillRule.category, outcome);
+    const kind    = SKILL_RESULT_KIND[skillRule.skillKey] ?? "generic";
     return {
       requires_check: true,
       stat_used:  skillRule.displayName,
       target, d100_roll: roll, outcome,
       hp_change:  Math.max(cons.hp,  -char.hp),
       san_change: Math.max(cons.san, -char.san),
-      consequence_summary: cons.flavor,
+      consequence_summary: describeResult(kind, outcome),
       san_check: sanCheck,
     };
   }
@@ -412,13 +508,14 @@ export function resolveAction(
     const roll    = rollD100();
     const outcome = decideOutcome(roll, target);
     const cons    = consequences(statRule.category, outcome);
+    const kind    = STAT_RESULT_KIND[statRule.stat] ?? "generic";
     return {
       requires_check: true,
       stat_used:  statRule.stat.toUpperCase(),
       target, d100_roll: roll, outcome,
       hp_change:  Math.max(cons.hp,  -char.hp),
       san_change: Math.max(cons.san, -char.san),
-      consequence_summary: cons.flavor,
+      consequence_summary: describeResult(kind, outcome),
       san_check: sanCheck,
     };
   }

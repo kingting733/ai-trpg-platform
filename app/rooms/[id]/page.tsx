@@ -24,6 +24,7 @@ interface RollResult {
   consequence_summary: string;
   san_check?: {
     severity_label: string;
+    trigger_text?:  string;
     pow:            number;
     roll:           number;
     success:        boolean;
@@ -698,6 +699,11 @@ function DiceResult({ roll }: { roll: RollResult }) {
             <span className="opacity-90">d100 = <b>{sc.roll}</b> vs 意志 {sc.pow}</span>
             <span className="font-bold">→ {sc.success ? "撐住" : "失守"}</span>
           </div>
+          {sc.trigger_text && (
+            <div className="mt-1 opacity-90">
+              目睹了「{sc.trigger_text}」相關的景象，{sc.success ? "勉強穩住心神。" : "心神受到衝擊。"}
+            </div>
+          )}
           {sc.san_loss > 0 && (
             <div className="mt-1 font-semibold">理智 −{sc.san_loss}</div>
           )}
