@@ -354,9 +354,9 @@ function skillTarget(rule: SkillRule, char: CheckCharacter): number {
 }
 
 function decideOutcome(roll: number, target: number): Outcome {
-  if (roll >= 96)                      return "critical_failure";
-  if (roll <= Math.floor(target / 5)) return "critical_success";
-  if (roll <= target)                  return "success";
+  if (roll >= 95) return "critical_failure";
+  if (roll <= 5)  return "critical_success";
+  if (roll <= target) return "success";
   return "failure";
 }
 
