@@ -28,13 +28,6 @@ const DIFFICULTY_STYLE: Record<string, string> = {
   Nightmare: "text-red-400",
 };
 
-const FEATURES = [
-  { icon: "🤖", title: "AI GM 智能主持",  desc: "智能生成劇情與場景，讓每次跑團都獨一無二。" },
-  { icon: "👥", title: "多人協作跑團",    desc: "與好友即時協作，共創精彩故事。" },
-  { icon: "🎲", title: "自動擲骰系統",    desc: "內建擲骰與判定，公平公正更流暢。" },
-  { icon: "📖", title: "動態劇情分支",    desc: "你的選擇將改變故事，解鎖多重結局。" },
-];
-
 const ALL = "全部";
 
 // ─── Hero ─────────────────────────────────────────────────────────────────────
@@ -52,7 +45,7 @@ function HeroSection() {
           style={{ backgroundImage: "linear-gradient(#c9a96e 1px,transparent 1px),linear-gradient(90deg,#c9a96e 1px,transparent 1px)", backgroundSize: "48px 48px" }} />
 
         <div className="relative max-w-6xl mx-auto px-4 py-16">
-          <div className="flex items-start gap-10">
+          <div className="flex items-start">
             {/* Left */}
             <div className="flex-1 min-w-0">
               {/* Decorative top line */}
@@ -71,20 +64,6 @@ function HeroSection() {
                 <span className="w-4 h-4 border border-gold/30 rounded-full flex items-center justify-center text-[9px]">✦</span>
                 AI GM 驅動的沉浸式劇本體驗
               </div>
-            </div>
-
-            {/* Right: feature boxes */}
-            <div className="grid grid-cols-2 gap-3 w-[460px] shrink-0">
-              {FEATURES.map((f) => (
-                <div key={f.title}
-                  className="rounded-xl p-4 transition-colors group cursor-default"
-                  style={{ background: "rgba(26,21,14,0.8)", border: "1px solid rgba(201,169,110,0.12)" }}
-                >
-                  <div className="text-2xl mb-2.5">{f.icon}</div>
-                  <div className="text-gold text-sm font-semibold mb-1">{f.title}</div>
-                  <div className="text-zinc-600 text-xs leading-relaxed">{f.desc}</div>
-                </div>
-              ))}
             </div>
           </div>
         </div>
