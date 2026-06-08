@@ -19,7 +19,7 @@ export function NavbarClient({ user }: Props) {
 
   if (!user) {
     return (
-      <Link href="/login" className="bg-zinc-800 hover:bg-zinc-700 text-white px-3 py-1.5 rounded-md">
+      <Link href="/login" className="border border-surface-border hover:border-gold/40 text-zinc-300 hover:text-gold px-4 py-1.5 rounded-lg text-sm transition-colors">
         登入
       </Link>
     );
@@ -27,12 +27,15 @@ export function NavbarClient({ user }: Props) {
 
   return (
     <div className="flex items-center gap-3">
-      <Link href="/account" className="text-slate-400 text-xs hover:text-slate-200">
-        嗨，<span className="text-slate-200 font-medium">{user.username}</span>
+      <Link href="/account" className="flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-200 transition-colors">
+        <div className="w-6 h-6 rounded-full bg-surface-card border border-surface-border flex items-center justify-center text-gold text-[10px]">
+          {(user.username ?? "?").slice(0, 1).toUpperCase()}
+        </div>
+        <span>嗨，<span className="text-zinc-300 font-medium">{user.username}</span></span>
       </Link>
       <button
         onClick={handleLogout}
-        className="border border-slate-600 hover:border-slate-400 text-slate-300 hover:text-white px-3 py-1.5 rounded-md text-sm"
+        className="border border-surface-border hover:border-zinc-500 text-zinc-500 hover:text-zinc-200 px-3 py-1.5 rounded-lg text-sm transition-colors"
       >
         登出
       </button>
