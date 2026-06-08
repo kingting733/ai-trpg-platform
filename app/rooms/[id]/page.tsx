@@ -659,11 +659,11 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
 
 // ─── Ending Screen ────────────────────────────────────────────────────────────
 
-const ENDING_META: Record<string, { icon: string; badge: string; badgeCls: string; borderCls: string }> = {
-  best:    { icon: "✦", badge: "最佳結局",   badgeCls: "bg-amber-900/60 text-amber-300 border-amber-700",    borderCls: "border-amber-700/60" },
-  normal:  { icon: "✔", badge: "勝利",       badgeCls: "bg-green-900/60 text-green-300 border-green-700",    borderCls: "border-green-700/60" },
-  bad:     { icon: "↗", badge: "苦甜結局",   badgeCls: "bg-orange-900/60 text-orange-300 border-orange-700", borderCls: "border-orange-700/60" },
-  failure: { icon: "✕", badge: "失敗",       badgeCls: "bg-red-900/60 text-red-300 border-red-700",         borderCls: "border-red-700/60" },
+const ENDING_META: Record<string, { icon: string; badge: string; accent: string; glow: string }> = {
+  best:    { icon: "✦", badge: "最佳結局", accent: "#c9a96e", glow: "rgba(201,169,110,0.45)" },
+  normal:  { icon: "✔", badge: "勝利",     accent: "#6ee7b7", glow: "rgba(110,231,183,0.40)" },
+  bad:     { icon: "↗", badge: "苦甜結局", accent: "#fdba74", glow: "rgba(253,186,116,0.40)" },
+  failure: { icon: "✕", badge: "失敗",     accent: "#fca5a5", glow: "rgba(252,165,165,0.40)" },
 };
 
 function EndingScreen({
@@ -679,16 +679,25 @@ function EndingScreen({
   const hasEnding = !!room.ending_title;
   const meta = ENDING_META[room.ending_type ?? ""] ?? ENDING_META.normal;
   const canGrow = room.ending_type === "good" || room.ending_type === "normal";
+  const accent = hasEnding ? meta.accent : "#c9a96e";
+  const glow = hasEnding ? meta.glow : "rgba(201,169,110,0.40)";
 
   return (
+    <>
+    {/* Faint occult texture behind the ending */}
+    <div className="fixed inset-0 -z-10 pointer-events-none opacity-[0.04]" aria-hidden
+      style={{ backgroundImage: "radial-gradient(circle, #c9a96e 1px, transparent 1px)", backgroundSize: "42px 42px" }} />
     <div className="flex flex-col items-center justify-start min-h-[70vh] gap-6 py-10 max-w-2xl mx-auto">
       {/* Icon + type badge */}
       <div className="flex flex-col items-center gap-3">
-        <div className={`w-16 h-16 rounded-full flex items-center justify-center text-3xl border-2 ${hasEnding ? meta.borderCls : "border-slate-600"} bg-slate-800`}>
+        <div className="relative w-16 h-16 rounded-full flex items-center justify-center text-3xl"
+          style={{ background: "linear-gradient(150deg,#1c1813,#0f0c08)", border: `2px solid ${glow}`, color: accent, boxShadow: `0 0 28px ${glow}` }}>
+          <div className="absolute inset-[4px] rounded-full pointer-events-none" style={{ border: `1px solid ${glow}` }} />
           {hasEnding ? meta.icon : "⚔"}
         </div>
         {hasEnding && (
-          <span className={`text-xs px-3 py-1 rounded-full border font-semibold uppercase tracking-wider ${meta.badgeCls}`}>
+          <span className="text-xs px-3 py-1 rounded-full font-semibold uppercase tracking-wider"
+            style={{ background: "rgba(20,16,11,0.8)", border: `1px solid ${glow}`, color: accent }}>
             {meta.badge}
           </span>
         )}
@@ -696,24 +705,24 @@ function EndingScreen({
 
       {/* Title + room name */}
       <div className="text-center">
-        <h1 className="text-3xl font-bold text-white mb-1">
+        <h1 className="font-serif text-3xl mb-1.5" style={{ color: accent, letterSpacing: "0.04em" }}>
           {hasEnding ? room.ending_title : "冒險結束"}
         </h1>
-        <p className="text-slate-400 text-sm">
-          <span className="text-zinc-100">{room.name}</span> 的故事已結束。
+        <p className="text-zinc-500 text-sm">
+          <span className="text-gold">{room.name}</span> 的故事已結束。
         </p>
       </div>
 
       {/* Ending summary */}
       {room.ending_summary && (
-        <div className={`w-full bg-slate-800/60 border rounded-xl p-5 ${meta.borderCls}`}>
-          <p className="text-slate-200 leading-relaxed text-sm">{room.ending_summary}</p>
-        </div>
+        <Panel className="w-full p-5" frame={glow}>
+          <p className="text-zinc-300 leading-relaxed text-sm">{room.ending_summary}</p>
+        </Panel>
       )}
 
       {/* Story log (last 10 non-system entries) */}
-      <div className="w-full bg-slate-900/50 border border-slate-700 rounded-xl p-5">
-        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">故事回顧</h3>
+      <Panel className="w-full p-5">
+        <PanelHeader title="故事回顧" />
         <div className="flex flex-col gap-2 max-h-56 overflow-y-auto">
           {storyLog
             .filter((e) => e.entry_type !== "system")
@@ -721,8 +730,8 @@ function EndingScreen({
             .map((entry) => (
               <div key={entry.id} className="text-sm">
                 {entry.entry_type === "action" && (
-                  <p className="text-slate-400">
-                    <span className="text-zinc-100">{entry.characters?.name ?? "Player"}:</span>{" "}
+                  <p className="text-zinc-400">
+                    <span className="text-gold">{entry.characters?.name ?? "Player"}:</span>{" "}
                     {entry.content}
                   </p>
                 )}
@@ -732,18 +741,19 @@ function EndingScreen({
               </div>
             ))}
         </div>
-      </div>
+      </Panel>
 
       {/* Character growth — only available on good/normal endings */}
       {canGrow ? (
         <button
           onClick={onGrowth}
-          className="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+          className="w-full py-3 rounded-lg font-serif transition-all hover:brightness-110 flex items-center justify-center gap-2"
+          style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07", boxShadow: "0 0 18px rgba(201,169,110,0.2)" }}
         >
           📈 角色成長 — 對本局成功使用過的技能進行成長檢定
         </button>
       ) : (
-        <div className="w-full text-center text-slate-500 text-sm py-2 border border-slate-800 rounded-lg">
+        <div className="w-full text-center text-zinc-600 text-sm py-2.5 rounded-lg" style={{ border: "1px solid #2e2416" }}>
           失敗結局不開放角色成長
         </div>
       )}
@@ -752,24 +762,28 @@ function EndingScreen({
       <div className="flex gap-3 w-full">
         <button
           onClick={onScenarios}
-          className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white py-3 rounded-lg font-medium transition-colors"
+          className="flex-1 py-3 rounded-lg font-medium transition-all hover:brightness-110"
+          style={{ background: "rgba(26,21,14,0.9)", border: "1px solid rgba(201,169,110,0.35)", color: "#c9a96e" }}
         >
           瀏覽劇本
         </button>
         <button
           onClick={onHub}
-          className="flex-1 border border-slate-600 hover:border-slate-400 text-slate-300 hover:text-white py-3 rounded-lg font-medium transition-colors"
+          className="flex-1 py-3 rounded-lg font-medium transition-colors text-zinc-400 hover:text-zinc-200"
+          style={{ background: "#1a150e", border: "1px solid #2e2416" }}
         >
           遊戲大廳
         </button>
         <button
           onClick={onDashboard}
-          className="flex-1 border border-slate-600 hover:border-slate-400 text-slate-300 hover:text-white py-3 rounded-lg font-medium transition-colors"
+          className="flex-1 py-3 rounded-lg font-medium transition-colors text-zinc-400 hover:text-zinc-200"
+          style={{ background: "#1a150e", border: "1px solid #2e2416" }}
         >
           後台
         </button>
       </div>
     </div>
+    </>
   );
 }
 
