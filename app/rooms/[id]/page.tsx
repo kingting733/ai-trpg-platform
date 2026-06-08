@@ -177,6 +177,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   const [roomPlayers, setRoomPlayers] = useState<RoomPlayer[]>([]);
   const [storyLog, setStoryLog] = useState<StoryLogEntry[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [myCharacter, setMyCharacter] = useState<Character | null>(null);
   const [actionText, setActionText] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -194,6 +195,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push("/login"); return; }
     setCurrentUserId(user.id);
+    setCurrentUserEmail(user.email ?? null);
 
     const { data: roomData } = await supabase.from("rooms").select("*").eq("id", params.id).single();
     if (!roomData) { router.push("/play/hub"); return; }
@@ -532,8 +534,8 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
       {/* Sidebar */}
       <div className="flex flex-col gap-3 overflow-y-auto">
 
-        {/* Objective Tracker */}
-        {room.objectives && room.objectives.length > 0 && (
+        {/* Objective Tracker — restricted to a single account */}
+        {currentUserEmail === "kingtingtai@gmail.com" && room.objectives && room.objectives.length > 0 && (
           <Panel className="p-4 shrink-0">
             <PanelHeader title="任務目標" />
             <div className="flex flex-col gap-2">
