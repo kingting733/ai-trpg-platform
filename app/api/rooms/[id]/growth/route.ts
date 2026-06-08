@@ -45,8 +45,8 @@ async function computeEligible(
     .select("id, user_id, skills, dex, app, cleared_scenarios")
     .eq("id", character.source_card_id)
     .single();
-  if (!card) return { error: "找不到來源角色卡。", status: 404 as const };
-  if (card.user_id !== userId) return { error: "你不擁有此角色卡。", status: 403 as const };
+  if (!card) return { error: "找不到來源調查員。", status: 404 as const };
+  if (card.user_id !== userId) return { error: "你不擁有此調查員。", status: 403 as const };
 
   // Winning the story marks the scenario as cleared on the card — independent of
   // whether any skill is eligible for growth. Idempotent (dedup the array).
@@ -131,7 +131,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const { card, eligible, claim, skills, scenarioId } = result;
 
   // One growth per card per SCENARIO (replaying the same story grants nothing).
-  if (claim) return NextResponse.json({ error: "此角色卡已在此劇本中成長過，無法再次成長。" }, { status: 409 });
+  if (claim) return NextResponse.json({ error: "此調查員已在此劇本中成長過，無法再次成長。" }, { status: 409 });
 
   // The chosen skill must be in the server-computed eligible set.
   const target = eligible.find((s) => s.key === skillKey);
@@ -167,7 +167,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   });
   if (insErr) {
     // Unique violation → a concurrent claim won the race. Surface gracefully.
-    return NextResponse.json({ error: "此角色卡已在此劇本中成長過。" }, { status: 409 });
+    return NextResponse.json({ error: "此調查員已在此劇本中成長過。" }, { status: 409 });
   }
 
   return NextResponse.json({

@@ -65,7 +65,7 @@ export default function GrowthPage({ params }: { params: { id: string } }) {
           挑選一個你在本場冒險中<span className="text-amber-400">成功使用過</span>的技能，進行成長檢定。<br />
           擲 d100，若骰值<span className="text-amber-400">高於</span>目前技能值，技能永久提升 1d10。
         </p>
-        <p className="text-slate-500 text-xs mt-1">每張角色卡每場冒險只能成長一次。</p>
+        <p className="text-slate-500 text-xs mt-1">每位調查員每場冒險只能成長一次。</p>
       </div>
 
       {error && (
@@ -75,7 +75,7 @@ export default function GrowthPage({ params }: { params: { id: string } }) {
       {/* Already claimed (this story) — show the historical result */}
       {claim && !result && (
         <div className="bg-slate-800/60 border border-amber-700 rounded-xl p-5 mb-4 text-center">
-          <p className="text-slate-300 text-sm mb-2">此角色卡已在本場冒險中成長過：</p>
+          <p className="text-slate-300 text-sm mb-2">此調查員已在本場冒險中成長過：</p>
           <ResultDetail
             name={SKILL_ZH_BY_KEY[claim.skill_key] ?? claim.skill_key}
             roll={claim.d100_roll}
@@ -146,7 +146,7 @@ export default function GrowthPage({ params }: { params: { id: string } }) {
       {/* Navigation */}
       <div className="flex gap-3">
         <Link href="/characters" className="flex-1 text-center border border-slate-600 hover:border-slate-400 text-slate-300 hover:text-white py-2.5 rounded-lg text-sm">
-          我的角色卡
+          我的調查員
         </Link>
         <Link href="/play/hub" className="flex-1 text-center border border-slate-600 hover:border-slate-400 text-slate-300 hover:text-white py-2.5 rounded-lg text-sm">
           遊戲大廳

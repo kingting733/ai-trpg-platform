@@ -331,7 +331,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
         <div ref={logContainerRef} onScroll={onLogScroll} className="flex-1 bg-slate-900/50 border border-slate-700 rounded-xl p-4 overflow-y-auto min-h-0 flex flex-col gap-3">
           {storyLog.length === 0 && (
             <p className="text-slate-500 text-sm italic text-center mt-8">
-              {needsInit ? "準備就緒 — 點擊下方「開始冒險」！" : "等待所有玩家選擇角色卡..."}
+              {needsInit ? "準備就緒 — 點擊下方「開始冒險」！" : "等待所有玩家選擇調查員..."}
             </p>
           )}
           {storyLog.map((entry) => (
@@ -441,11 +441,11 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                     onClick={() => router.push(`/rooms/${params.id}/select-card`)}
                     className="bg-zinc-800 hover:bg-zinc-700 text-white px-6 py-2.5 rounded-lg font-medium"
                   >
-                    選擇角色卡以繼續 →
+                    選擇調查員以繼續 →
                   </button>
                 );
               }
-              return <span className="text-slate-500">{allHaveChars ? "等待主持人開始..." : "等待所有玩家選擇角色卡..."}</span>;
+              return <span className="text-slate-500">{allHaveChars ? "等待主持人開始..." : "等待所有玩家選擇調查員..."}</span>;
             })()}
           </div>
         )}

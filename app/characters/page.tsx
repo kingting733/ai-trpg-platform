@@ -162,7 +162,7 @@ export default function CharactersPage() {
           <div>
             <h1 className="font-serif text-gold leading-none mb-2"
               style={{ fontSize: "clamp(2rem,4vw,2.75rem)", letterSpacing: "0.08em" }}>
-              我的角色卡
+              我的調查員
             </h1>
             <p className="text-zinc-500 text-sm">
               每天最多可抽取 {DAILY_LIMIT} 張卡。屬性由骰子決定，永久鎖定。
@@ -182,7 +182,7 @@ export default function CharactersPage() {
             }
           >
             <span className="text-base">🎲</span>
-            {opening ? "擲骰中..." : openedToday ? `今日已達上限 (${todayCount}/${DAILY_LIMIT}) ✓` : `抽取角色卡 (${todayCount}/${DAILY_LIMIT})`}
+            {opening ? "擲骰中..." : openedToday ? `今日已達上限 (${todayCount}/${DAILY_LIMIT}) ✓` : `抽取調查員 (${todayCount}/${DAILY_LIMIT})`}
           </button>
           {openedToday && (
             <span className="text-xs text-zinc-600">明天（UTC）再來抽取。</span>
@@ -201,7 +201,7 @@ export default function CharactersPage() {
 
       {revealed && (
         <div className="mb-8">
-          <p className="text-xs text-gold uppercase tracking-[0.2em] mb-3">✦ 獲得新角色卡！</p>
+          <p className="text-xs text-gold uppercase tracking-[0.2em] mb-3">✦ 獲得新調查員！</p>
           <div className="max-w-xs">
             <CardView card={revealed} highlight scenarioTitles={scenarioTitles} onNameSaved={handleNameSaved} onDeleted={handleDeleted} />
           </div>
@@ -214,12 +214,12 @@ export default function CharactersPage() {
         <div className="text-center py-20 rounded-xl"
           style={{ border: "1px dashed #2e2416", background: "#0e0c08" }}>
           <div className="text-4xl mb-3 opacity-60">🎴</div>
-          <p className="text-zinc-400">你還沒有任何角色卡。</p>
+          <p className="text-zinc-400">你還沒有任何調查員。</p>
           <p className="text-zinc-600 text-sm mt-1">抽取第一張卡開始你的收藏。</p>
         </div>
       ) : (
         <>
-          <p className="text-sm text-zinc-600 mb-4">共 {cards.length} 張角色卡</p>
+          <p className="text-sm text-zinc-600 mb-4">共 {cards.length} 位調查員</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 pb-12">
             {cards.map((card) => (
               <CardView key={card.id} card={card} scenarioTitles={scenarioTitles} onNameSaved={handleNameSaved} onDeleted={handleDeleted} />

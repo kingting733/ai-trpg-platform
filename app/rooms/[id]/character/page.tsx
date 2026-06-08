@@ -90,9 +90,9 @@ export default function CharacterCreationPage({ params }: { params: { id: string
       <h1 className="text-3xl font-bold text-white mb-2">建立角色</h1>
       <p className="text-slate-400 mb-2 text-sm">輸入名稱即可加入。屬性將使用預設值（均為平均值）。</p>
       <p className="text-slate-500 text-xs mb-6">
-        若想使用自己抽到的角色卡，請前往{" "}
+        若想使用自己抽到的調查員，請前往{" "}
         <Link href={`/rooms/${params.id}/select-card`} className="text-zinc-100 hover:text-white underline">
-          選擇角色卡
+          選擇調查員
         </Link>
         。
       </p>

@@ -273,7 +273,7 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
         onClick={(e) => e.stopPropagation()}
       >
         <div className="text-center mb-4">
-          <p className="text-xs text-zinc-100 uppercase tracking-widest">抽取你的角色卡</p>
+          <p className="text-xs text-zinc-100 uppercase tracking-widest">抽取你的調查員</p>
           <h2 className="text-xl font-bold text-white mt-1">{card.name}</h2>
         </div>
 

@@ -109,14 +109,14 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
     router.push(`/rooms/${params.id}`);
   }
 
-  if (loading) return <div className="text-center text-slate-400 py-20">載入角色卡中...</div>;
+  if (loading) return <div className="text-center text-slate-400 py-20">載入調查員中...</div>;
 
   if (cards.length === 0) {
     return (
       <div className="max-w-lg mx-auto text-center py-20">
         <div className="text-5xl mb-4">🎴</div>
-        <h2 className="text-2xl font-bold text-white mb-2">尚無角色卡</h2>
-        <p className="text-slate-400 mb-6">你需要至少一張角色卡才能遊玩。請先抽取每日卡。</p>
+        <h2 className="text-2xl font-bold text-white mb-2">尚無調查員</h2>
+        <p className="text-slate-400 mb-6">你需要至少一位調查員才能遊玩。請先抽取每日卡。</p>
         <Link
           href="/characters"
           className="inline-block bg-zinc-800 hover:bg-zinc-700 text-white px-6 py-3 rounded-lg font-medium"
@@ -130,8 +130,8 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
   return (
     <div className="max-w-5xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-white mb-1">選擇你的角色卡</h1>
-        <p className="text-slate-400 text-sm">選擇你要在本次冒險中使用的角色卡。選定後屬性將永久鎖定。</p>
+        <h1 className="text-3xl font-bold text-white mb-1">選擇你的調查員</h1>
+        <p className="text-slate-400 text-sm">選擇你要在本次冒險中使用的調查員。選定後屬性將永久鎖定。</p>
       </div>
 
       {error && (
