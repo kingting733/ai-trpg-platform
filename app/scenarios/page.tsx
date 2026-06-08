@@ -61,7 +61,7 @@ function HeroSection() {
                 <span className="text-gold/50 text-xs tracking-[0.2em] uppercase font-medium">Scenario Library</span>
               </div>
 
-              <h1 className="font-serif text-gold leading-none mb-5" style={{ fontSize: "clamp(3.5rem,7vw,5.5rem)", letterSpacing: "0.15em", fontWeight: 900 }}>
+              <h1 className="font-serif text-gold leading-none mb-5" style={{ fontSize: "clamp(3.5rem,7vw,5.5rem)", letterSpacing: "0.15em" }}>
                 劇本庫
               </h1>
               <p className="text-zinc-400 text-base mb-7 leading-relaxed max-w-md">
