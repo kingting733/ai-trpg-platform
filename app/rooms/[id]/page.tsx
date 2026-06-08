@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback, useRef, type CSSProperties, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { currentSkillValue, SKILL_KEY_BY_ZH } from "@/lib/game/skills";
 
 interface Character {
   id: string;
@@ -133,6 +134,14 @@ const SKILL_ZH: Record<string, string> = {
   firearms: "射擊", occult: "神秘學", fighting: "搏鬥",
 };
 
+// Grouped skill list for the player's skill-picker, mirroring the GM's 3-slot
+// suggested-action structure (調查/感知 · 社交/心理 · 行動/風險).
+const SKILL_PICKER: { label: string; keys: string[] }[] = [
+  { label: "調查 / 感知", keys: ["spot_hidden", "listen", "library_use", "occult"] },
+  { label: "社交 / 心理", keys: ["persuade", "fast_talk", "charm", "intimidate", "psychology"] },
+  { label: "行動 / 風險", keys: ["dodge", "stealth", "lockpick", "drive_auto", "first_aid", "fighting", "firearms"] },
+];
+
 const STAT_ZH: Record<string, string> = {
   hp: "生命", san: "理智", mp: "魔力",
   str: "力量", con: "體質", siz: "體型", dex: "敏捷", app: "外貌",
@@ -197,6 +206,8 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [myCharacter, setMyCharacter] = useState<Character | null>(null);
   const [actionText, setActionText] = useState("");
+  const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
+  const [skillMenuOpen, setSkillMenuOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [initializing, setInitializing] = useState(false);
   const [gmThinking, setGmThinking] = useState(false);
@@ -303,11 +314,15 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     setInitializing(false);
   }
 
-  async function submitAction(text?: string) {
+  async function submitAction(text?: string, skill?: string | null) {
     const finalText = (text ?? actionText).trim();
     if (!finalText || !room || !myCharacter || !currentUserId) return;
+    // An explicit per-call skill wins; otherwise use the manually-picked skill.
+    const forcedSkill = skill !== undefined ? skill : selectedSkill;
     setSubmitting(true);
     setActionText("");
+    setSelectedSkill(null);
+    setSkillMenuOpen(false);
 
     // All game state changes (action save, turn advance, GM response) happen server-side
     setGmThinking(true);
@@ -320,6 +335,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           actionText: finalText,
           actingUserId: currentUserId,
           characterId: myCharacter.id,
+          forcedSkill: forcedSkill ?? null,
         }),
       });
     } catch {
@@ -329,6 +345,18 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
 
     await fetchAll();
     setSubmitting(false);
+  }
+
+  // A GM choice may be tagged like "[偵查] <Name> 翻找抽屜". Pull the skill out so
+  // the roll matches the tag, and strip the tag from the action text we submit.
+  function submitChoice(choice: string) {
+    const m = choice.match(/^\s*[\[【]\s*([^\]】]+?)\s*[\]】]\s*([\s\S]*)$/);
+    if (m) {
+      const key = SKILL_KEY_BY_ZH[m[1].trim()] ?? null;
+      submitAction(m[2].trim() || choice, key);
+    } else {
+      submitAction(choice, null);
+    }
   }
 
   async function endGame() {
@@ -484,19 +512,31 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           <div className="flex flex-col gap-2 shrink-0">
             <p className="text-xs tracking-wider"><span className="text-gold font-medium">建議行動</span> <span className="text-zinc-600">— 或在下方輸入自己的行動</span></p>
             <div className="grid grid-cols-1 gap-2">
-              {room.current_choices!.map((c, i) => (
-                <button
-                  key={i}
-                  onClick={() => submitAction(c)}
-                  disabled={submitting}
-                  className="group flex items-center gap-3 text-left rounded-lg px-4 py-3 transition-all disabled:opacity-40 hover:brightness-110"
-                  style={{ background: "rgba(26,21,14,0.6)", border: "1px solid #2e2416" }}
-                >
-                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-full shrink-0 text-xs text-gold"
-                    style={{ border: "1px solid rgba(201,169,110,0.35)" }}>{i + 1}</span>
-                  <span className="text-zinc-300 group-hover:text-zinc-100 text-sm">{c}</span>
-                </button>
-              ))}
+              {room.current_choices!.map((c, i) => {
+                // Split a "[技能] 行動" choice so the skill tag renders as its own chip.
+                const m = c.match(/^\s*[\[【]\s*([^\]】]+?)\s*[\]】]\s*([\s\S]*)$/);
+                const tag = m ? m[1].trim() : null;
+                const bodyText = m ? (m[2].trim() || c) : c;
+                return (
+                  <button
+                    key={i}
+                    onClick={() => submitChoice(c)}
+                    disabled={submitting}
+                    className="group flex items-center gap-3 text-left rounded-lg px-4 py-3 transition-all disabled:opacity-40 hover:brightness-110"
+                    style={{ background: "rgba(26,21,14,0.6)", border: "1px solid #2e2416" }}
+                  >
+                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full shrink-0 text-xs text-gold"
+                      style={{ border: "1px solid rgba(201,169,110,0.35)" }}>{i + 1}</span>
+                    {tag && (
+                      <span className="shrink-0 text-[11px] px-2 py-0.5 rounded-full text-gold"
+                        style={{ background: "rgba(201,169,110,0.12)", border: "1px solid rgba(201,169,110,0.35)" }}>
+                        {tag}
+                      </span>
+                    )}
+                    <span className="text-zinc-300 group-hover:text-zinc-100 text-sm">{bodyText}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -522,7 +562,62 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           </div>
         ) : hasStarted ? (
           <div className="flex flex-col gap-2 shrink-0">
-          <div className="flex gap-3">
+          <div className="flex gap-3 items-stretch relative">
+            {/* Skill picker */}
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setSkillMenuOpen((o) => !o)}
+                disabled={!isMyTurn || submitting}
+                className="h-full px-3 rounded-xl text-sm transition-all disabled:opacity-40 hover:brightness-110 flex items-center gap-1.5"
+                style={selectedSkill
+                  ? { background: "rgba(201,169,110,0.14)", border: "1px solid rgba(201,169,110,0.5)", color: "#e4d8be" }
+                  : { background: "rgba(14,12,8,0.8)", border: "1px solid #2e2416", color: "#9a8c6e" }}
+                title="選擇要使用的技能（可選）"
+              >
+                <span>🎲</span>
+                <span className="whitespace-nowrap">{selectedSkill ? (SKILL_ZH[selectedSkill] ?? selectedSkill) : "技能"}</span>
+                <span className="text-[10px] opacity-70">▾</span>
+              </button>
+
+              {skillMenuOpen && (
+                <div className="absolute bottom-full left-0 mb-2 w-64 max-h-80 overflow-y-auto rounded-xl p-2 z-30 shadow-xl"
+                  style={{ background: "rgba(20,16,11,0.98)", border: "1px solid rgba(201,169,110,0.3)" }}>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedSkill(null); setSkillMenuOpen(false); }}
+                    className="w-full text-left px-3 py-2 rounded-lg text-sm hover:brightness-125 transition-all"
+                    style={{ background: selectedSkill === null ? "rgba(201,169,110,0.12)" : "transparent", color: "#cbb890" }}
+                  >
+                    自動偵測（依行動文字判斷）
+                  </button>
+                  {SKILL_PICKER.map((group) => (
+                    <div key={group.label} className="mt-1.5">
+                      <p className="text-[10px] uppercase tracking-wider px-2 py-1" style={{ color: "rgba(201,169,110,0.5)" }}>{group.label}</p>
+                      {group.keys.map((key) => {
+                        const val = myCharacter
+                          ? currentSkillValue(key, myCharacter.skills, { dex: myCharacter.dex, app: myCharacter.app })
+                          : 0;
+                        const active = selectedSkill === key;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => { setSelectedSkill(key); setSkillMenuOpen(false); }}
+                            className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-sm hover:brightness-125 transition-all"
+                            style={{ background: active ? "rgba(201,169,110,0.16)" : "transparent", color: active ? "#e4d8be" : "#bdb29a" }}
+                          >
+                            <span>{SKILL_ZH[key] ?? key}</span>
+                            <span className="tabular-nums text-xs text-gold">{val}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <input
               value={actionText}
               onChange={(e) => setActionText(e.target.value)}
@@ -541,6 +636,12 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
               {submitting ? "..." : "Submit"}
             </button>
           </div>
+          {selectedSkill && (
+            <p className="text-[11px] text-zinc-500 pl-1">
+              將以 <span className="text-gold">{SKILL_ZH[selectedSkill] ?? selectedSkill}</span> 進行檢定 ——
+              <button type="button" onClick={() => setSelectedSkill(null)} className="ml-1 underline hover:text-zinc-300">改回自動</button>
+            </p>
+          )}
           </div>
         ) : (
           <div className="text-center text-sm py-3 shrink-0">

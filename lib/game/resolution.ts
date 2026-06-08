@@ -490,6 +490,16 @@ function matchSkill(text: string): SkillRule | null {
   return best?.rule ?? null;
 }
 
+/** Look up a skill rule by its stored key (e.g. "spot_hidden") — used when the
+ *  player explicitly picks a skill instead of relying on keyword detection. */
+function skillRuleByKey(key: string): SkillRule | null {
+  return SKILL_RULES.find((r) => r.skillKey === key) ?? null;
+}
+
+/** Player-facing skill list (key + display name + category) for the picker UI. */
+export const PLAYER_SKILL_LIST: { key: string; zh: string; category: Category }[] =
+  SKILL_RULES.map((r) => ({ key: r.skillKey, zh: r.displayName, category: r.category }));
+
 function matchStat(text: string): StatRule | null {
   const t = text.toLowerCase();
   let best: { rule: StatRule; score: number } | null = null;
@@ -634,6 +644,7 @@ export function resolveAction(
   actionText: string,
   char: CheckCharacter,
   sceneContext = "",
+  forcedSkill?: string | null,
 ): RollResult {
   // SAN check runs independently and STACKS on top of any action check.
   // SAN check is a SEPARATE roll. Its loss lives ONLY in `san_check` (not folded
@@ -641,8 +652,8 @@ export function resolveAction(
   // both san_change (action) and san_check.san_loss to the character.
   const sanCheck = resolveSanCheck(`${actionText}\n${sceneContext}`, char);
 
-  // 1. Try skill-first match
-  const skillRule = matchSkill(actionText);
+  // 1. Try skill-first match. A player-chosen skill overrides keyword detection.
+  const skillRule = (forcedSkill ? skillRuleByKey(forcedSkill) : null) ?? matchSkill(actionText);
   if (skillRule) {
     const target  = skillTarget(skillRule, char);
     const roll    = rollD100();

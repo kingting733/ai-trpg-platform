@@ -31,8 +31,9 @@ export async function POST(request: Request) {
     actionText: string;
     actingUserId: string;
     characterId: string;
+    forcedSkill?: string | null;
   };
-  const { roomId, actionText, actingUserId, characterId } = body;
+  const { roomId, actionText, actingUserId, characterId, forcedSkill } = body;
 
   // Verify caller is a room participant and it's actually their turn
   const { data: room } = await supabase
@@ -200,7 +201,7 @@ export async function POST(request: Request) {
     };
   } else {
     // ── Normal solo action check ──
-    roll = resolvedActor ? resolveAction(actionText, resolvedActor, sceneContext) : null;
+    roll = resolvedActor ? resolveAction(actionText, resolvedActor, sceneContext, forcedSkill) : null;
 
     // Total SAN change = action's own SAN change + horror SAN-check loss (separate roll).
     const sanCheckLoss = roll?.san_check?.san_loss ?? 0;
