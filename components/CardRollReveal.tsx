@@ -14,6 +14,8 @@ const OCCUPATION_ICON: Record<string, string> = {
   "賭徒":     "🃏",
   "走私司機": "🚗",
 };
+
+const ALL_OCCUPATIONS = Object.keys(OCCUPATION_ICON);
 import type { SkillKey } from "@/lib/cards/dice";
 
 type Rarity = "Common" | "Rare" | "Epic" | "Legendary";
@@ -239,6 +241,145 @@ function SkillAllocator({ card, onSaved }: { card: RevealCard; onSaved: () => vo
   );
 }
 
+// ─── Occupation slot-machine reveal ──────────────────────────────────────────
+
+const SKILL_ZH_MAP: Record<string, string> = {
+  spot_hidden: "偵查", listen: "聆聽", library_use: "圖書館使用",
+  psychology: "心理學", persuade: "說服", fast_talk: "話術",
+  charm: "魅惑", intimidate: "恐嚇", dodge: "閃避",
+  first_aid: "急救", stealth: "潛行", lockpick: "開鎖",
+  drive_auto: "駕駛汽車", firearms: "射擊", occult: "神秘學", fighting: "搏鬥",
+};
+
+function OccupationReveal({
+  occupation,
+  buffedSkills,
+  onDone,
+}: {
+  occupation: string;
+  buffedSkills: string[];
+  onDone: () => void;
+}) {
+  // Phase: "spinning" → "slowing" → "locked"
+  const [spinPhase, setSpinPhase] = useState<"spinning" | "slowing" | "locked">("spinning");
+  const [displayed, setDisplayed] = useState(ALL_OCCUPATIONS[0]);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    let speed = 60;
+    let ticks = 0;
+    const FAST_TICKS = 18;    // fast spin count
+    const SLOW_TICKS = 10;    // slow spin count
+
+    function spin(ms: number) {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      intervalRef.current = setInterval(() => {
+        ticks++;
+        if (ticks <= FAST_TICKS) {
+          setDisplayed(ALL_OCCUPATIONS[ticks % ALL_OCCUPATIONS.length]);
+        } else if (ticks <= FAST_TICKS + SLOW_TICKS) {
+          setSpinPhase("slowing");
+          speed = 80 + (ticks - FAST_TICKS) * 30;
+          setDisplayed(ALL_OCCUPATIONS[ticks % ALL_OCCUPATIONS.length]);
+          // re-schedule at new speed
+          clearInterval(intervalRef.current!);
+          intervalRef.current = setInterval(() => {
+            ticks++;
+            if (ticks > FAST_TICKS + SLOW_TICKS) {
+              clearInterval(intervalRef.current!);
+              setDisplayed(occupation);
+              setSpinPhase("locked");
+            } else {
+              setDisplayed(ALL_OCCUPATIONS[ticks % ALL_OCCUPATIONS.length]);
+            }
+          }, speed);
+        }
+      }, ms);
+    }
+
+    spin(speed);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [occupation]);
+
+  const icon = OCCUPATION_ICON[displayed] ?? "🎭";
+  const isLocked = spinPhase === "locked";
+
+  return (
+    <div className="flex flex-col items-center gap-5 py-2">
+      {/* Eyebrow */}
+      <div className="flex items-center gap-3 w-full">
+        <div className="h-px flex-1" style={{ background: "linear-gradient(to right, transparent, rgba(201,169,110,0.3))" }} />
+        <span className="text-[10px] tracking-[0.25em] uppercase" style={{ color: "rgba(201,169,110,0.5)" }}>職業抽籤</span>
+        <div className="h-px flex-1" style={{ background: "linear-gradient(to left, transparent, rgba(201,169,110,0.3))" }} />
+      </div>
+
+      {/* Slot display */}
+      <div className="w-full rounded-xl py-6 flex flex-col items-center gap-2 transition-all"
+        style={isLocked
+          ? { background: "rgba(201,169,110,0.07)", border: "1px solid rgba(201,169,110,0.45)", boxShadow: "0 0 28px rgba(201,169,110,0.18)" }
+          : { background: "rgba(14,12,8,0.7)", border: "1px solid #2a2010" }}>
+        <span
+          className="text-6xl transition-all select-none"
+          style={{ filter: isLocked ? "drop-shadow(0 0 12px rgba(201,169,110,0.6))" : "none",
+            transform: spinPhase === "spinning" ? "scale(0.9)" : "scale(1)",
+            transition: "transform 0.2s, filter 0.3s" }}
+        >
+          {icon}
+        </span>
+        <span
+          className="font-serif text-2xl tracking-wide transition-all"
+          style={{ color: isLocked ? "#e4d8be" : "rgba(201,169,110,0.4)",
+            textShadow: isLocked ? "0 0 18px rgba(201,169,110,0.45)" : "none",
+            letterSpacing: "0.08em" }}
+        >
+          {displayed}
+        </span>
+        {!isLocked && (
+          <span className="text-[10px] tracking-[0.2em] uppercase animate-pulse"
+            style={{ color: "rgba(201,169,110,0.4)" }}>抽籤中…</span>
+        )}
+      </div>
+
+      {/* Buffed skills reveal — only shown once locked */}
+      {isLocked && (
+        <div className="w-full">
+          <p className="text-[10px] tracking-[0.2em] uppercase text-center mb-2"
+            style={{ color: "rgba(201,169,110,0.55)" }}>職業加成技能 +10</p>
+          <div className="grid grid-cols-2 gap-2">
+            {buffedSkills.map((key) => (
+              <div key={key} className="rounded-lg px-3 py-2.5 flex items-center gap-2"
+                style={{ background: "rgba(201,169,110,0.08)", border: "1px solid rgba(201,169,110,0.35)" }}>
+                <span className="text-gold text-sm">★</span>
+                <span className="text-sm font-medium" style={{ color: "#e4d8be" }}>
+                  {SKILL_ZH_MAP[key] ?? key}
+                </span>
+                <span className="ml-auto text-xs font-bold" style={{ color: "#c9a96e" }}>+10</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {isLocked && (
+        <button
+          onClick={onDone}
+          className="w-full py-2.5 rounded-lg font-serif text-sm transition-all hover:brightness-110"
+          style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07", boxShadow: "0 0 16px rgba(201,169,110,0.2)" }}
+        >
+          查看屬性總覽 →
+        </button>
+      )}
+
+      {!isLocked && (
+        <button onClick={() => { if (intervalRef.current) clearInterval(intervalRef.current); setDisplayed(occupation); setSpinPhase("locked"); }}
+          className="text-xs text-zinc-600 hover:text-zinc-400">
+          跳過
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ─── Die face ─────────────────────────────────────────────────────────────────
 
 function Die({ value, rolling, sides }: { value: number; rolling: boolean; sides: number }) {
@@ -266,18 +407,32 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
   const steps = useRef(buildSteps(card)).current;
   const [index, setIndex] = useState(0);
   const [rolling, setRolling] = useState(true);
-  const [phase, setPhase] = useState<"rolling" | "summary" | "skills">("rolling");
+  const [phase, setPhase] = useState<"rolling" | "occupation" | "summary" | "skills">("rolling");
   const completed = steps.slice(0, index).map((s) => ({ label: s.labelZh, total: s.total }));
   const rarity = RARITY_ACCENT[card.rarity];
 
+  // Derive the two buffed skill keys from the card's seeded skills (if any)
+  const buffedSkillKeys: string[] = card.skills
+    ? Object.keys(card.skills).filter((k) => {
+        const s = SKILLS.find((sk) => sk.key === k);
+        if (!s) return false;
+        const base = baseForSkill(s, card.dex, card.app);
+        return (card.skills![k] ?? 0) > base;
+      })
+    : [];
+
   useEffect(() => {
     if (phase !== "rolling") return;
-    if (index >= steps.length) { setPhase("summary"); return; }
+    if (index >= steps.length) {
+      // After stats finish rolling → occupation reveal (only if there is one)
+      setPhase(card.occupation ? "occupation" : "summary");
+      return;
+    }
     setRolling(true);
     const rollTime = setTimeout(() => setRolling(false), 650);
     const advance  = setTimeout(() => setIndex((i) => i + 1), 1250);
     return () => { clearTimeout(rollTime); clearTimeout(advance); };
-  }, [index, steps.length, phase]);
+  }, [index, steps.length, phase, card.occupation]);
 
   const step = steps[index];
 
@@ -366,11 +521,19 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
                 </div>
               )}
 
-              <button onClick={() => setPhase("summary")}
+              <button onClick={() => setPhase(card.occupation ? "occupation" : "summary")}
                 className="w-full text-xs text-zinc-600 hover:text-zinc-400 py-1">
                 跳過動畫
               </button>
             </div>
+
+          /* ── Occupation reveal phase ── */
+          ) : phase === "occupation" && card.occupation ? (
+            <OccupationReveal
+              occupation={card.occupation}
+              buffedSkills={buffedSkillKeys}
+              onDone={() => setPhase("summary")}
+            />
 
           /* ── Summary phase ── */
           ) : phase === "summary" ? (
