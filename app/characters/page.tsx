@@ -57,6 +57,8 @@ const SKILL_ZH: Record<string, string> = {
   stealth:      "潛行",
   lockpick:     "開鎖",
   drive_auto:   "駕駛汽車",
+  firearms:     "射擊",
+  occult:       "神秘學",
 };
 
 function isSameUtcDay(iso: string) {

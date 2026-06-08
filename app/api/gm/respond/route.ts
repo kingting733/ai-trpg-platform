@@ -246,7 +246,7 @@ export async function POST(request: Request) {
 
   if (roll?.requires_check) {
     const outcome = roll.outcome ?? "";
-    const isInvestigation = ["偵查", "聆聽", "圖書館使用", "心理學", "spot_hidden", "library_use"].includes(roll.stat_used ?? "");
+    const isInvestigation = ["偵查", "聆聽", "圖書館使用", "心理學", "神秘學", "spot_hidden", "library_use", "occult"].includes(roll.stat_used ?? "");
 
     if ((outcome === "critical_success" || outcome === "success") && isInvestigation) {
       newLedgerEntries.push({ turn: turnLabel, type: "clue", character: actorName, fact: `成功調查：${actionText.slice(0, 80)}` });

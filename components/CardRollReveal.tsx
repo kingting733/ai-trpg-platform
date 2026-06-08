@@ -87,6 +87,8 @@ const SKILLS: { key: SkillKey; zh: string; base: number | "dex2" | "app2" | "inv
   { key: "stealth",      zh: "潛行",      base:  1 },
   { key: "lockpick",     zh: "開鎖",      base:  1 },
   { key: "drive_auto",   zh: "駕駛汽車",  base:  0 },
+  { key: "firearms",     zh: "射擊",      base: 20 },
+  { key: "occult",       zh: "神秘學",    base:  5 },
 ];
 
 function baseForSkill(s: typeof SKILLS[number], dex: number, app: number = 50): number {

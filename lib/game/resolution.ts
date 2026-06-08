@@ -156,6 +156,24 @@ const SKILL_RULES: SkillRule[] = [
       "駕駛", "開車",
     ],
   },
+  {
+    skillKey: "firearms", displayName: "射擊", category: "physical",
+    baseValue: () => 20,
+    keywords: [
+      "shoot", "fire", "gun", "pistol", "revolver", "rifle", "shotgun",
+      "aim", "open fire", "take aim", "shoot at", "fire at",
+      "射擊", "開槍", "開火", "射", "瞄準", "射死", "槍",
+    ],
+  },
+  {
+    skillKey: "occult", displayName: "神秘學", category: "mental",
+    baseValue: () => 5,
+    keywords: [
+      "occult", "ritual", "arcane", "esoteric", "symbol", "rune", "incantation",
+      "tome", "grimoire", "supernatural lore", "identify the symbol",
+      "神秘學", "神祕學", "儀式", "符文", "符號", "咒語", "魔法書", "禁書", "邪教",
+    ],
+  },
 ];
 
 // ─── Raw stat fallback rules (used when no skill matches) ─────────────────────
@@ -377,6 +395,7 @@ const SKILL_RESULT_KIND: Record<string, ResultKind> = {
   dodge: "evade", stealth: "evade",
   first_aid: "heal",
   lockpick: "manipulate", drive_auto: "manipulate",
+  firearms: "force", occult: "investigate",
 };
 
 const STAT_RESULT_KIND: Record<StatKey, ResultKind> = {

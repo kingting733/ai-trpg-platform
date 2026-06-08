@@ -6,6 +6,7 @@ const SKILL_BASES: Record<string, number | "dex2" | "app2" | "inv_app"> = {
   spot_hidden: 10, listen: 10, library_use: 10, psychology: 1,
   persuade: 5, fast_talk: 5, charm: "app2", intimidate: "inv_app",
   dodge: "dex2", first_aid: 1, stealth: 1, lockpick: 1, drive_auto: 0,
+  firearms: 20, occult: 5,
 };
 
 export async function PATCH(

@@ -114,6 +114,7 @@ const SKILL_ZH: Record<string, string> = {
   psychology: "心理學", persuade: "說服", fast_talk: "話術",
   charm: "魅惑", intimidate: "恐嚇", dodge: "閃避",
   first_aid: "急救", stealth: "潛行", lockpick: "開鎖", drive_auto: "駕駛汽車",
+  firearms: "射擊", occult: "神秘學",
 };
 
 const STAT_ZH: Record<string, string> = {

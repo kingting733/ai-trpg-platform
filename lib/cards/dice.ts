@@ -3,7 +3,8 @@ export type Rarity = "Common" | "Rare" | "Epic" | "Legendary";
 export type SkillKey =
   | "spot_hidden" | "listen" | "library_use" | "psychology"
   | "persuade" | "fast_talk" | "charm" | "intimidate"
-  | "dodge" | "first_aid" | "stealth" | "lockpick" | "drive_auto";
+  | "dodge" | "first_aid" | "stealth" | "lockpick" | "drive_auto"
+  | "firearms" | "occult";
 
 export type SkillPoints = Partial<Record<SkillKey, number>>;
 
