@@ -45,7 +45,7 @@ function HeroSection() {
       <div className="relative overflow-hidden" style={{ background: "#0c0a07" }}>
         {/* Hand-built SVG atmosphere: occult circle + city silhouette + fog */}
         <div className="absolute inset-0 pointer-events-none"
-          style={{ backgroundImage: "url('/hero-bg.svg')", backgroundSize: "cover", backgroundPosition: "center" }} />
+          style={{ backgroundImage: "url('/hero-bg.png')", backgroundSize: "cover", backgroundPosition: "center" }} />
 
         {/* Subtle grid texture on top */}
         <div className="absolute inset-0 opacity-[0.02] pointer-events-none"
