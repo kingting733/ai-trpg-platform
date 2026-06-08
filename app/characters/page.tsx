@@ -28,6 +28,21 @@ const RARITY_STYLES: Record<CharacterCard["rarity"], { frame: string; chip: stri
 
 const STAT_KEYS = ["str", "con", "siz", "dex", "app", "int", "pow", "edu", "luck"] as const;
 
+const STAT_ZH: Record<string, string> = {
+  HP:   "生命",
+  SAN:  "理智",
+  MP:   "魔力",
+  STR:  "力量",
+  CON:  "體質",
+  SIZ:  "體型",
+  DEX:  "敏捷",
+  APP:  "外貌",
+  INT:  "智力",
+  POW:  "意志",
+  EDU:  "教育",
+  LUCK: "幸運",
+};
+
 const SKILL_ZH: Record<string, string> = {
   spot_hidden:  "偵查",
   listen:       "聆聽",
@@ -453,7 +468,7 @@ function CardView({
 function StatBox({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex justify-between items-center py-1.5" style={{ borderBottom: "1px solid rgba(42,32,16,0.6)" }}>
-      <span className="text-zinc-600 text-[11px] tracking-wide">{label}</span>
+      <span className="text-zinc-600 text-[11px] tracking-wide">{STAT_ZH[label] ?? label}</span>
       <span className="text-zinc-200 text-xs font-semibold">{value}</span>
     </div>
   );
