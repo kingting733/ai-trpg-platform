@@ -154,11 +154,6 @@ export default function CharactersPage() {
       {/* ── Header ── */}
       <div className="flex items-start justify-between gap-4 flex-wrap pt-2 pb-6">
         <div className="flex items-start gap-4">
-          {/* Decorative sigil */}
-          <div className="mt-1 w-12 h-12 rounded-lg flex items-center justify-center shrink-0 text-gold text-xl"
-            style={{ background: "rgba(26,21,14,0.8)", border: "1px solid rgba(201,169,110,0.25)" }}>
-            ✦
-          </div>
           <div>
             <h1 className="font-serif text-gold leading-none mb-2"
               style={{ fontSize: "clamp(2rem,4vw,2.75rem)", letterSpacing: "0.08em" }}>
