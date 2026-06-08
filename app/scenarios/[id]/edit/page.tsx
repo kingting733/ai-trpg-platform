@@ -342,6 +342,19 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
                       <textarea value={loc.items} onChange={(e) => {
                         const next = [...locations]; next[i] = { ...next[i], items: e.target.value }; setLocations(next);
                       }} rows={2} placeholder="此地點可找到的物品" className={taCls} />
+
+                      <div className="mt-1 pt-3 border-t border-slate-700/60">
+                        <p className="text-xs text-amber-300/80 mb-2">🔍 搜索成功後揭示給玩家（圖片與／或文字，可留空）</p>
+                        <CoverImageUpload
+                          value={loc.reveal_image ?? ""}
+                          onChange={(url) => {
+                            const next = [...locations]; next[i] = { ...next[i], reveal_image: url }; setLocations(next);
+                          }}
+                        />
+                        <textarea value={loc.reveal_text ?? ""} onChange={(e) => {
+                          const next = [...locations]; next[i] = { ...next[i], reveal_text: e.target.value }; setLocations(next);
+                        }} rows={2} placeholder="搜索成功時直接顯示給玩家的文字（例如信件內容、線索描述）" className={`${taCls} mt-2`} />
+                      </div>
                     </div>
                   </div>
                 ))}

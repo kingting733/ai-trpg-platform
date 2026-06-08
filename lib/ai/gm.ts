@@ -1,7 +1,11 @@
 export interface LocationEntry {
   name: string;
-  clues: string;   // free-text
-  items: string;   // free-text
+  clues: string;   // free-text (GM-facing)
+  items: string;   // free-text (GM-facing)
+  /** Image shown to players when they succeed a search check here. */
+  reveal_image?: string;
+  /** Text shown verbatim to players when they succeed a search check here. */
+  reveal_text?: string;
 }
 
 export interface NpcEntry {

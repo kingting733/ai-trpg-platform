@@ -239,6 +239,53 @@ export async function POST(request: Request) {
     });
   }
 
+  // === KEY LOCATION MEDIA REVEAL ===
+  // When a player SUCCEEDS a search check at a key location that the creator
+  // attached an image and/or hidden text to, push that reveal into the log —
+  // once per location per room (subsequent searches don't re-trigger it).
+  {
+    const searchSucceeded =
+      !!roll?.requires_check &&
+      (roll.outcome === "success" || roll.outcome === "critical_success");
+    const SEARCH_RE = /搜|調查|檢查|查看|探索|翻找|偵查|察看|search|investigate|examin|inspect|look|explor/i;
+    const looksLikeSearch = SEARCH_RE.test(actionText);
+
+    if (searchSucceeded && looksLikeSearch) {
+      const locs: LocationEntry[] = Array.isArray((room as any).scenarios?.locations)
+        ? (room as any).scenarios.locations.filter(
+            (l: any) => l && typeof l === "object" && typeof l.name === "string"
+          )
+        : [];
+      const alreadyRevealed: string[] = Array.isArray((room as any).revealed_locations)
+        ? (room as any).revealed_locations
+        : [];
+
+      const hit = locs.find(
+        (l) =>
+          l.name.trim().length > 0 &&
+          actionText.includes(l.name.trim()) &&
+          ((l.reveal_image && l.reveal_image.trim()) || (l.reveal_text && l.reveal_text.trim())) &&
+          !alreadyRevealed.includes(l.name.trim())
+      );
+
+      if (hit) {
+        const name = hit.name.trim();
+        const body = hit.reveal_text?.trim();
+        await supabase.from("story_logs").insert({
+          room_id: roomId,
+          round_number: room.current_round,
+          entry_type: "location_media",
+          content: body && body.length > 0 ? body : `🔍 你在「${name}」搜索到了一些東西。`,
+          media_url: hit.reveal_image?.trim() || null,
+        });
+        await supabase
+          .from("rooms")
+          .update({ revealed_locations: [...alreadyRevealed, name] })
+          .eq("id", roomId);
+      }
+    }
+  }
+
   // === FIRST AID — heals a TARGET (any roster member, including self) ===
   // Tied to the 急救 skill check the actor just rolled. Each character may only
   // be healed once per "scene" (approximated by round number — resets when the

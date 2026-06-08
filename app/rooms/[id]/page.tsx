@@ -49,13 +49,14 @@ interface RollResult {
 
 interface StoryLogEntry {
   id: string;
-  entry_type: "system" | "action" | "gm_response";
+  entry_type: "system" | "action" | "gm_response" | "location_media";
   content: string;
   character_id: string | null;
   player_id: string | null;
   created_at: string;
   characters?: { name: string } | null;
   roll_result?: RollResult | null;
+  media_url?: string | null;
 }
 
 interface Room {
@@ -437,6 +438,22 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                 <div className="rounded-lg p-3.5" style={{ background: "rgba(20,16,11,0.6)", border: "1px solid rgba(201,169,110,0.18)" }}>
                   <span className="text-xs text-gold font-medium uppercase tracking-wider block mb-2">GM</span>
                   <GmText content={entry.content} />
+                </div>
+              )}
+              {entry.entry_type === "location_media" && (
+                <div className="rounded-lg p-3.5" style={{ background: "rgba(20,16,11,0.6)", border: "1px solid rgba(201,169,110,0.30)" }}>
+                  <span className="text-xs text-gold font-medium uppercase tracking-wider flex items-center gap-1 mb-2">🔍 發現</span>
+                  {entry.media_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={entry.media_url}
+                      alt="發現"
+                      className="rounded-lg w-full object-cover mb-2 border"
+                      style={{ borderColor: "rgba(201,169,110,0.25)", maxHeight: "22rem" }}
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    />
+                  )}
+                  {entry.content && <GmText content={entry.content} />}
                 </div>
               )}
             </div>
