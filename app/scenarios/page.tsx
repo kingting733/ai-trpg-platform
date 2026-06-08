@@ -61,7 +61,7 @@ function HeroSection() {
                 <span className="text-gold/50 text-xs tracking-[0.2em] uppercase font-medium">Scenario Library</span>
               </div>
 
-              <h1 className="font-serif font-bold text-gold leading-none mb-5" style={{ fontSize: "clamp(3.5rem,7vw,5.5rem)", letterSpacing: "0.15em" }}>
+              <h1 className="font-serif text-gold leading-none mb-5" style={{ fontSize: "clamp(3.5rem,7vw,5.5rem)", letterSpacing: "0.15em", fontWeight: 900 }}>
                 劇本庫
               </h1>
               <p className="text-zinc-400 text-base mb-7 leading-relaxed max-w-md">
@@ -208,8 +208,8 @@ function ScenarioCard({ scenario }: { scenario: Scenario }) {
           <div className="flex gap-3 flex-1">
             {/* Left: title + description */}
             <div className="flex-1 min-w-0 flex flex-col">
-              <h3 className="font-bold text-base mb-2 leading-snug line-clamp-1 group-hover:text-gold transition-colors duration-200"
-                style={{ color: "#e4e0d8" }}>
+              <h3 className="font-display text-xl mb-2 leading-snug line-clamp-1 group-hover:text-gold transition-colors duration-200"
+                style={{ color: "#e4e0d8", fontWeight: 700 }}>
                 {scenario.title}
               </h3>
               <p className="text-xs leading-relaxed line-clamp-4 flex-1" style={{ color: "#525046" }}>

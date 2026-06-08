@@ -9,7 +9,10 @@ const config: Config = {
     extend: {
       fontFamily: {
         sans: ["'Inter'", "system-ui", "sans-serif"],
+        // Chinese display serif (Ming/Song) — heavy weight for titles
         serif: ["'Noto Serif TC'", "'STSong'", "serif"],
+        // Elegant English display serif for English titles
+        display: ["'Cormorant'", "'Noto Serif TC'", "serif"],
       },
       colors: {
         gold: {
