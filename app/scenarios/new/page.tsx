@@ -51,6 +51,8 @@ export default function NewScenarioPage() {
   const [failureConditions, setFailureConditions] = useState("");
   const [failureTurnLimit, setFailureTurnLimit] = useState("");
 
+  const [coverImageUrl, setCoverImageUrl] = useState("");
+
   // GM-only: GM Toolkit
   const [endingConditions, setEndingConditions] = useState("");
   const [gmNotes, setGmNotes] = useState("");
@@ -185,6 +187,7 @@ export default function NewScenarioPage() {
         ending_conditions: endingConditions.trim() || null,
         gm_notes: gmNotes.trim() || null,
         source_document: sourceDocument.trim() || null,
+        cover_image_url: coverImageUrl.trim() || null,
         language,
         status,
       })
@@ -307,6 +310,12 @@ export default function NewScenarioPage() {
             </Field>
             <Field label="標籤（逗號分隔）" hint="幫助玩家找到你的劇本。例：地下城、可單人、黑暗">
               <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="地下城, 可單人, 黑暗, 調查" className={inputCls} />
+            </Field>
+            <Field label="封面圖片網址" hint="貼上一張圖片的 URL，作為劇本封面顯示在劇本庫中。建議比例 16:9，最好是暗色系氛圍圖。">
+              <input value={coverImageUrl} onChange={(e) => setCoverImageUrl(e.target.value)} placeholder="https://..." className={inputCls} />
+              {coverImageUrl.trim() && (
+                <img src={coverImageUrl.trim()} alt="封面預覽" className="mt-2 rounded-lg h-32 object-cover w-full opacity-80 border border-slate-600" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+              )}
             </Field>
             <Field label="劇本語言" hint="AI 主持人將以此語言進行遊戲敘述。">
               <select value={language} onChange={(e) => setLanguage(e.target.value)} className={inputCls}>
