@@ -404,6 +404,29 @@ export async function POST(request: Request) {
   const structuredNpcs: NpcEntry[] = Array.isArray(scenario?.npcs)
     ? scenario.npcs.filter((n: any) => n && typeof n === "object" && typeof n.name === "string" && typeof n.hp === "number") as NpcEntry[]
     : [];
+  // Social immunity check — runs after structuredNpcs is available.
+  // Detect if the resolved action was a social skill aimed at a social-immune NPC,
+  // and if so void any mechanical rewards + mark it for the GM directive.
+  {
+    const SOCIAL_SKILLS = new Set(["魅惑", "說服", "話術", "恐嚇", "心理學",
+      "charm", "persuade", "fast_talk", "intimidate", "psychology"]);
+    if (roll?.requires_check && roll.stat_used && SOCIAL_SKILLS.has(roll.stat_used)) {
+      const immuneNpc = structuredNpcs.find(
+        (n) => n.social_immune && n.name.trim().length > 0 && actionText.includes(n.name.trim())
+      );
+      if (immuneNpc) {
+        roll = {
+          ...roll,
+          hp_change: 0,
+          san_change: 0,
+          outcome: "failure",
+          consequence_summary: `${immuneNpc.name} 對社交技能免疫，此行動無效。`,
+          _socialImmuneTarget: immuneNpc.name,
+        } as typeof roll & { _socialImmuneTarget?: string };
+      }
+    }
+  }
+
   const gmContext: ScenarioGMContext | null = scenario ? {
     openingScene: scenario.opening_scene ?? null,
     locations: structuredLocations,
@@ -519,6 +542,9 @@ export async function POST(request: Request) {
                 damage: attack.damage,
                 targetDied: attack.target_died ?? false,
               }
+            : null,
+          socialImmune: (roll as any)?._socialImmuneTarget
+            ? { targetName: (roll as any)._socialImmuneTarget as string }
             : null,
         }
       : null,

@@ -399,6 +399,17 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
                       <textarea value={npc.goal} onChange={(e) => {
                         const next = [...npcs]; next[i] = { ...next[i], goal: e.target.value }; setNpcs(next);
                       }} rows={2} placeholder="他們想要什麼？在意什麼？隱藏著什麼秘密？" className={taCls} />
+                      <label className="flex items-center gap-2 cursor-pointer select-none mt-1">
+                        <input
+                          type="checkbox"
+                          checked={!!npc.social_immune}
+                          onChange={(e) => {
+                            const next = [...npcs]; next[i] = { ...next[i], social_immune: e.target.checked }; setNpcs(next);
+                          }}
+                          className="accent-amber-500 w-4 h-4"
+                        />
+                        <span className="text-xs text-amber-300/80">🛡 對社交技能免疫（怪物、無意識存在、終極敵人）</span>
+                      </label>
                     </div>
                   </div>
                 ))}
