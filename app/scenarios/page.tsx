@@ -42,15 +42,13 @@ const ALL = "全部";
 function HeroSection() {
   return (
     <div className="-mx-4 -mt-8">
-      <div className="relative overflow-hidden" style={{ background: "linear-gradient(135deg, #0f0c07 0%, #13100a 40%, #0e0c08 100%)" }}>
-        {/* Atmospheric glows */}
-        <div className="absolute top-0 left-0 w-[600px] h-[300px] opacity-20 pointer-events-none"
-          style={{ background: "radial-gradient(ellipse at 30% 40%, #6b3a1f 0%, transparent 70%)" }} />
-        <div className="absolute top-0 right-0 w-[400px] h-[300px] opacity-10 pointer-events-none"
-          style={{ background: "radial-gradient(ellipse at 70% 30%, #c9a96e 0%, transparent 60%)" }} />
+      <div className="relative overflow-hidden" style={{ background: "#0c0a07" }}>
+        {/* Hand-built SVG atmosphere: occult circle + city silhouette + fog */}
+        <div className="absolute inset-0 pointer-events-none"
+          style={{ backgroundImage: "url('/hero-bg.svg')", backgroundSize: "cover", backgroundPosition: "center" }} />
 
-        {/* Subtle grid */}
-        <div className="absolute inset-0 opacity-[0.025] pointer-events-none"
+        {/* Subtle grid texture on top */}
+        <div className="absolute inset-0 opacity-[0.02] pointer-events-none"
           style={{ backgroundImage: "linear-gradient(#c9a96e 1px,transparent 1px),linear-gradient(90deg,#c9a96e 1px,transparent 1px)", backgroundSize: "48px 48px" }} />
 
         <div className="relative max-w-6xl mx-auto px-4 py-16">
