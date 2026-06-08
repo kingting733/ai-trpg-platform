@@ -1,5 +1,19 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+
+const OCCUPATION_ICON: Record<string, string> = {
+  "記者":     "📰",
+  "警探":     "🔍",
+  "大學生":   "📚",
+  "醫生":     "🏥",
+  "黑幫成員": "🔫",
+  "風水師":   "☯️",
+  "退役軍人": "🎖️",
+  "YouTuber": "📱",
+  "前邪教成員":"🕯️",
+  "賭徒":     "🃏",
+  "走私司機": "🚗",
+};
 import type { SkillKey } from "@/lib/cards/dice";
 
 type Rarity = "Common" | "Rare" | "Epic" | "Legendary";
@@ -296,13 +310,19 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
               <span className="text-[10px] tracking-[0.25em] uppercase" style={{ color: "rgba(201,169,110,0.5)" }}>調查員檔案</span>
               <div className="h-px flex-1" style={{ background: "linear-gradient(to left, transparent, rgba(201,169,110,0.3))" }} />
             </div>
-            <h2 className="font-serif text-xl mt-1" style={{ color: "#e4d8be", letterSpacing: "0.04em" }}>{card.name}</h2>
-            {card.occupation && (
-              <span className="inline-block mt-2 text-[11px] px-2.5 py-0.5 rounded-full"
-                style={{ background: "rgba(201,169,110,0.1)", border: "1px solid rgba(201,169,110,0.35)", color: "#c9a96e" }}>
-                職業 · {card.occupation}
-              </span>
-            )}
+            <div className="flex items-center gap-3 mt-1">
+              {card.occupation && (
+                <span className="text-3xl leading-none shrink-0">
+                  {OCCUPATION_ICON[card.occupation] ?? "🎭"}
+                </span>
+              )}
+              <div>
+                <h2 className="font-serif text-xl" style={{ color: "#e4d8be", letterSpacing: "0.04em" }}>{card.name}</h2>
+                {card.occupation && (
+                  <p className="text-[11px] mt-0.5" style={{ color: "rgba(201,169,110,0.65)" }}>{card.occupation}</p>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* ── Rolling phase ── */}

@@ -19,6 +19,20 @@ interface CharacterCard {
   created_at: string;
 }
 
+const OCCUPATION_ICON: Record<string, string> = {
+  "記者":     "📰",
+  "警探":     "🔍",
+  "大學生":   "📚",
+  "醫生":     "🏥",
+  "黑幫成員": "🔫",
+  "風水師":   "☯️",
+  "退役軍人": "🎖️",
+  "YouTuber": "📱",
+  "前邪教成員":"🕯️",
+  "賭徒":     "🃏",
+  "走私司機": "🚗",
+};
+
 // Rarity accents tuned to the occult / aged-parchment palette.
 const RARITY_STYLES: Record<CharacterCard["rarity"], { frame: string; chip: string; glow: string }> = {
   Common:    { frame: "rgba(201,169,110,0.12)", chip: "border-zinc-600 text-zinc-400",      glow: "" },
@@ -354,29 +368,32 @@ function CardView({
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 min-w-0">
-                <h3 className="font-serif text-lg truncate" style={{ color: "#e4d8be", letterSpacing: "0.02em" }}>{card.name}</h3>
-                <button
-                  onClick={startEdit}
-                  title="Rename card"
-                  className="text-zinc-600 hover:text-gold shrink-0 text-xs leading-none"
-                >
-                  ✎
-                </button>
+              <div className="flex items-start gap-2.5 min-w-0">
+                {card.occupation && (
+                  <span className="text-2xl leading-none mt-0.5 shrink-0">
+                    {OCCUPATION_ICON[card.occupation] ?? "🎭"}
+                  </span>
+                )}
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="font-serif text-lg truncate" style={{ color: "#e4d8be", letterSpacing: "0.02em" }}>{card.name}</h3>
+                    <button
+                      onClick={startEdit}
+                      title="Rename card"
+                      className="text-zinc-600 hover:text-gold shrink-0 text-xs leading-none"
+                    >
+                      ✎
+                    </button>
+                  </div>
+                  {card.occupation && (
+                    <p className="text-[11px] mt-0.5" style={{ color: "rgba(201,169,110,0.65)" }}>{card.occupation}</p>
+                  )}
+                </div>
               </div>
             )}
           </div>
           <span className={`text-xs px-2 py-0.5 rounded border bg-black/30 shrink-0 ${style.chip}`}>{card.rarity}</span>
         </div>
-
-        {card.occupation && (
-          <div className="mb-2 -mt-1">
-            <span className="text-[11px] px-2 py-0.5 rounded-full"
-              style={{ background: "rgba(201,169,110,0.1)", border: "1px solid rgba(201,169,110,0.3)", color: "#c9a96e" }}>
-              職業 · {card.occupation}
-            </span>
-          </div>
-        )}
 
         <div className="grid grid-cols-3 gap-x-4 gap-y-px">
           <StatBox label="HP" value={card.hp} />

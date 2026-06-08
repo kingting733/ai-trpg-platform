@@ -16,6 +16,20 @@ interface CharacterCard {
   occupation: string | null;
 }
 
+const OCCUPATION_ICON: Record<string, string> = {
+  "記者":     "📰",
+  "警探":     "🔍",
+  "大學生":   "📚",
+  "醫生":     "🏥",
+  "黑幫成員": "🔫",
+  "風水師":   "☯️",
+  "退役軍人": "🎖️",
+  "YouTuber": "📱",
+  "前邪教成員":"🕯️",
+  "賭徒":     "🃏",
+  "走私司機": "🚗",
+};
+
 const RARITY_ACCENT: Record<CharacterCard["rarity"], { frame: string; chip: string; selectedGlow: string }> = {
   Common:    { frame: "rgba(201,169,110,0.12)", chip: "border-zinc-600 text-zinc-400",       selectedGlow: "rgba(161,161,170,0.35)" },
   Rare:      { frame: "rgba(56,189,248,0.28)",  chip: "border-sky-600/70 text-sky-300",      selectedGlow: "rgba(56,189,248,0.35)"  },
@@ -159,14 +173,18 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
               <div className="relative">
                 {/* Name + rarity chip */}
                 <div className="flex items-start justify-between mb-4 gap-2">
-                  <div className="min-w-0">
-                    <h3 className="font-serif text-base truncate" style={{ color: "#e4d8be" }}>{card.name}</h3>
+                  <div className="flex items-start gap-2.5 min-w-0">
                     {card.occupation && (
-                      <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full"
-                        style={{ background: "rgba(201,169,110,0.1)", border: "1px solid rgba(201,169,110,0.3)", color: "#c9a96e" }}>
-                        職業 · {card.occupation}
+                      <span className="text-2xl leading-none mt-0.5 shrink-0">
+                        {OCCUPATION_ICON[card.occupation] ?? "🎭"}
                       </span>
                     )}
+                    <div className="min-w-0">
+                      <h3 className="font-serif text-base truncate" style={{ color: "#e4d8be" }}>{card.name}</h3>
+                      {card.occupation && (
+                        <p className="text-[10px] mt-0.5" style={{ color: "rgba(201,169,110,0.65)" }}>{card.occupation}</p>
+                      )}
+                    </div>
                   </div>
                   <span className={`text-xs px-2 py-0.5 rounded border bg-black/30 shrink-0 ${accent.chip}`}>{card.rarity}</span>
                 </div>
