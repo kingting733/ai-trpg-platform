@@ -18,6 +18,7 @@ export interface RollResult {
   san_change:          number;
   consequence_summary: string;
   san_check?:          SanCheckResult | null;  // horror-triggered SAN check
+  attack?:             AttackResult | null;    // contested-attack detail (dodge + damage)
 }
 
 export type SanSeverity = "obvious" | "strong" | "core" | "final";
@@ -254,6 +255,136 @@ export function rollInjuryDamage(severity: InjurySeverity): { amount: number; la
   const tier = INJURY_TIERS[severity] ?? INJURY_TIERS.minor;
   return { amount: tier.roll(), label: tier.label };
 }
+
+// ─── Contested attack system ─────────────────────────────────────────────────
+// When a character attacks another combatant (player OR npc), the ATTACKER rolls
+// STR or 搏鬥, the DEFENDER rolls 閃避, then the server rolls damage. 搏鬥 (trained
+// fighting) deals more damage than raw STR. A critical hit cannot be dodged.
+//
+// Damage tables (scaled to the small HP pool ≈ 5–18):
+//   STR    — hit 1d3,  crit 1d6+1
+//   搏鬥   — hit 1d6,  crit 2d6
+
+export type AttackType = "str" | "fighting";
+
+/** Default 閃避 value for NPCs/monsters that have no character sheet. */
+export const NPC_DEFAULT_DODGE = 25;
+
+// Trained-fighting verbs → roll 搏鬥 (higher damage).
+const FIGHTING_ATTACK_KEYWORDS = [
+  "punch", "brawl", "fight", "grapple", "wrestle", "strike", "melee",
+  "knife", "stab", "swing at", "tackle", "beat up", "slash",
+  "搏鬥", "打鬥", "肉搏", "毆打", "揮拳", "出拳", "扭打", "近身", "刺", "捅", "打架",
+  "攻擊", "襲擊", "撲向", "砍",
+];
+
+// Raw brute-force verbs → roll STR (lower damage).
+const STR_ATTACK_KEYWORDS = [
+  "smash", "bash", "slam", "crush", "choke", "strangle", "throw at", "headbutt",
+  "砸", "撞擊", "掐", "扼", "勒", "摔", "猛力", "撕", "壓制", "扳斷",
+];
+
+/**
+ * Decide whether an action is an attack and, if so, which skill it uses.
+ * Returns null when the wording isn't an attack at all. Fighting verbs win over
+ * brute-force verbs (a deliberate strike is trained combat).
+ */
+export function detectAttackType(text: string): AttackType | null {
+  const t = text.toLowerCase();
+  if (FIGHTING_ATTACK_KEYWORDS.some((k) => t.includes(k))) return "fighting";
+  if (STR_ATTACK_KEYWORDS.some((k) => t.includes(k))) return "str";
+  return null;
+}
+
+function attackSkillValue(type: AttackType, char: CheckCharacter): number {
+  if (type === "fighting") {
+    const stored = (char.skills ?? {}).fighting as number | undefined;
+    return Math.min(99, stored != null && stored > 0 ? stored : 25);
+  }
+  return Math.min(99, char.str);
+}
+
+/** A character's 閃避 value (stored skill, else DEX÷2). */
+export function dodgeValueOf(char: CheckCharacter): number {
+  const stored = (char.skills ?? {}).dodge as number | undefined;
+  return Math.min(99, stored != null && stored > 0 ? stored : Math.floor((char.dex ?? 50) / 2));
+}
+
+function rollAttackDamage(type: AttackType, crit: boolean): number {
+  if (type === "fighting") return crit ? rollDiceN(2, 6) : rollDiceN(1, 6);
+  return crit ? rollDiceN(1, 6) + 1 : rollDiceN(1, 3);
+}
+
+export interface AttackResult {
+  type:          AttackType;
+  skill_label:   string;        // 搏鬥 / 力量 (for display)
+  target_name:   string;
+  is_npc:        boolean;
+  attack_target: number;        // attacker's roll-under value
+  attack_roll:   number;
+  attack_outcome: Outcome;
+  hit:           boolean;       // attacker succeeded
+  crit:          boolean;       // critical hit (undodgeable, crit damage)
+  dodge_target:  number | null; // defender 閃避 value (null if no dodge attempted)
+  dodge_roll:    number | null;
+  dodged:        boolean;       // defender avoided the hit
+  damage:        number;        // HP damage to apply (0 if miss/dodge)
+  target_hp_after?: number;     // filled in by the route after applying
+  target_died?:  boolean;       // filled in by the route after applying
+}
+
+/**
+ * Resolve a contested attack. Rolls the attacker's STR/搏鬥, then (if it lands and
+ * isn't a crit) the defender's 閃避, then damage. The route applies the damage to
+ * the target's HP and fills target_hp_after / target_died.
+ */
+export function resolveAttack(
+  attacker: CheckCharacter,
+  defenderDodgeValue: number,
+  type: AttackType,
+  targetName: string,
+  isNpc: boolean,
+): AttackResult {
+  const attack_target = attackSkillValue(type, attacker);
+  const attack_roll = rollD100();
+  const attack_outcome = decideOutcome(attack_roll, attack_target);
+  const hit = attack_outcome === "success" || attack_outcome === "critical_success";
+  const crit = attack_outcome === "critical_success";
+
+  let dodge_target: number | null = null;
+  let dodge_roll: number | null = null;
+  let dodged = false;
+  let damage = 0;
+
+  if (hit) {
+    if (crit) {
+      damage = rollAttackDamage(type, true); // critical hits cannot be dodged
+    } else {
+      dodge_target = Math.min(99, defenderDodgeValue);
+      dodge_roll = rollD100();
+      const dodgeOutcome = decideOutcome(dodge_roll, dodge_target);
+      dodged = dodgeOutcome === "success" || dodgeOutcome === "critical_success";
+      if (!dodged) damage = rollAttackDamage(type, false);
+    }
+  }
+
+  return {
+    type,
+    skill_label: type === "fighting" ? "搏鬥" : "力量",
+    target_name: targetName,
+    is_npc: isNpc,
+    attack_target,
+    attack_roll,
+    attack_outcome,
+    hit,
+    crit,
+    dodge_target,
+    dodge_roll,
+    dodged,
+    damage,
+  };
+}
+
 
 /** First-aid heal amount — tied to the 急救 skill check outcome. */
 export function rollFirstAidHeal(outcome: Outcome): number {

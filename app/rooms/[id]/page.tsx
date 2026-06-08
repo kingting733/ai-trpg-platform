@@ -31,6 +31,20 @@ interface RollResult {
     success:        boolean;
     san_loss:       number;
   } | null;
+  attack?: {
+    type:          "str" | "fighting";
+    skill_label:   string;
+    target_name:   string;
+    is_npc:        boolean;
+    hit:           boolean;
+    crit:          boolean;
+    dodge_target:  number | null;
+    dodge_roll:    number | null;
+    dodged:        boolean;
+    damage:        number;
+    target_hp_after?: number;
+    target_died?:  boolean;
+  } | null;
 }
 
 interface StoryLogEntry {
@@ -828,6 +842,35 @@ function DiceResult({ roll }: { roll: RollResult }) {
               {roll.consequence_summary}
               {roll.hp_change !== 0 && <span className="ml-1 font-semibold">生命 {roll.hp_change}</span>}
               {roll.san_change !== 0 && <span className="ml-1 font-semibold">理智 {roll.san_change}</span>}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Attack box — dodge contest + damage for a contested attack */}
+      {roll.attack && (
+        <div className={`rounded-lg border px-3 py-2 text-xs ${
+          roll.attack.damage > 0
+            ? "text-rose-300 border-rose-700 bg-rose-950/40"
+            : "text-zinc-300 border-slate-700 bg-slate-900/40"
+        }`}>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-bold tracking-wider">⚔️ 攻擊 → {roll.attack.target_name}</span>
+            {!roll.attack.hit ? (
+              <span className="font-bold">落空</span>
+            ) : roll.attack.crit ? (
+              <span className="font-bold">重擊命中（無法閃避）</span>
+            ) : roll.attack.dodge_roll != null ? (
+              <span className="opacity-90">
+                閃避 d100 = <b>{roll.attack.dodge_roll}</b> vs {roll.attack.dodge_target}% → {roll.attack.dodged ? "閃過" : "未閃過"}
+              </span>
+            ) : null}
+          </div>
+          {roll.attack.damage > 0 && (
+            <div className="mt-1 font-semibold">
+              {roll.attack.skill_label}傷害 −{roll.attack.damage} HP
+              {roll.attack.target_hp_after != null && !roll.attack.is_npc && `（剩餘 ${roll.attack.target_hp_after}）`}
+              {roll.attack.target_died && <span className="ml-1">☠ 倒下</span>}
             </div>
           )}
         </div>

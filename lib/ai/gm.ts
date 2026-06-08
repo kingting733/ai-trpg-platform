@@ -84,6 +84,17 @@ export interface GMAIInput {
       success: boolean;
       sanLoss: number;
     } | null;
+    attack?: {
+      attackerName: string;
+      targetName: string;
+      isNpc: boolean;
+      skillLabel: string;   // 搏鬥 / 力量
+      hit: boolean;
+      crit: boolean;
+      dodged: boolean;
+      damage: number;
+      targetDied: boolean;
+    } | null;
   } | null;
 }
 
@@ -431,6 +442,29 @@ function criticalGuidance(
 function buildDiceDirective(input: GMAIInput): string {
   const r = input.resolution;
   if (!r) return "";
+
+  // Contested attack — the system has already rolled to-hit, dodge, and damage,
+  // and applied the HP loss. The GM only narrates the already-decided result.
+  const atk = r.attack;
+  if (atk) {
+    let body: string;
+    if (!atk.hit) {
+      body = `${atk.attackerName} attacked ${atk.targetName} (${atk.skillLabel}) but MISSED — the blow fails to land. Narrate a missed attack; deal no damage.`;
+    } else if (atk.dodged) {
+      body = `${atk.attackerName} attacked ${atk.targetName} (${atk.skillLabel}) and the blow was on target, but ${atk.targetName} DODGED it. Narrate the evasion; deal no damage.`;
+    } else if (atk.crit) {
+      body = `${atk.attackerName} landed a CRITICAL hit on ${atk.targetName} with ${atk.skillLabel} — impossible to dodge — dealing ${atk.damage} damage.${atk.targetDied ? ` This drops ${atk.targetName} and they DIE / are taken out.` : ""} Narrate a brutal, decisive strike.`;
+    } else {
+      body = `${atk.attackerName} hit ${atk.targetName} with ${atk.skillLabel}, dealing ${atk.damage} damage.${atk.targetDied ? ` This drops ${atk.targetName} and they DIE / are taken out.` : ""} Narrate the successful strike and its impact.`;
+    }
+    return `
+ATTACK RESULT (THIS IS FINAL — YOU MUST OBEY IT):
+- ${atk.attackerName} rolled d100 ${r.d100} vs ${atk.skillLabel} ${r.target}% → ${r.outcome?.replace(/_/g, " ").toUpperCase()}.
+- ${body}
+STRICT RULES: The HP damage above has ALREADY been applied by the system — do NOT invent a different amount and do NOT flag a separate injury for this attack. Do NOT turn a miss/dodge into a hit, or a hit into a miss. Narrate exactly this outcome.
+`;
+  }
+
   if (!r.requiresCheck) {
     return `\nDICE RESULT: ${input.actingCharacterName}'s action was low-risk and needed no dice check. Narrate it naturally without inventing a dramatic success or failure.\n`;
   }

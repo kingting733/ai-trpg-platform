@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { generateGMResponse, GMAIInput, ScenarioGMContext, LedgerEntry, LocationEntry, NpcEntry } from "@/lib/ai/gm";
 import { createClient } from "@/lib/supabase/server";
-import { resolveAction, rollInjuryDamage, rollFirstAidHeal, InjurySeverity } from "@/lib/game/resolution";
+import {
+  resolveAction, rollInjuryDamage, rollFirstAidHeal, InjurySeverity,
+  detectAttackType, resolveAttack, dodgeValueOf, NPC_DEFAULT_DODGE, AttackResult,
+} from "@/lib/game/resolution";
 import { refreshStorySummary } from "@/lib/ai/summarize";
 import { detectEnding } from "@/lib/ai/detect-ending";
 import {
@@ -75,25 +78,144 @@ export async function POST(request: Request) {
 
   // === DICE RESOLUTION ===
   // The SYSTEM decides the outcome; the GM only narrates it.
-  const roll = resolvedActor
-    ? resolveAction(actionText, resolvedActor, sceneContext)
-    : null;
+  //
+  // CONTESTED ATTACK takes priority: when the action is an attack (STR/搏鬥 verb)
+  // aimed at an identifiable combatant (player OR npc), the attacker rolls to hit,
+  // the defender rolls 閃避, and the server rolls & applies damage to the TARGET.
+  // Otherwise we fall back to the normal solo action check (which resolves the
+  // ACTOR's own STR/搏鬥/skill roll and any self-consequences + SAN check).
 
+  // NPC roster known to the room (declared in the scenario + any already damaged).
+  const scenarioNpcs: Array<{ name: string; hp?: number }> = Array.isArray((room as any).scenarios?.npcs)
+    ? (room as any).scenarios.npcs.filter((n: any) => n && typeof n === "object" && typeof n.name === "string")
+    : [];
+  const npcStateNow: Record<string, { hp: number; max_hp: number; alive: boolean }> =
+    (room.npc_states && typeof room.npc_states === "object") ? room.npc_states : {};
+
+  let roll = null as ReturnType<typeof resolveAction> | null;
+  let attack: AttackResult | null = null;
   let actorDied = false;
   let actorBroke = false;
-  // Total SAN change = action's own SAN change + horror SAN-check loss (separate roll).
-  const sanCheckLoss = roll?.san_check?.san_loss ?? 0;
-  const totalSanChange = (roll?.san_change ?? 0) - sanCheckLoss;
-  if (roll && resolvedActor && roll.requires_check && (roll.hp_change !== 0 || totalSanChange !== 0)) {
-    const newHp = Math.max(0, resolvedActor.hp + roll.hp_change);
-    const newSan = Math.max(0, resolvedActor.san + totalSanChange);
-    actorDied = newHp <= 0;
-    actorBroke = newSan <= 0;
-    await supabase.from("characters")
-      .update({ hp: newHp, san: newSan })
-      .eq("id", resolvedActor.id);
-    resolvedActor.hp = newHp;
-    resolvedActor.san = newSan;
+
+  // Pieces produced by an attack that must be written AFTER the action log row.
+  let attackSystemLog: string | null = null;
+  const attackLedgerEntries: LedgerEntry[] = [];
+
+  const attackType = resolvedActor ? detectAttackType(actionText) : null;
+
+  // Find an attack target named in the action: a living roster character (not self)
+  // first, otherwise a known living NPC.
+  let targetChar: any = null;
+  let targetNpcName: string | null = null;
+  if (attackType && resolvedActor) {
+    targetChar = sortedByDex.find(
+      (c: any) => c.id !== resolvedActor.id && c.hp > 0 && c.san > 0 && actionText.includes(c.name)
+    ) ?? null;
+    if (!targetChar) {
+      const knownNpcNames = Array.from(new Set([
+        ...Object.keys(npcStateNow),
+        ...scenarioNpcs.map((n) => n.name),
+      ]));
+      targetNpcName = knownNpcNames.find(
+        (name) => actionText.includes(name) && (npcStateNow[name]?.alive !== false)
+      ) ?? null;
+    }
+  }
+
+  if (attackType && resolvedActor && (targetChar || targetNpcName)) {
+    // ── Contested attack path ──
+    const isNpc = !targetChar;
+    const targetName: string = isNpc ? (targetNpcName as string) : targetChar.name;
+    const dodgeVal = isNpc ? NPC_DEFAULT_DODGE : dodgeValueOf(targetChar);
+    attack = resolveAttack(resolvedActor, dodgeVal, attackType, targetName, isNpc);
+
+    if (attack.damage > 0) {
+      if (isNpc) {
+        const npcStates = { ...npcStateNow };
+        let npc = npcStates[targetName];
+        if (!npc) {
+          const declared = scenarioNpcs.find((n) => n.name === targetName);
+          const maxHp = declared && typeof declared.hp === "number"
+            ? declared.hp : 10;
+          npc = { hp: maxHp, max_hp: maxHp, alive: true };
+        }
+        npc = { ...npc, hp: Math.max(0, npc.hp - attack.damage) };
+        if (npc.hp <= 0) npc.alive = false;
+        npcStates[targetName] = npc;
+        await supabase.from("rooms").update({ npc_states: npcStates }).eq("id", roomId);
+        attack.target_hp_after = npc.hp;
+        attack.target_died = !npc.alive;
+        attackSystemLog = npc.alive
+          ? `💢 ${targetName} 被 ${resolvedActor.name} 的${attack.skill_label}攻擊命中（−${attack.damage} HP，剩餘 ${npc.hp}/${npc.max_hp}）`
+          : `☠ ${targetName} 被 ${resolvedActor.name} 擊倒，已死亡。`;
+        attackLedgerEntries.push({
+          turn: room.current_round, type: npc.alive ? "event" : "death", character: targetName,
+          fact: npc.alive
+            ? `被 ${resolvedActor.name} 攻擊（${attack.skill_label}，−${attack.damage} HP）`
+            : `被 ${resolvedActor.name} 擊殺`,
+        });
+      } else {
+        const newHp = Math.max(0, targetChar.hp - attack.damage);
+        await supabase.from("characters").update({ hp: newHp }).eq("id", targetChar.id);
+        targetChar.hp = newHp; // keep roster in sync for turn-advance & all-dead checks
+        attack.target_hp_after = newHp;
+        attack.target_died = newHp <= 0;
+        attackSystemLog = newHp > 0
+          ? `💢 ${targetName} 被 ${resolvedActor.name} 的${attack.skill_label}攻擊命中（−${attack.damage} HP，剩餘 ${newHp}）`
+          : `☠ ${targetName} 被 ${resolvedActor.name} 擊倒。`;
+        attackLedgerEntries.push({
+          turn: room.current_round, type: newHp <= 0 ? "death" : "event", character: targetName,
+          fact: newHp <= 0
+            ? `被 ${resolvedActor.name} 擊倒陣亡`
+            : `被 ${resolvedActor.name} 攻擊（${attack.skill_label}，−${attack.damage} HP）`,
+        });
+      }
+    } else {
+      // Missed or dodged — no damage.
+      attackSystemLog = attack.dodged
+        ? `🌀 ${attack.target_name} 閃避了 ${resolvedActor.name} 的攻擊。`
+        : `✖ ${resolvedActor.name} 的攻擊落空。`;
+    }
+
+    // Build a RollResult so the existing dice UI shows the attacker's to-hit roll,
+    // with the dodge + damage detail attached under `attack`.
+    const hitLabel = !attack.hit
+      ? "攻擊失手"
+      : attack.crit
+      ? `重擊命中 ${attack.target_name}（無法閃避），造成 ${attack.damage} 點傷害`
+      : attack.dodged
+      ? `命中判定成功，但被 ${attack.target_name} 閃避`
+      : `命中 ${attack.target_name}，造成 ${attack.damage} 點傷害`;
+    roll = {
+      requires_check: true,
+      stat_used: attack.skill_label,
+      target: attack.attack_target,
+      d100_roll: attack.attack_roll,
+      outcome: attack.attack_outcome,
+      hp_change: 0,
+      san_change: 0,
+      consequence_summary: hitLabel,
+      san_check: null,
+      attack,
+    };
+  } else {
+    // ── Normal solo action check ──
+    roll = resolvedActor ? resolveAction(actionText, resolvedActor, sceneContext) : null;
+
+    // Total SAN change = action's own SAN change + horror SAN-check loss (separate roll).
+    const sanCheckLoss = roll?.san_check?.san_loss ?? 0;
+    const totalSanChange = (roll?.san_change ?? 0) - sanCheckLoss;
+    if (roll && resolvedActor && roll.requires_check && (roll.hp_change !== 0 || totalSanChange !== 0)) {
+      const newHp = Math.max(0, resolvedActor.hp + roll.hp_change);
+      const newSan = Math.max(0, resolvedActor.san + totalSanChange);
+      actorDied = newHp <= 0;
+      actorBroke = newSan <= 0;
+      await supabase.from("characters")
+        .update({ hp: newHp, san: newSan })
+        .eq("id", resolvedActor.id);
+      resolvedActor.hp = newHp;
+      resolvedActor.san = newSan;
+    }
   }
 
   // Save action to story_logs, with the dice result attached to the action entry.
@@ -106,6 +228,16 @@ export async function POST(request: Request) {
     content: actionText,
     roll_result: roll,
   });
+
+  // Contested-attack damage feedback (written after the action so it reads in order).
+  if (attackSystemLog) {
+    await supabase.from("story_logs").insert({
+      room_id: roomId,
+      round_number: room.current_round,
+      entry_type: "system",
+      content: attackSystemLog,
+    });
+  }
 
   // === FIRST AID — heals a TARGET (any roster member, including self) ===
   // Tied to the 急救 skill check the actor just rolled. Each character may only
@@ -262,7 +394,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const updatedLedger = [...storyLedger, ...newLedgerEntries];
+  const updatedLedger = [...storyLedger, ...newLedgerEntries, ...attackLedgerEntries];
 
   // === OBJECTIVE STATUS (GM-only) ===
   // Tell the GM which objectives are already satisfied as of the start of this
@@ -325,6 +457,19 @@ export async function POST(request: Request) {
                 roll: roll.san_check.roll,
                 success: roll.san_check.success,
                 sanLoss: roll.san_check.san_loss,
+              }
+            : null,
+          attack: attack
+            ? {
+                attackerName: resolvedActor?.name ?? "Unknown",
+                targetName: attack.target_name,
+                isNpc: attack.is_npc,
+                skillLabel: attack.skill_label,
+                hit: attack.hit,
+                crit: attack.crit,
+                dodged: attack.dodged,
+                damage: attack.damage,
+                targetDied: attack.target_died ?? false,
               }
             : null,
         }
