@@ -18,11 +18,12 @@ interface CharacterCard {
   created_at: string;
 }
 
-const RARITY_STYLES: Record<CharacterCard["rarity"], { border: string; chip: string; glow: string }> = {
-  Common:    { border: "border-slate-600",  chip: "bg-slate-700 text-slate-300 border-slate-600",       glow: "" },
-  Rare:      { border: "border-sky-600",    chip: "bg-sky-900/50 text-sky-300 border-sky-700",          glow: "shadow-lg shadow-sky-900/30" },
-  Epic:      { border: "border-zinc-500", chip: "bg-zinc-800/70 text-white border-zinc-600", glow: "shadow-lg shadow-black/50" },
-  Legendary: { border: "border-amber-500",  chip: "bg-amber-900/50 text-amber-300 border-amber-600",    glow: "shadow-xl shadow-amber-900/50" },
+// Rarity accents tuned to the occult / aged-parchment palette.
+const RARITY_STYLES: Record<CharacterCard["rarity"], { frame: string; chip: string; glow: string }> = {
+  Common:    { frame: "rgba(201,169,110,0.12)", chip: "border-zinc-600 text-zinc-400",      glow: "" },
+  Rare:      { frame: "rgba(56,189,248,0.30)",  chip: "border-sky-600/70 text-sky-300",     glow: "0 0 24px rgba(56,189,248,0.08)" },
+  Epic:      { frame: "rgba(192,132,252,0.30)", chip: "border-purple-500/70 text-purple-300", glow: "0 0 24px rgba(192,132,252,0.10)" },
+  Legendary: { frame: "rgba(201,169,110,0.45)", chip: "border-amber-500/70 text-amber-300",  glow: "0 0 28px rgba(201,169,110,0.18)" },
 };
 
 const STAT_KEYS = ["str", "con", "siz", "dex", "app", "int", "pow", "edu", "luck"] as const;
@@ -130,36 +131,62 @@ export default function CharactersPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="max-w-6xl mx-auto">
       {rolling && (
         <CardRollReveal card={rolling as unknown as RevealCard} onDone={finishReveal} />
       )}
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-white">我的角色卡</h1>
-          <p className="text-slate-400 text-sm mt-1">每天最多可抽取 {DAILY_LIMIT} 張卡。屬性由骰子決定，永久鎖定。</p>
+
+      {/* ── Header ── */}
+      <div className="flex items-start justify-between gap-4 flex-wrap pt-2 pb-6">
+        <div className="flex items-start gap-4">
+          {/* Decorative sigil */}
+          <div className="mt-1 w-12 h-12 rounded-lg flex items-center justify-center shrink-0 text-gold text-xl"
+            style={{ background: "rgba(26,21,14,0.8)", border: "1px solid rgba(201,169,110,0.25)" }}>
+            ✦
+          </div>
+          <div>
+            <h1 className="font-serif text-gold leading-none mb-2"
+              style={{ fontSize: "clamp(2rem,4vw,2.75rem)", letterSpacing: "0.08em" }}>
+              我的角色卡
+            </h1>
+            <p className="text-zinc-500 text-sm">
+              每天最多可抽取 {DAILY_LIMIT} 張卡。屬性由骰子決定，永久鎖定。
+            </p>
+          </div>
         </div>
-        <div className="flex flex-col items-end gap-1">
+
+        <div className="flex flex-col items-end gap-1.5">
           <button
             onClick={openCard}
             disabled={opening || openedToday}
-            className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-lg font-medium transition-colors"
+            className="group flex items-center gap-2.5 px-5 py-3 rounded-lg font-medium text-sm transition-all disabled:cursor-not-allowed"
+            style={
+              opening || openedToday
+                ? { background: "#1a150e", border: "1px solid #2e2416", color: "#5a5248" }
+                : { background: "rgba(26,21,14,0.9)", border: "1px solid rgba(201,169,110,0.35)", color: "#c9a96e", boxShadow: "0 0 18px rgba(201,169,110,0.12)" }
+            }
           >
+            <span className="text-base">🎲</span>
             {opening ? "擲骰中..." : openedToday ? `今日已達上限 (${todayCount}/${DAILY_LIMIT}) ✓` : `抽取角色卡 (${todayCount}/${DAILY_LIMIT})`}
           </button>
           {openedToday && (
-            <span className="text-xs text-slate-500">明天（UTC）再來抽取。</span>
+            <span className="text-xs text-zinc-600">明天（UTC）再來抽取。</span>
           )}
         </div>
       </div>
 
+      <div className="h-px mb-6" style={{ background: "linear-gradient(90deg,transparent,rgba(201,169,110,0.2),transparent)" }} />
+
       {error && (
-        <div className="bg-red-900/30 border border-red-700 text-red-300 text-sm rounded-lg px-4 py-3 mb-6">{error}</div>
+        <div className="border text-sm rounded-lg px-4 py-3 mb-6"
+          style={{ background: "rgba(127,29,29,0.2)", borderColor: "rgba(185,28,28,0.5)", color: "#fca5a5" }}>
+          {error}
+        </div>
       )}
 
       {revealed && (
         <div className="mb-8">
-          <p className="text-xs text-zinc-100 uppercase tracking-wider mb-2">獲得新角色卡！</p>
+          <p className="text-xs text-gold uppercase tracking-[0.2em] mb-3">✦ 獲得新角色卡！</p>
           <div className="max-w-xs">
             <CardView card={revealed} highlight scenarioTitles={scenarioTitles} onNameSaved={handleNameSaved} onDeleted={handleDeleted} />
           </div>
@@ -167,17 +194,18 @@ export default function CharactersPage() {
       )}
 
       {loading ? (
-        <div className="text-slate-500 text-sm">載入收藏中...</div>
+        <div className="text-center py-24 text-zinc-700 text-sm">載入收藏中...</div>
       ) : cards.length === 0 ? (
-        <div className="text-center py-20 border border-dashed border-slate-700 rounded-xl">
-          <div className="text-4xl mb-3">🎴</div>
-          <p className="text-slate-400">你還沒有任何角色卡。</p>
-          <p className="text-slate-500 text-sm mt-1">抽取第一張卡開始你的收藏。</p>
+        <div className="text-center py-20 rounded-xl"
+          style={{ border: "1px dashed #2e2416", background: "#0e0c08" }}>
+          <div className="text-4xl mb-3 opacity-60">🎴</div>
+          <p className="text-zinc-400">你還沒有任何角色卡。</p>
+          <p className="text-zinc-600 text-sm mt-1">抽取第一張卡開始你的收藏。</p>
         </div>
       ) : (
         <>
-          <p className="text-sm text-slate-500 mb-3">共 {cards.length} 張角色卡</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <p className="text-sm text-zinc-600 mb-4">共 {cards.length} 張角色卡</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 pb-12">
             {cards.map((card) => (
               <CardView key={card.id} card={card} scenarioTitles={scenarioTitles} onNameSaved={handleNameSaved} onDeleted={handleDeleted} />
             ))}
@@ -256,153 +284,177 @@ function CardView({
   }
 
   return (
-    <div className={`bg-slate-800/50 border ${style.border} ${style.glow} rounded-xl p-4 flex flex-col gap-0 ${highlight ? "ring-2 ring-zinc-400" : ""}`}>
-      <div className="flex items-start justify-between mb-3 gap-2">
-        <div className="flex-1 min-w-0">
-          {editing ? (
-            <div className="flex flex-col gap-1">
-              <input
-                ref={inputRef}
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") saveName();
-                  if (e.key === "Escape") setEditing(false);
-                }}
-                maxLength={40}
-                className="w-full bg-slate-900 border border-zinc-500 rounded px-2 py-1 text-white text-sm focus:outline-none"
-              />
-              {nameError && <span className="text-red-400 text-xs">{nameError}</span>}
-              <div className="flex gap-2 mt-0.5">
+    <div
+      className="relative rounded-xl p-5 pt-6 flex flex-col"
+      style={{
+        background: "linear-gradient(150deg,#1c1813 0%,#13100b 55%,#0f0c08 100%)",
+        border: "1px solid #2e2416",
+        boxShadow: highlight
+          ? "0 0 0 2px rgba(201,169,110,0.5), 0 4px 28px rgba(0,0,0,0.5)"
+          : `0 4px 24px rgba(0,0,0,0.45)${style.glow ? `, ${style.glow}` : ""}`,
+      }}
+    >
+      {/* Aged-paper speckle texture */}
+      <div className="absolute inset-0 rounded-xl pointer-events-none opacity-[0.05]"
+        style={{ backgroundImage: "radial-gradient(circle, #c9a96e 1px, transparent 1px)", backgroundSize: "16px 16px" }} />
+      {/* Ornate inner frame */}
+      <div className="absolute inset-[7px] rounded-lg pointer-events-none"
+        style={{ border: `1px solid ${style.frame}` }} />
+      {/* Paper clip */}
+      <div className="absolute -top-1.5 left-5 w-3.5 h-7 rounded-full pointer-events-none -rotate-12"
+        style={{ border: "2px solid rgba(201,169,110,0.35)", borderBottom: "none", background: "transparent" }} />
+
+      <div className="relative flex flex-col">
+        <div className="flex items-start justify-between mb-4 gap-2">
+          <div className="flex-1 min-w-0">
+            {editing ? (
+              <div className="flex flex-col gap-1">
+                <input
+                  ref={inputRef}
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") saveName();
+                    if (e.key === "Escape") setEditing(false);
+                  }}
+                  maxLength={40}
+                  className="w-full rounded px-2 py-1 text-white text-sm focus:outline-none"
+                  style={{ background: "#0e0c08", border: "1px solid rgba(201,169,110,0.4)" }}
+                />
+                {nameError && <span className="text-red-400 text-xs">{nameError}</span>}
+                <div className="flex gap-2 mt-0.5">
+                  <button
+                    onClick={saveName}
+                    disabled={saving}
+                    className="text-xs px-2 py-0.5 rounded disabled:opacity-50"
+                    style={{ background: "rgba(201,169,110,0.15)", border: "1px solid rgba(201,169,110,0.35)", color: "#c9a96e" }}
+                  >
+                    {saving ? "儲存中…" : "儲存"}
+                  </button>
+                  <button
+                    onClick={() => setEditing(false)}
+                    className="text-xs text-zinc-500 hover:text-zinc-300"
+                  >
+                    取消
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 min-w-0">
+                <h3 className="font-serif text-lg truncate" style={{ color: "#e4d8be", letterSpacing: "0.02em" }}>{card.name}</h3>
                 <button
-                  onClick={saveName}
-                  disabled={saving}
-                  className="text-xs bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white px-2 py-0.5 rounded"
+                  onClick={startEdit}
+                  title="Rename card"
+                  className="text-zinc-600 hover:text-gold shrink-0 text-xs leading-none"
                 >
-                  {saving ? "儲存中…" : "儲存"}
-                </button>
-                <button
-                  onClick={() => setEditing(false)}
-                  className="text-xs text-slate-400 hover:text-white"
-                >
-                  取消
+                  ✎
                 </button>
               </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5 min-w-0">
-              <h3 className="text-white font-semibold truncate">{card.name}</h3>
-              <button
-                onClick={startEdit}
-                title="Rename card"
-                className="text-slate-500 hover:text-slate-300 shrink-0 text-xs leading-none"
-              >
-                ✎
-              </button>
-            </div>
-          )}
+            )}
+          </div>
+          <span className={`text-xs px-2 py-0.5 rounded border bg-black/30 shrink-0 ${style.chip}`}>{card.rarity}</span>
         </div>
-        <span className={`text-xs px-2 py-0.5 rounded border ${style.chip} shrink-0`}>{card.rarity}</span>
-      </div>
 
-      <div className="grid grid-cols-3 gap-1.5 mb-2">
-        <StatBox label="HP" value={card.hp} />
-        <StatBox label="SAN" value={card.san} />
-        <StatBox label="MP" value={card.mp} />
-      </div>
+        <div className="grid grid-cols-3 gap-x-4 gap-y-px">
+          <StatBox label="HP" value={card.hp} />
+          <StatBox label="SAN" value={card.san} />
+          <StatBox label="MP" value={card.mp} />
+          {STAT_KEYS.map((k) => (
+            <StatBox key={k} label={k.toUpperCase()} value={card[k]} />
+          ))}
+        </div>
 
-      <div className="grid grid-cols-3 gap-1.5 mb-2">
-        {STAT_KEYS.map((k) => (
-          <StatBox key={k} label={k.toUpperCase()} value={card[k]} />
-        ))}
-      </div>
-
-      <div className="flex items-center justify-between text-xs border-t border-slate-700 pt-2 mt-1">
-        <span className="text-slate-400">
-          合計 <span className="text-white font-bold">{card.total_stats}</span>
-        </span>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowSkills((v) => !v)}
-            className="text-xs text-zinc-100 hover:text-white underline underline-offset-2"
-          >
-            {showSkills ? "收起技能 ▲" : "查看技能 ▼"}
-          </button>
-          <span className="text-slate-600">
-            {new Date(card.created_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+        <div className="flex items-center justify-between text-xs pt-3 mt-3"
+          style={{ borderTop: "1px solid #2a2010" }}>
+          <span className="text-zinc-500">
+            合計 <span className="text-gold font-bold">{card.total_stats}</span>
           </span>
-        </div>
-      </div>
-
-      {showSkills && (
-        <div className="mt-2 border-t border-slate-700 pt-2">
-          {card.skills && Object.keys(card.skills).filter((k) => (card.skills![k] ?? 0) > 0).length > 0 ? (
-            <div className="grid grid-cols-2 gap-1">
-              {Object.entries(card.skills)
-                .filter(([, v]) => (v ?? 0) > 0)
-                .sort(([, a], [, b]) => b - a)
-                .map(([k, v]) => (
-                  <div key={k} className="flex justify-between bg-slate-900/50 rounded px-2 py-1">
-                    <span className="text-slate-400 text-xs">{SKILL_ZH[k] ?? k.replace(/_/g, " ")}</span>
-                    <span className="text-white text-xs font-bold">{v}%</span>
-                  </div>
-                ))}
-            </div>
-          ) : (
-            <p className="text-slate-500 text-xs text-center py-2">尚未分配技能點數</p>
-          )}
-        </div>
-      )}
-
-      {card.cleared_scenarios && card.cleared_scenarios.length > 0 && (
-        <div className="mt-2 border-t border-slate-700 pt-2">
-          <p className="text-[10px] text-emerald-500 uppercase tracking-wider mb-1">已通關劇本</p>
-          <div className="flex flex-wrap gap-1">
-            {card.cleared_scenarios.map((sid) => (
-              <span
-                key={sid}
-                className="text-[10px] bg-emerald-900/40 text-emerald-300 border border-emerald-800 px-1.5 py-0.5 rounded"
-              >
-                🏆 {scenarioTitles?.[sid] ?? "劇本"}
-              </span>
-            ))}
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => setShowSkills((v) => !v)}
+              className="text-xs text-gold/80 hover:text-gold underline underline-offset-2"
+            >
+              {showSkills ? "收起技能 ▲" : "查看技能 ▼"}
+            </button>
+            <span className="text-zinc-700">
+              {new Date(card.created_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+            </span>
           </div>
         </div>
-      )}
 
-      {!confirmDelete ? (
-        <button
-          onClick={() => setConfirmDelete(true)}
-          className="mt-2 w-full text-xs text-slate-600 hover:text-red-400 transition-colors py-1"
-        >
-          刪除此卡
-        </button>
-      ) : (
-        <div className="mt-2 flex gap-2">
+        {showSkills && (
+          <div className="mt-3 pt-3" style={{ borderTop: "1px solid #2a2010" }}>
+            {card.skills && Object.keys(card.skills).filter((k) => (card.skills![k] ?? 0) > 0).length > 0 ? (
+              <div className="grid grid-cols-2 gap-1">
+                {Object.entries(card.skills)
+                  .filter(([, v]) => (v ?? 0) > 0)
+                  .sort(([, a], [, b]) => b - a)
+                  .map(([k, v]) => (
+                    <div key={k} className="flex justify-between rounded px-2 py-1" style={{ background: "rgba(0,0,0,0.3)" }}>
+                      <span className="text-zinc-500 text-xs">{SKILL_ZH[k] ?? k.replace(/_/g, " ")}</span>
+                      <span className="text-gold text-xs font-bold">{v}%</span>
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              <p className="text-zinc-600 text-xs text-center py-2">尚未分配技能點數</p>
+            )}
+          </div>
+        )}
+
+        {card.cleared_scenarios && card.cleared_scenarios.length > 0 && (
+          <div className="mt-3 pt-3" style={{ borderTop: "1px solid #2a2010" }}>
+            <p className="text-[10px] text-emerald-500 uppercase tracking-wider mb-1.5">已通關劇本</p>
+            <div className="flex flex-wrap gap-1">
+              {card.cleared_scenarios.map((sid) => (
+                <span
+                  key={sid}
+                  className="text-[10px] px-1.5 py-0.5 rounded"
+                  style={{ background: "rgba(6,78,59,0.4)", border: "1px solid rgba(6,95,70,0.6)", color: "#6ee7b7" }}
+                >
+                  🏆 {scenarioTitles?.[sid] ?? "劇本"}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!confirmDelete ? (
           <button
-            onClick={deleteCard}
-            disabled={deleting}
-            className="flex-1 text-xs bg-red-800/70 hover:bg-red-700 disabled:opacity-50 text-red-200 rounded py-1.5 font-medium"
+            onClick={() => setConfirmDelete(true)}
+            className="mt-3 w-full text-xs text-zinc-700 hover:text-red-400 transition-colors py-1"
           >
-            {deleting ? "刪除中…" : "確認刪除"}
+            🗑 刪除此卡
           </button>
-          <button
-            onClick={() => setConfirmDelete(false)}
-            className="flex-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded py-1.5"
-          >
-            取消
-          </button>
-        </div>
-      )}
+        ) : (
+          <div className="mt-3 flex gap-2">
+            <button
+              onClick={deleteCard}
+              disabled={deleting}
+              className="flex-1 text-xs rounded py-1.5 font-medium disabled:opacity-50"
+              style={{ background: "rgba(127,29,29,0.6)", color: "#fecaca" }}
+            >
+              {deleting ? "刪除中…" : "確認刪除"}
+            </button>
+            <button
+              onClick={() => setConfirmDelete(false)}
+              className="flex-1 text-xs rounded py-1.5"
+              style={{ background: "#1a150e", border: "1px solid #2e2416", color: "#a1a1aa" }}
+            >
+              取消
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 function StatBox({ label, value }: { label: string; value: number }) {
   return (
-    <div className="flex justify-between bg-slate-900/50 rounded px-2 py-1">
-      <span className="text-slate-500 text-xs">{label}</span>
-      <span className="text-slate-200 text-xs font-medium">{value}</span>
+    <div className="flex justify-between items-center py-1.5" style={{ borderBottom: "1px solid rgba(42,32,16,0.6)" }}>
+      <span className="text-zinc-600 text-[11px] tracking-wide">{label}</span>
+      <span className="text-zinc-200 text-xs font-semibold">{value}</span>
     </div>
   );
 }
