@@ -30,11 +30,11 @@ export async function Navbar() {
           <span className="font-semibold text-zinc-100 tracking-wide text-sm">TRPG Platform</span>
         </Link>
 
-        {/* Nav links — client component handles active underline */}
-        <NavbarLinks isAdmin={isAdmin} isLoggedIn={!!user} />
-
-        {/* User section */}
-        <NavbarClient user={user ? { username } : null} />
+        {/* Right group: nav links + user section */}
+        <div className="flex items-center gap-8">
+          <NavbarLinks isAdmin={isAdmin} isLoggedIn={!!user} />
+          <NavbarClient user={user ? { username } : null} />
+        </div>
       </div>
     </nav>
   );

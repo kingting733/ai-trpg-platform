@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { LocationEntry, NpcEntry } from "@/lib/ai/gm";
+import { CoverImageUpload } from "@/components/CoverImageUpload";
 
 const GENRES = ["Fantasy", "Cyberpunk", "Horror", "Sci-Fi", "Mystery", "Historical", "Other"];
 const DIFFICULTIES = ["Story", "Normal", "Hard", "Nightmare"] as const;
@@ -262,11 +263,8 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
             <Field label="標籤（逗號分隔）">
               <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="地城, 單人友好, 黑暗" className={inputCls} />
             </Field>
-            <Field label="封面圖片網址" hint="貼上一張圖片的 URL，作為劇本封面顯示在劇本庫中。建議比例 16:9，暗色系氛圍圖。">
-              <input value={coverImageUrl} onChange={(e) => setCoverImageUrl(e.target.value)} placeholder="https://..." className={inputCls} />
-              {coverImageUrl.trim() && (
-                <img src={coverImageUrl.trim()} alt="封面預覽" className="mt-2 rounded-lg h-32 object-cover w-full opacity-80 border border-slate-600" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-              )}
+            <Field label="封面圖片" hint="上傳一張圖片作為劇本封面，顯示在劇本庫中。建議比例 16:9，暗色系氛圍圖效果最佳。">
+              <CoverImageUpload value={coverImageUrl} onChange={setCoverImageUrl} />
             </Field>
             <Field label="劇本語言" hint="AI 主持人將以此語言進行遊戲敘述。">
               <select value={language} onChange={(e) => setLanguage(e.target.value)} className={inputCls}>
