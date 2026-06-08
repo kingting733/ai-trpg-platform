@@ -33,7 +33,7 @@ async function callAI(system: string, user: string): Promise<string> {
           model,
           system,
           messages: [{ role: "user", content: user }],
-          max_tokens: 300,
+          max_tokens: 900,
         }),
       });
       if (!res.ok) return "{}";
@@ -48,7 +48,7 @@ async function callAI(system: string, user: string): Promise<string> {
       body: JSON.stringify({
         model,
         messages: [{ role: "system", content: system }, { role: "user", content: user }],
-        max_tokens: 300,
+        max_tokens: 900,
         temperature: 0.1,
       }),
     });
@@ -110,7 +110,7 @@ Field rules:
 - triggered: true only if ALL required ending conditions are clearly met by the cumulative story
 - type: "best" = perfect/ideal win, "normal" = standard success, "bad" = pyrrhic/bittersweet success, "failure" = defeat/death/quest failed
 - title: 4-7 word ending title written in the scenario language — null if not triggered
-- summary: 2-3 sentences describing how the adventure concluded, written in the scenario language for a closing screen — null if not triggered`;
+- summary: when triggered, a vivid epilogue of about 300 words in flowing prose (written in the scenario language) describing what happens AFTERWARD as a direct consequence of the specific choices and actions the players took — the fate of each character, what becomes of the world/place, and how the loose threads resolve. Ground every beat in the STORY HISTORY shown; do not invent events that contradict it. null if not triggered`;
 
   // Send up to 12 lines of history (increased from 6 to avoid dropping earlier key actions).
   // The current action is already inside recentLog (saved before this call), so we do NOT
@@ -143,7 +143,7 @@ Have the ending conditions been cumulatively met?`;
         ? parsed.title.trim().slice(0, 80)
         : "The Story Ends",
       summary: typeof parsed.summary === "string" && parsed.summary.trim()
-        ? parsed.summary.trim().slice(0, 600)
+        ? parsed.summary.trim().slice(0, 4000)
         : null,
     };
   } catch {

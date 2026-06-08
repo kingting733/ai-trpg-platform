@@ -715,10 +715,12 @@ function EndingScreen({
         </p>
       </div>
 
-      {/* Ending summary */}
+      {/* Ending summary — ~300-word epilogue */}
       {room.ending_summary && (
-        <Panel className="w-full p-5" frame={glow}>
-          <p className="text-zinc-300 leading-relaxed text-sm">{room.ending_summary}</p>
+        <Panel className="w-full p-6" frame={glow}>
+          <div className="max-h-[22rem] overflow-y-auto pr-1 leading-relaxed">
+            <GmText content={room.ending_summary} />
+          </div>
         </Panel>
       )}
 

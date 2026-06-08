@@ -415,18 +415,18 @@ Return ONLY valid JSON, no markdown:
 {"type":"best"|"normal"|"bad","title":string,"summary":string}
 - type: "best" = flawless/ideal victory, "normal" = solid success, "bad" = costly/bittersweet victory. Default "normal".
 - title: 4-7 word ending title.
-- summary: 2-3 sentences describing how the adventure concluded.`;
+- summary: a vivid epilogue of about 300 words, written in flowing prose, describing what happens AFTERWARD as a direct consequence of the specific choices and actions the players took during the adventure — the fate of each character, what becomes of the world/place, and how the loose threads resolve. Ground every beat in the actual events shown in RECENT STORY; do not invent characters or events that contradict it.`;
 
   const user = `ADVENTURE: ${scenarioTitle}
 COMPLETED OBJECTIVES:
 ${goalList}
 
-RECENT STORY:
-${recentLog.slice(-6).join("\n")}
+RECENT STORY (what the players actually did — base the epilogue on this):
+${recentLog.slice(-14).join("\n")}
 
-Write the victory closing screen.`;
+Write the victory closing screen with a ~300-word epilogue.`;
 
-  const raw = await callAI(system, user, 300);
+  const raw = await callAI(system, user, 900);
   if (!raw) return fallback;
   try {
     const parsed = JSON.parse(extractJSON(raw));
@@ -434,7 +434,7 @@ Write the victory closing screen.`;
     return {
       type,
       title: typeof parsed?.title === "string" && parsed.title.trim() ? parsed.title.trim().slice(0, 80) : fallback.title,
-      summary: typeof parsed?.summary === "string" && parsed.summary.trim() ? parsed.summary.trim().slice(0, 600) : fallback.summary,
+      summary: typeof parsed?.summary === "string" && parsed.summary.trim() ? parsed.summary.trim().slice(0, 4000) : fallback.summary,
     };
   } catch {
     return fallback;
@@ -523,24 +523,24 @@ export async function generateFailureNarration(
 Return ONLY valid JSON, no markdown:
 {"title":string,"summary":string}
 - title: 4-7 word failure ending title.
-- summary: 2-3 sentences describing how the adventure ended in failure.`;
+- summary: a vivid epilogue of about 300 words, written in flowing prose, describing what happens AFTERWARD as a direct consequence of the specific choices and actions the players took — the grim fate of each character, what becomes of the world/place left behind, and how the unresolved threads curdle. Ground every beat in the actual events shown in RECENT STORY; do not invent characters or events that contradict it.`;
 
   const user = `ADVENTURE: ${scenarioTitle}
 FAILURE THAT TRIGGERED: ${failedCondition}
 
-RECENT STORY:
-${recentLog.slice(-6).join("\n")}
+RECENT STORY (what the players actually did — base the epilogue on this):
+${recentLog.slice(-14).join("\n")}
 
-Write the failure closing screen.`;
+Write the failure closing screen with a ~300-word epilogue.`;
 
-  const raw = await callAI(system, user, 300);
+  const raw = await callAI(system, user, 900);
   if (!raw) return fallback;
   try {
     const parsed = JSON.parse(extractJSON(raw));
     return {
       type: "failure",
       title: typeof parsed?.title === "string" && parsed.title.trim() ? parsed.title.trim().slice(0, 80) : fallback.title,
-      summary: typeof parsed?.summary === "string" && parsed.summary.trim() ? parsed.summary.trim().slice(0, 600) : fallback.summary,
+      summary: typeof parsed?.summary === "string" && parsed.summary.trim() ? parsed.summary.trim().slice(0, 4000) : fallback.summary,
     };
   } catch {
     return fallback;
