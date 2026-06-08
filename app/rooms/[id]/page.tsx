@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, type CSSProperties, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -72,11 +72,11 @@ function StatBar({ label, cur, max, pct, color }: {
 }) {
   return (
     <div>
-      <div className="flex justify-between items-baseline mb-0.5">
-        <span className="text-slate-400 text-xs">{label}</span>
-        <span className="text-slate-300 text-xs font-medium tabular-nums">{cur}<span className="text-slate-600">/{max}</span></span>
+      <div className="flex justify-between items-baseline mb-1">
+        <span className="text-zinc-400 text-xs">{label}</span>
+        <span className="text-zinc-200 text-xs font-bold tabular-nums">{cur}<span className="text-zinc-600">/{max}</span></span>
       </div>
-      <div className="h-1.5 w-full bg-slate-900/70 rounded-full overflow-hidden">
+      <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: "#0e0c08" }}>
         <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
       </div>
     </div>
@@ -92,12 +92,12 @@ function GmText({ content }: { content: string }) {
         // Bold header: paragraph that is entirely **...**
         const headerMatch = para.match(/^\*\*(.+?)\*\*$/);
         if (headerMatch) {
-          return <p key={i} className="text-amber-300 font-semibold text-sm">{headerMatch[1]}</p>;
+          return <p key={i} className="text-gold font-semibold text-sm">{headerMatch[1]}</p>;
         }
         // Inline **bold** within a line
         const parts = para.split(/(\*\*.+?\*\*)/g);
         return (
-          <p key={i} className="text-slate-200 text-sm leading-relaxed">
+          <p key={i} className="text-zinc-300 text-sm leading-relaxed">
             {parts.map((part, j) => {
               const m = part.match(/^\*\*(.+?)\*\*$/);
               return m ? <strong key={j} className="text-white font-semibold">{m[1]}</strong> : part;
@@ -121,6 +121,54 @@ const STAT_ZH: Record<string, string> = {
   str: "力量", con: "體質", siz: "體型", dex: "敏捷", app: "外貌",
   int: "智力", pow: "意志", edu: "教育", luck: "幸運",
 };
+
+// ─── Shared occult / aged-parchment styling ─────────────────────────────────
+const PANEL: CSSProperties = {
+  background: "linear-gradient(150deg,#1c1813 0%,#13100b 55%,#0f0c08 100%)",
+  border: "1px solid #2e2416",
+  boxShadow: "0 4px 24px rgba(0,0,0,0.45)",
+};
+
+// Parchment surface with an ornate inner frame.
+function Panel({ children, className = "", style, frame = "rgba(201,169,110,0.14)" }: {
+  children: ReactNode; className?: string; style?: CSSProperties; frame?: string;
+}) {
+  return (
+    <div className={`relative rounded-xl ${className}`} style={{ ...PANEL, ...style }}>
+      <div className="absolute inset-[6px] rounded-lg pointer-events-none" style={{ border: `1px solid ${frame}` }} />
+      <div className="relative">{children}</div>
+    </div>
+  );
+}
+
+// Concentric occult seal glyph.
+function Seal({ size = 38, glyph = "✦", className = "" }: { size?: number; glyph?: string; className?: string }) {
+  return (
+    <div className={`relative shrink-0 flex items-center justify-center text-gold/70 ${className}`} style={{ width: size, height: size }}>
+      <div className="absolute inset-0 rounded-full" style={{ border: "1px solid rgba(201,169,110,0.30)" }} />
+      <div className="absolute inset-[3px] rounded-full" style={{ border: "1px solid rgba(201,169,110,0.16)" }} />
+      <span style={{ fontSize: size * 0.42, lineHeight: 1 }}>{glyph}</span>
+    </div>
+  );
+}
+
+// Decorative paper clip.
+function Clip({ className = "" }: { className?: string }) {
+  return (
+    <div className={`absolute w-3.5 h-7 rounded-full -rotate-12 pointer-events-none z-10 ${className}`}
+      style={{ border: "2px solid rgba(201,169,110,0.30)", borderBottom: "none" }} />
+  );
+}
+
+// Small section header with an occult diamond marker.
+function PanelHeader({ title }: { title: string }) {
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      <span className="text-gold/70 text-sm leading-none">◈</span>
+      <h3 className="font-serif text-gold text-sm tracking-wide">{title}</h3>
+    </div>
+  );
+}
 
 export default function RoomPlayPage({ params }: { params: { id: string } }) {
   const router = useRouter();
@@ -273,7 +321,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     setEndingGame(false);
   }
 
-  if (!room) return <div className="text-center text-slate-400 py-20">載入房間中...</div>;
+  if (!room) return <div className="text-center text-zinc-600 py-20">載入房間中...</div>;
 
   // Ending screen
   if (room.status === "completed") {
@@ -294,101 +342,124 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   const hasStarted = room.current_round > 0;
 
   return (
+    <>
+    {/* Faint occult texture behind the whole play view */}
+    <div className="fixed inset-0 -z-10 pointer-events-none opacity-[0.04]" aria-hidden
+      style={{ backgroundImage: "radial-gradient(circle, #c9a96e 1px, transparent 1px)", backgroundSize: "42px 42px" }} />
     <div className="grid grid-cols-[1fr_280px] gap-4 h-[calc(100vh-7rem)]">
       {/* Main area */}
       <div className="flex flex-col gap-3 min-h-0">
         {/* Header */}
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3 text-sm">
-            <span className="text-slate-400">回合 <span className="text-white font-bold">{room.current_round || "—"}</span></span>
-            <span className="text-slate-600">·</span>
-            {currentTurnChar ? (
-              <span className="text-slate-400">
-                行動者：<span className={`font-bold ${isMyTurn ? "text-green-400" : "text-zinc-100"}`}>
-                  {isMyTurn ? "輪到你了！" : currentTurnChar.name}
+        <Panel className="px-5 py-3 shrink-0">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 text-sm">
+              <Seal size={34} glyph="✶" />
+              <span className="text-zinc-400">回合 <span className="text-gold font-bold">{room.current_round || "—"}</span></span>
+              <span className="text-zinc-700">·</span>
+              {currentTurnChar ? (
+                <span className="text-zinc-400">
+                  行動者：<span className={`font-bold ${isMyTurn ? "text-emerald-400" : "text-gold"}`}>
+                    {isMyTurn ? "輪到你了！" : currentTurnChar.name}
+                  </span>
                 </span>
-              </span>
-            ) : (
-              <span className="text-slate-500">等待開始...</span>
-            )}
+              ) : (
+                <span className="text-zinc-600">等待開始...</span>
+              )}
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-xs text-zinc-500 font-mono tracking-wider">房間代碼 {room.room_code}</span>
+              {room.host_id === currentUserId && hasStarted && (
+                <button
+                  onClick={endGame}
+                  disabled={endingGame}
+                  className="text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 hover:brightness-125"
+                  style={{ border: "1px solid rgba(185,28,28,0.5)", color: "#f87171", background: "rgba(127,29,29,0.15)" }}
+                >
+                  結束遊戲
+                </button>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-slate-500 font-mono">{room.room_code}</span>
-            {room.host_id === currentUserId && hasStarted && (
-              <button
-                onClick={endGame}
-                disabled={endingGame}
-                className="text-xs text-red-400 hover:text-red-300 border border-red-900/50 hover:border-red-700 px-2 py-1 rounded transition-colors disabled:opacity-40"
-              >
-                結束遊戲
-              </button>
-            )}
-          </div>
-        </div>
+        </Panel>
 
         {/* Story log */}
-        <div className="relative flex-1 min-h-0 flex flex-col">
-        <div ref={logContainerRef} onScroll={onLogScroll} className="flex-1 bg-slate-900/50 border border-slate-700 rounded-xl p-4 overflow-y-auto min-h-0 flex flex-col gap-3">
+        <div className="relative flex-1 min-h-0 flex flex-col rounded-xl" style={PANEL}>
+          {/* Ornate frame + decorations (fixed to the panel, not the scroll content) */}
+          <div className="absolute inset-[6px] rounded-lg pointer-events-none z-10" style={{ border: "1px solid rgba(201,169,110,0.16)" }} />
+          <Clip className="-top-1.5 left-7" />
+          <div className="absolute -top-2 right-9 px-3 py-1 rotate-3 pointer-events-none z-10 text-[10px] italic"
+            style={{ background: "rgba(40,34,24,0.92)", border: "1px solid rgba(201,169,110,0.2)", color: "rgba(201,169,110,0.5)", boxShadow: "0 2px 8px rgba(0,0,0,0.5)" }}>
+            observe · record
+          </div>
+          <div className="absolute bottom-5 right-6 pointer-events-none z-0 opacity-[0.10]">
+            <Seal size={88} glyph="◬" />
+          </div>
+
+          <div ref={logContainerRef} onScroll={onLogScroll} className="relative z-[1] flex-1 p-5 overflow-y-auto min-h-0 flex flex-col gap-3">
           {storyLog.length === 0 && (
-            <p className="text-slate-500 text-sm italic text-center mt-8">
+            <p className="text-zinc-600 text-sm italic text-center mt-8">
               {needsInit ? "準備就緒 — 點擊下方「開始冒險」！" : "等待所有玩家選擇調查員..."}
             </p>
           )}
           {storyLog.map((entry) => (
             <div key={entry.id}>
               {entry.entry_type === "system" && (
-                <p className="text-slate-500 italic text-xs text-center">{entry.content}</p>
+                <p className="text-zinc-600 italic text-xs text-center">{entry.content}</p>
               )}
               {entry.entry_type === "action" && (
                 <div className="flex flex-col gap-1">
                   <div className="flex gap-2">
-                    <span className="text-zinc-100 font-medium text-sm shrink-0">{entry.characters?.name ?? "Player"}:</span>
-                    <span className="text-slate-300 text-sm">{entry.content}</span>
+                    <span className="text-gold font-medium text-sm shrink-0">{entry.characters?.name ?? "Player"}:</span>
+                    <span className="text-zinc-300 text-sm">{entry.content}</span>
                   </div>
                   {entry.roll_result?.requires_check && <DiceResult roll={entry.roll_result} />}
                 </div>
               )}
               {entry.entry_type === "gm_response" && (
-                <div className="bg-slate-800 border border-amber-900/50 rounded-lg p-3">
-                  <span className="text-xs text-amber-500 font-medium uppercase tracking-wider block mb-2">GM</span>
+                <div className="rounded-lg p-3.5" style={{ background: "rgba(20,16,11,0.6)", border: "1px solid rgba(201,169,110,0.18)" }}>
+                  <span className="text-xs text-gold font-medium uppercase tracking-wider block mb-2">GM</span>
                   <GmText content={entry.content} />
                 </div>
               )}
             </div>
           ))}
           {gmThinking && (
-            <div className="bg-slate-800 border border-amber-900/30 rounded-lg p-3">
-              <span className="text-xs text-amber-500/60 font-medium uppercase tracking-wider block mb-1">GM</span>
-              <span className="text-slate-500 text-sm italic">thinking...</span>
+            <div className="rounded-lg p-3.5" style={{ background: "rgba(20,16,11,0.5)", border: "1px solid rgba(201,169,110,0.10)" }}>
+              <span className="text-xs text-gold/60 font-medium uppercase tracking-wider block mb-1">GM</span>
+              <span className="text-zinc-600 text-sm italic">thinking...</span>
             </div>
           )}
           <div ref={logEndRef} />
-        </div>
+          </div>
 
-        {/* Jump-to-latest button — appears only when scrolled away from the bottom */}
-        {!atBottom && (
-          <button
-            onClick={scrollToBottom}
-            className="absolute bottom-3 right-3 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-medium px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1 transition-colors"
-          >
-            ↓ 最新訊息
-          </button>
-        )}
+          {/* Jump-to-latest button — appears only when scrolled away from the bottom */}
+          {!atBottom && (
+            <button
+              onClick={scrollToBottom}
+              className="absolute bottom-3 right-3 z-20 text-xs font-medium px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1 transition-colors"
+              style={{ background: "rgba(26,21,14,0.95)", border: "1px solid rgba(201,169,110,0.35)", color: "#c9a96e" }}
+            >
+              ↓ 最新訊息
+            </button>
+          )}
         </div>
 
         {/* Suggested choices — only shown if they were generated FOR the current turn player */}
         {isMyTurn && choicesAreForMe && (room.current_choices?.length ?? 0) === 3 && hasStarted && (
           <div className="flex flex-col gap-2 shrink-0">
-            <p className="text-xs text-slate-500 uppercase tracking-wider">建議行動 — 或在下方輸入自己的行動</p>
+            <p className="text-xs tracking-wider"><span className="text-gold font-medium">建議行動</span> <span className="text-zinc-600">— 或在下方輸入自己的行動</span></p>
             <div className="grid grid-cols-1 gap-2">
               {room.current_choices!.map((c, i) => (
                 <button
                   key={i}
                   onClick={() => submitAction(c)}
                   disabled={submitting}
-                  className="text-left bg-slate-800 hover:bg-slate-700 border border-slate-600 hover:border-zinc-400 text-slate-300 hover:text-white text-sm px-4 py-2.5 rounded-lg transition-colors disabled:opacity-40"
+                  className="group flex items-center gap-3 text-left rounded-lg px-4 py-3 transition-all disabled:opacity-40 hover:brightness-110"
+                  style={{ background: "rgba(26,21,14,0.6)", border: "1px solid #2e2416" }}
                 >
-                  <span className="text-zinc-100 font-bold mr-2">{i + 1}.</span>{c}
+                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-full shrink-0 text-xs text-gold"
+                    style={{ border: "1px solid rgba(201,169,110,0.35)" }}>{i + 1}</span>
+                  <span className="text-zinc-300 group-hover:text-zinc-100 text-sm">{c}</span>
                 </button>
               ))}
             </div>
@@ -400,15 +471,19 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           <button
             onClick={initializeTurns}
             disabled={initializing}
-            className="w-full bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white py-3 rounded-xl font-medium shrink-0"
+            className="w-full py-3 rounded-xl font-serif text-base shrink-0 transition-all disabled:opacity-50 hover:brightness-110"
+            style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07", boxShadow: "0 0 18px rgba(201,169,110,0.2)" }}
           >
             {initializing ? "開始中..." : "開始冒險"}
           </button>
         ) : hasStarted && iAmDead ? (
-          <div className={`text-center text-sm py-3 shrink-0 border rounded-xl ${iAmInsane ? "text-teal-300 border-teal-900/50 bg-teal-900/40" : "text-red-300 border-red-900/50 bg-red-900/20"}`}>
+          <div className="text-center text-sm py-3 shrink-0 border rounded-xl"
+            style={iAmInsane && !iAmDown
+              ? { color: "#5eead4", borderColor: "rgba(19,78,74,0.6)", background: "rgba(19,78,74,0.25)" }
+              : { color: "#fca5a5", borderColor: "rgba(127,29,29,0.5)", background: "rgba(127,29,29,0.2)" }}>
             {iAmInsane && !iAmDown
-              ? `${myCharacter?.name ?? "你的角色"} 的精神已完全崩潰，永遠迷失在黑暗中。`
-              : `${myCharacter?.name ?? "你的角色"} 已在此倒下，無法再行動。`}
+              ? `${myCharacter?.name ?? "你的調查員"} 的精神已完全崩潰，永遠迷失在黑暗中。`
+              : `${myCharacter?.name ?? "你的調查員"} 已在此倒下，無法再行動。`}
           </div>
         ) : hasStarted ? (
           <div className="flex flex-col gap-2 shrink-0">
@@ -419,12 +494,14 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && isMyTurn && !submitting) { e.preventDefault(); submitAction(); } }}
               placeholder={isMyTurn ? "描述你的行動..." : `等待 ${currentTurnChar?.name ?? "..."} 行動...`}
               disabled={!isMyTurn || submitting}
-              className="flex-1 bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-zinc-500 disabled:opacity-50"
+              className="flex-1 rounded-xl px-4 py-3 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-gold/50 disabled:opacity-50 transition-colors"
+              style={{ background: "rgba(14,12,8,0.8)", border: "1px solid #2e2416" }}
             />
             <button
               onClick={() => submitAction()}
               disabled={!isMyTurn || !actionText.trim() || submitting}
-              className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-6 py-3 rounded-xl font-medium shrink-0"
+              className="px-7 py-3 rounded-xl font-serif text-sm shrink-0 transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110"
+              style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07", boxShadow: "0 0 16px rgba(201,169,110,0.18)" }}
             >
               {submitting ? "..." : "Submit"}
             </button>
@@ -439,13 +516,14 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                 return (
                   <button
                     onClick={() => router.push(`/rooms/${params.id}/select-card`)}
-                    className="bg-zinc-800 hover:bg-zinc-700 text-white px-6 py-2.5 rounded-lg font-medium"
+                    className="px-6 py-2.5 rounded-lg font-serif transition-all hover:brightness-110"
+                    style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07" }}
                   >
                     選擇調查員以繼續 →
                   </button>
                 );
               }
-              return <span className="text-slate-500">{allHaveChars ? "等待主持人開始..." : "等待所有玩家選擇調查員..."}</span>;
+              return <span className="text-zinc-600">{allHaveChars ? "等待主持人開始..." : "等待所有玩家選擇調查員..."}</span>;
             })()}
           </div>
         )}
@@ -456,21 +534,24 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
 
         {/* Objective Tracker */}
         {room.objectives && room.objectives.length > 0 && (
-          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 shrink-0">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">任務目標</h3>
+          <Panel className="p-4 shrink-0">
+            <PanelHeader title="任務目標" />
             <div className="flex flex-col gap-2">
               {room.objectives.map((obj) => {
                 const prog = room.objective_progress?.[obj.id];
                 const done = prog?.done === true;
                 return (
                   <div key={obj.id} className={`flex items-start gap-2 text-xs ${done ? "opacity-60" : ""}`}>
-                    <span className={`shrink-0 mt-0.5 w-4 h-4 rounded flex items-center justify-center font-bold ${done ? "bg-emerald-800/60 text-emerald-300 border border-emerald-700" : "bg-slate-700 text-slate-500 border border-slate-600"}`}>
+                    <span className="shrink-0 mt-0.5 w-4 h-4 rounded flex items-center justify-center font-bold"
+                      style={done
+                        ? { background: "rgba(6,78,59,0.5)", color: "#6ee7b7", border: "1px solid rgba(6,95,70,0.7)" }
+                        : { background: "rgba(14,12,8,0.8)", color: "#71717a", border: "1px solid #2e2416" }}>
                       {done ? "✓" : "○"}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <span className={done ? "text-slate-400 line-through" : "text-slate-200"}>{obj.text}</span>
+                      <span className={done ? "text-zinc-500 line-through" : "text-zinc-300"}>{obj.text}</span>
                       {obj.scope === "each_player" && !done && (
-                        <span className="ml-1.5 text-[10px] text-slate-500">（各自完成）</span>
+                        <span className="ml-1.5 text-[10px] text-zinc-600">（各自完成）</span>
                       )}
                       {done && prog?.character && (
                         <span className="ml-1.5 text-[10px] text-emerald-600">by {prog.character}</span>
@@ -480,29 +561,30 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                 );
               })}
             </div>
-          </div>
+          </Panel>
         )}
 
-<div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 shrink-0">
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">行動順序</h3>
+        <Panel className="p-4 shrink-0">
+          <PanelHeader title="行動順序" />
           <div className="flex flex-col gap-1.5">
-            {sortedByDex.length === 0 && <p className="text-slate-500 text-xs">尚無角色</p>}
+            {sortedByDex.length === 0 && <p className="text-zinc-600 text-xs">尚無調查員</p>}
             {sortedByDex.map((c, i) => {
               const isActive = c.user_id === room.current_turn_player_id && hasStarted;
               return (
                 <div
                   key={c.id}
-                  className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs ${isActive ? "bg-zinc-800/60 border border-zinc-600" : ""}`}
+                  className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs"
+                  style={isActive ? { background: "rgba(201,169,110,0.10)", border: "1px solid rgba(201,169,110,0.30)" } : { border: "1px solid transparent" }}
                 >
-                  <span className="text-slate-600 w-3">{i + 1}.</span>
-                  <span className={`flex-1 font-medium truncate ${isActive ? "text-white" : "text-slate-300"}`}>{c.name}</span>
-                  <span className="text-slate-500">DEX {c.dex}</span>
-                  {isActive && <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />}
+                  <span className="text-zinc-600 w-3">{i + 1}.</span>
+                  <span className={`flex-1 font-medium truncate ${isActive ? "text-gold" : "text-zinc-300"}`}>{c.name}</span>
+                  <span className="text-zinc-500">DEX {c.dex}</span>
+                  {isActive && <span className="w-1.5 h-1.5 rounded-full bg-gold shrink-0" />}
                 </div>
               );
             })}
           </div>
-        </div>
+        </Panel>
 
         {sortedByDex.map((c) => {
           const isActive = c.user_id === room.current_turn_player_id && hasStarted;
@@ -510,11 +592,16 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           const insane = c.san <= 0;
           const dead = down || insane;
           return (
-            <div key={c.id} className={`bg-slate-800/50 border rounded-xl p-4 shrink-0 ${dead ? "border-red-900/70 opacity-60" : isActive ? "border-zinc-600" : "border-slate-700"}`}>
-              <div className="flex items-center justify-between mb-2 gap-2">
-                <h4 className="font-medium text-white text-sm truncate">{c.name}</h4>
-                {down && <span className="text-[10px] bg-red-900/60 text-red-300 border border-red-800 px-1.5 py-0.5 rounded shrink-0">陣亡</span>}
-                {!down && insane && <span className="text-[10px] bg-teal-900/60 text-teal-300 border border-teal-800 px-1.5 py-0.5 rounded shrink-0">發瘋</span>}
+            <Panel key={c.id} className="p-4 shrink-0"
+              frame={dead ? "rgba(185,28,28,0.4)" : isActive ? "rgba(201,169,110,0.40)" : "rgba(201,169,110,0.14)"}
+              style={dead ? { opacity: 0.65 } : undefined}>
+              <div className="flex items-center justify-between mb-3 gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-gold/70 text-sm leading-none">◈</span>
+                  <h4 className="font-serif text-gold truncate">{c.name}</h4>
+                </div>
+                {down && <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: "rgba(127,29,29,0.6)", color: "#fca5a5", border: "1px solid rgba(153,27,27,0.7)" }}>陣亡</span>}
+                {!down && insane && <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: "rgba(19,78,74,0.6)", color: "#5eead4", border: "1px solid rgba(17,94,89,0.7)" }}>發瘋</span>}
               </div>
               {(() => {
                 const maxHp = Math.max(1, Math.floor((c.con + c.siz) / 10));
@@ -534,38 +621,39 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                   </div>
                 );
               })()}
-              <div className="grid grid-cols-2 gap-1">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-px">
                 {(["str","con","siz","dex","app","int","pow","edu","luck"] as const).map((k) => (
-                  <div key={k} className="flex justify-between bg-slate-900/50 rounded px-2 py-0.5">
-                    <span className="text-slate-500 text-xs">{STAT_ZH[k]}</span>
-                    <span className="text-slate-300 text-xs font-medium">{c[k]}</span>
+                  <div key={k} className="flex justify-between items-center py-1" style={{ borderBottom: "1px solid rgba(42,32,16,0.5)" }}>
+                    <span className="text-zinc-600 text-[11px]">{STAT_ZH[k]}</span>
+                    <span className="text-zinc-200 text-xs font-semibold">{c[k]}</span>
                   </div>
                 ))}
               </div>
               <button
                 onClick={() => toggleSkills(c.id)}
-                className="mt-2 w-full text-xs text-zinc-100 hover:text-white text-left"
+                className="mt-3 w-full text-xs text-gold/80 hover:text-gold text-left"
               >
                 {skillsOpen[c.id] ? "收起技能 ▲" : "查看技能 ▼"}
               </button>
               {skillsOpen[c.id] && (
-                <div className="mt-1 grid grid-cols-2 gap-1">
+                <div className="mt-2 grid grid-cols-2 gap-1">
                   {c.skills && Object.entries(c.skills).filter(([,v]) => (v ?? 0) > 0).sort(([,a],[,b]) => b-a).map(([k,v]) => (
-                    <div key={k} className="flex justify-between bg-slate-900/50 rounded px-2 py-0.5">
-                      <span className="text-slate-500 text-xs truncate">{SKILL_ZH[k] ?? k.replace(/_/g," ")}</span>
-                      <span className="text-white text-xs font-bold">{v}%</span>
+                    <div key={k} className="flex justify-between rounded px-2 py-1" style={{ background: "rgba(0,0,0,0.3)" }}>
+                      <span className="text-zinc-500 text-xs truncate">{SKILL_ZH[k] ?? k.replace(/_/g," ")}</span>
+                      <span className="text-gold text-xs font-bold">{v}%</span>
                     </div>
                   ))}
                   {(!c.skills || Object.values(c.skills).every(v => (v??0) === 0)) && (
-                    <p className="col-span-2 text-slate-600 text-xs text-center py-1">尚未分配技能</p>
+                    <p className="col-span-2 text-zinc-600 text-xs text-center py-1">尚未分配技能</p>
                   )}
                 </div>
               )}
-            </div>
+            </Panel>
           );
         })}
       </div>
     </div>
+    </>
   );
 }
 
