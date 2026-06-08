@@ -11,6 +11,7 @@ interface Character {
   str: number; con: number; siz: number; dex: number; app: number;
   int: number; pow: number; edu: number; luck: number;
   skills: Record<string, number> | null;
+  occupation: string | null;
 }
 
 interface RollResult {
@@ -114,7 +115,7 @@ const SKILL_ZH: Record<string, string> = {
   psychology: "心理學", persuade: "說服", fast_talk: "話術",
   charm: "魅惑", intimidate: "恐嚇", dodge: "閃避",
   first_aid: "急救", stealth: "潛行", lockpick: "開鎖", drive_auto: "駕駛汽車",
-  firearms: "射擊", occult: "神秘學",
+  firearms: "射擊", occult: "神秘學", fighting: "搏鬥",
 };
 
 const STAT_ZH: Record<string, string> = {
@@ -602,6 +603,12 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="text-gold/70 text-sm leading-none">◈</span>
                   <h4 className="font-serif text-gold truncate">{c.name}</h4>
+                  {c.occupation && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0"
+                      style={{ background: "rgba(201,169,110,0.1)", border: "1px solid rgba(201,169,110,0.3)", color: "#c9a96e" }}>
+                      {c.occupation}
+                    </span>
+                  )}
                 </div>
                 {down && <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: "rgba(127,29,29,0.6)", color: "#fca5a5", border: "1px solid rgba(153,27,27,0.7)" }}>陣亡</span>}
                 {!down && insane && <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: "rgba(19,78,74,0.6)", color: "#5eead4", border: "1px solid rgba(17,94,89,0.7)" }}>發瘋</span>}

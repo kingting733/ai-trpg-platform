@@ -25,6 +25,8 @@ export interface RevealCard {
   total_stats: number;
   rarity:      Rarity;
   roll_details: RollDetails | null;
+  skills?:     Record<string, number> | null; // occupation-seeded starting buffs
+  occupation?: string | null;
 }
 
 const RARITY_ACCENT: Record<Rarity, { color: string; glow: string; label: string }> = {
@@ -89,6 +91,7 @@ const SKILLS: { key: SkillKey; zh: string; base: number | "dex2" | "app2" | "inv
   { key: "drive_auto",   zh: "駕駛汽車",  base:  0 },
   { key: "firearms",     zh: "射擊",      base: 20 },
   { key: "occult",       zh: "神秘學",    base:  5 },
+  { key: "fighting",     zh: "搏鬥",      base: 25 },
 ];
 
 function baseForSkill(s: typeof SKILLS[number], dex: number, app: number = 50): number {
@@ -104,6 +107,16 @@ function SkillAllocator({ card, onSaved }: { card: RevealCard; onSaved: () => vo
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // Starting value (floor) for a skill = its occupation-seeded buff if present,
+  // otherwise the catalogue base. Players allocate points on top of the floor.
+  function floorFor(s: typeof SKILLS[number]): number {
+    const seeded = card.skills?.[s.key];
+    if (typeof seeded === "number") return seeded;
+    return baseForSkill(s, card.dex, card.app);
+  }
+
+  const buffedKeys = new Set(Object.keys(card.skills ?? {}));
+
   const spent = Object.values(allocated).reduce((s, v) => s + (v ?? 0), 0);
   const remaining = totalPool - spent;
 
@@ -113,7 +126,7 @@ function SkillAllocator({ card, onSaved }: { card: RevealCard; onSaved: () => vo
       const next = cur + delta;
       if (next < 0) return prev;
       if (delta > 0 && remaining <= 0) return prev;
-      const base = baseForSkill(SKILLS.find((s) => s.key === key)!, card.dex, card.app);
+      const base = floorFor(SKILLS.find((s) => s.key === key)!);
       if (base + next > 95) return prev;
       return { ...prev, [key]: next };
     });
@@ -122,7 +135,7 @@ function SkillAllocator({ card, onSaved }: { card: RevealCard; onSaved: () => vo
   function setDirect(key: SkillKey, raw: string) {
     const n = parseInt(raw, 10);
     if (isNaN(n) || n < 0) { setAllocated((prev) => ({ ...prev, [key]: 0 })); return; }
-    const base = baseForSkill(SKILLS.find((s) => s.key === key)!, card.dex, card.app);
+    const base = floorFor(SKILLS.find((s) => s.key === key)!);
     const cur = allocated[key] ?? 0;
     const headroom = remaining + cur;
     const capped = Math.min(n, headroom, 95 - base);
@@ -137,10 +150,7 @@ function SkillAllocator({ card, onSaved }: { card: RevealCard; onSaved: () => vo
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           skills: Object.fromEntries(
-            SKILLS.map((s) => {
-              const base = baseForSkill(s, card.dex, card.app);
-              return [s.key, base + (allocated[s.key] ?? 0)];
-            })
+            SKILLS.map((s) => [s.key, floorFor(s) + (allocated[s.key] ?? 0)])
           ),
         }),
       });
@@ -167,13 +177,19 @@ function SkillAllocator({ card, onSaved }: { card: RevealCard; onSaved: () => vo
 
       <div className="flex flex-col gap-1 max-h-64 overflow-y-auto pr-1">
         {SKILLS.map((s) => {
-          const base = baseForSkill(s, card.dex, card.app);
+          const base = floorFor(s);
           const add  = allocated[s.key] ?? 0;
           const total = base + add;
+          const buffed = buffedKeys.has(s.key);
           return (
             <div key={s.key} className="flex items-center gap-2 rounded-lg px-3 py-2"
-              style={{ background: "rgba(14,12,8,0.6)", border: "1px solid #2a2010" }}>
-              <span className="flex-1 text-xs text-zinc-300">{s.zh}</span>
+              style={buffed
+                ? { background: "rgba(201,169,110,0.08)", border: "1px solid rgba(201,169,110,0.3)" }
+                : { background: "rgba(14,12,8,0.6)", border: "1px solid #2a2010" }}>
+              <span className="flex-1 text-xs text-zinc-300">
+                {s.zh}
+                {buffed && <span className="ml-1 text-[10px]" style={{ color: "#c9a96e" }}>★職業</span>}
+              </span>
               <span className="text-[10px] text-zinc-600 w-5 text-right shrink-0">{base}</span>
               <span className="text-zinc-700 text-xs">+</span>
               <button onClick={() => adjust(s.key, -1)} disabled={add <= 0}
@@ -281,6 +297,12 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
               <div className="h-px flex-1" style={{ background: "linear-gradient(to left, transparent, rgba(201,169,110,0.3))" }} />
             </div>
             <h2 className="font-serif text-xl mt-1" style={{ color: "#e4d8be", letterSpacing: "0.04em" }}>{card.name}</h2>
+            {card.occupation && (
+              <span className="inline-block mt-2 text-[11px] px-2.5 py-0.5 rounded-full"
+                style={{ background: "rgba(201,169,110,0.1)", border: "1px solid rgba(201,169,110,0.35)", color: "#c9a96e" }}>
+                職業 · {card.occupation}
+              </span>
+            )}
           </div>
 
           {/* ── Rolling phase ── */}

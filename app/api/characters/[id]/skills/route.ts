@@ -6,7 +6,7 @@ const SKILL_BASES: Record<string, number | "dex2" | "app2" | "inv_app"> = {
   spot_hidden: 10, listen: 10, library_use: 10, psychology: 1,
   persuade: 5, fast_talk: 5, charm: "app2", intimidate: "inv_app",
   dodge: "dex2", first_aid: 1, stealth: 1, lockpick: 1, drive_auto: 0,
-  firearms: 20, occult: 5,
+  firearms: 20, occult: 5, fighting: 25,
 };
 
 export async function PATCH(
@@ -19,22 +19,37 @@ export async function PATCH(
 
   const { data: card } = await supabase
     .from("character_cards")
-    .select("id, user_id, skills, edu, int, dex, app")
+    .select("id, user_id, skills, skills_allocated, edu, int, dex, app")
     .eq("id", params.id)
     .single();
 
   if (!card) return NextResponse.json({ error: "Card not found" }, { status: 404 });
   if (card.user_id !== user.id) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const alreadySet = card.skills && Object.keys(card.skills).length > 0;
-  if (alreadySet) {
+  if (card.skills_allocated) {
     return NextResponse.json({ error: "Skills already allocated and cannot be changed." }, { status: 409 });
   }
 
   const body = await request.json() as { skills: Record<string, number> };
   const skills = body.skills ?? {};
 
-  // Validate each skill and compute total allocated (full_value - base).
+  const dex = card.dex ?? 50;
+  const app = card.app ?? 50;
+
+  // Per-skill floor = the occupation-seeded starting value if present, otherwise
+  // the skill's catalogue base. Points spent above this floor draw from the pool;
+  // the +10 occupation buffs are free and never charged against the player.
+  const seeded = (card.skills ?? {}) as Record<string, number>;
+  function floorFor(key: string): number {
+    if (typeof seeded[key] === "number") return seeded[key];
+    const rawBase = SKILL_BASES[key];
+    return rawBase === "dex2" ? Math.floor(dex / 2)
+         : rawBase === "app2" ? Math.floor(app / 2)
+         : rawBase === "inv_app" ? Math.floor((100 - app) / 5)
+         : (rawBase ?? 0);
+  }
+
+  // Validate each skill and compute total allocated (full_value - floor).
   const totalPool = (card.edu ?? 50) * 2 + (card.int ?? 65) * 2;
   let totalAllocated = 0;
 
@@ -42,16 +57,10 @@ export async function PATCH(
     if (!Number.isInteger(val) || val < 0 || val > 95) {
       return NextResponse.json({ error: `Invalid value for skill ${key}.` }, { status: 400 });
     }
-    const rawBase = SKILL_BASES[key];
-    const dex = card.dex ?? 50;
-    const app = card.app ?? 50;
-    const base = rawBase === "dex2" ? Math.floor(dex / 2)
-               : rawBase === "app2" ? Math.floor(app / 2)
-               : rawBase === "inv_app" ? Math.floor((100 - app) / 5)
-               : (rawBase ?? 0);
-    const allocated = val - base;
+    const floor = floorFor(key);
+    const allocated = val - floor;
     if (allocated < 0) {
-      return NextResponse.json({ error: `Value for ${key} is below its base of ${base}.` }, { status: 400 });
+      return NextResponse.json({ error: `Value for ${key} is below its starting value of ${floor}.` }, { status: 400 });
     }
     totalAllocated += allocated;
   }
@@ -63,9 +72,12 @@ export async function PATCH(
     );
   }
 
+  // Preserve occupation buffs for any skill the client omitted from the payload.
+  const merged: Record<string, number> = { ...seeded, ...skills };
+
   const { data: updated, error } = await supabase
     .from("character_cards")
-    .update({ skills })
+    .update({ skills: merged, skills_allocated: true })
     .eq("id", params.id)
     .select("*")
     .single();

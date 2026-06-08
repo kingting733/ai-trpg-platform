@@ -13,6 +13,7 @@ interface CharacterCard {
   total_stats: number;
   rarity: "Common" | "Rare" | "Epic" | "Legendary";
   skills: Record<string, number> | null;
+  occupation: string | null;
 }
 
 const RARITY_ACCENT: Record<CharacterCard["rarity"], { frame: string; chip: string; selectedGlow: string }> = {
@@ -80,7 +81,7 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
         name: card.name, hp: card.hp, san: card.san, mp: card.mp,
         str: card.str, con: card.con, siz: card.siz, dex: card.dex,
         app: card.app, int: card.int, pow: card.pow, edu: card.edu,
-        luck: card.luck, skills: card.skills ?? {},
+        luck: card.luck, skills: card.skills ?? {}, occupation: card.occupation ?? null,
       })
       .select("id").single();
 
@@ -158,7 +159,15 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
               <div className="relative">
                 {/* Name + rarity chip */}
                 <div className="flex items-start justify-between mb-4 gap-2">
-                  <h3 className="font-serif text-base truncate" style={{ color: "#e4d8be" }}>{card.name}</h3>
+                  <div className="min-w-0">
+                    <h3 className="font-serif text-base truncate" style={{ color: "#e4d8be" }}>{card.name}</h3>
+                    {card.occupation && (
+                      <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full"
+                        style={{ background: "rgba(201,169,110,0.1)", border: "1px solid rgba(201,169,110,0.3)", color: "#c9a96e" }}>
+                        職業 · {card.occupation}
+                      </span>
+                    )}
+                  </div>
                   <span className={`text-xs px-2 py-0.5 rounded border bg-black/30 shrink-0 ${accent.chip}`}>{card.rarity}</span>
                 </div>
 

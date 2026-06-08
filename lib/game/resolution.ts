@@ -174,6 +174,15 @@ const SKILL_RULES: SkillRule[] = [
       "神秘學", "神祕學", "儀式", "符文", "符號", "咒語", "魔法書", "禁書", "邪教",
     ],
   },
+  {
+    skillKey: "fighting", displayName: "搏鬥", category: "physical",
+    baseValue: () => 25,
+    keywords: [
+      "punch", "brawl", "fight", "grapple", "wrestle", "strike", "melee",
+      "hit", "knife", "stab", "swing at", "tackle", "beat up",
+      "搏鬥", "打鬥", "肉搏", "毆打", "揮拳", "出拳", "扭打", "近身", "刺", "捅", "打架",
+    ],
+  },
 ];
 
 // ─── Raw stat fallback rules (used when no skill matches) ─────────────────────
@@ -395,7 +404,7 @@ const SKILL_RESULT_KIND: Record<string, ResultKind> = {
   dodge: "evade", stealth: "evade",
   first_aid: "heal",
   lockpick: "manipulate", drive_auto: "manipulate",
-  firearms: "force", occult: "investigate",
+  firearms: "force", occult: "investigate", fighting: "force",
 };
 
 const STAT_RESULT_KIND: Record<StatKey, ResultKind> = {

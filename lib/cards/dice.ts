@@ -1,10 +1,13 @@
+import { skillBase, SKILL_CATALOGUE } from "@/lib/game/skills";
+import { randomOccupation, OCCUPATION_BUFF } from "./occupations";
+
 export type Rarity = "Common" | "Rare" | "Epic" | "Legendary";
 
 export type SkillKey =
   | "spot_hidden" | "listen" | "library_use" | "psychology"
   | "persuade" | "fast_talk" | "charm" | "intimidate"
   | "dodge" | "first_aid" | "stealth" | "lockpick" | "drive_auto"
-  | "firearms" | "occult";
+  | "firearms" | "occult" | "fighting";
 
 export type SkillPoints = Partial<Record<SkillKey, number>>;
 
@@ -38,7 +41,8 @@ export interface RolledCard {
   rarity:      Rarity;
   roll_details: RollDetails;
   skill_points: number; // EDU×2 + INT×2 — pool to allocate to skills
-  skills:      SkillPoints; // allocated by player after rolling
+  skills:      SkillPoints; // pre-seeded with the occupation's two +10 buffs
+  occupation:  string;      // random occupation; grants the seeded skill buffs
 }
 
 function rollDice(count: number, sides: number): number[] {
@@ -108,6 +112,16 @@ export function rollCharacterCard(): RolledCard {
     luck: { dice: luckDice },
   };
 
+  // Assign a random occupation and bake its two +10 starting-skill buffs into
+  // `skills` so they apply in-game even if the player never opens the allocator.
+  const occupation = randomOccupation();
+  const skills: SkillPoints = {};
+  for (const key of occupation.buffs) {
+    const meta = SKILL_CATALOGUE.find((s) => s.key === key);
+    const base = meta ? skillBase(meta.base, { dex, app }) : 0;
+    skills[key] = base + OCCUPATION_BUFF;
+  }
+
   return {
     name: generateName(),
     str, con, siz, dex, app, int, pow, edu, luck,
@@ -116,6 +130,7 @@ export function rollCharacterCard(): RolledCard {
     rarity: rarityForTotal(total_stats),
     roll_details,
     skill_points,
-    skills: {},
+    skills,
+    occupation: occupation.name,
   };
 }

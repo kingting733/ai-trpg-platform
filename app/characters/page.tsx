@@ -14,6 +14,7 @@ interface CharacterCard {
   rarity: "Common" | "Rare" | "Epic" | "Legendary";
   roll_details: RevealCard["roll_details"];
   skills: Record<string, number> | null;
+  occupation: string | null;
   cleared_scenarios: string[] | null;
   created_at: string;
 }
@@ -59,6 +60,7 @@ const SKILL_ZH: Record<string, string> = {
   drive_auto:   "駕駛汽車",
   firearms:     "射擊",
   occult:       "神秘學",
+  fighting:     "搏鬥",
 };
 
 function isSameUtcDay(iso: string) {
@@ -366,6 +368,15 @@ function CardView({
           </div>
           <span className={`text-xs px-2 py-0.5 rounded border bg-black/30 shrink-0 ${style.chip}`}>{card.rarity}</span>
         </div>
+
+        {card.occupation && (
+          <div className="mb-2 -mt-1">
+            <span className="text-[11px] px-2 py-0.5 rounded-full"
+              style={{ background: "rgba(201,169,110,0.1)", border: "1px solid rgba(201,169,110,0.3)", color: "#c9a96e" }}>
+              職業 · {card.occupation}
+            </span>
+          </div>
+        )}
 
         <div className="grid grid-cols-3 gap-x-4 gap-y-px">
           <StatBox label="HP" value={card.hp} />

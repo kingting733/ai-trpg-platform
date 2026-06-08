@@ -26,6 +26,7 @@ export const SKILL_CATALOGUE: SkillMeta[] = [
   { key: "drive_auto",  zh: "駕駛汽車",   base: 0 },
   { key: "firearms",    zh: "射擊",       base: 20 },
   { key: "occult",      zh: "神秘學",     base: 5 },
+  { key: "fighting",    zh: "搏鬥",       base: 25 },
 ];
 
 export const SKILL_KEY_BY_ZH: Record<string, string> =
