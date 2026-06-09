@@ -21,8 +21,28 @@ CREATE INDEX IF NOT EXISTS idx_scenarios_is_daily ON public.scenarios(is_daily);
 
 -- 2. System user that owns generated daily scenarios --------------------------
 -- Fixed UUID so the cron can always reference it. role 'creator' satisfies the
--- users.role CHECK constraint. It has no auth.users login (never signs in); the
--- cron writes on its behalf via the service-role key (bypasses RLS).
+-- users.role CHECK constraint. It never signs in; the cron writes on its behalf
+-- via the service-role key (bypasses RLS).
+--
+-- public.users.id has a FK to auth.users(id), so we must create the auth row
+-- first. It has an empty password and no login flow — purely an owner record.
+INSERT INTO auth.users (
+  id, instance_id, aud, role, email,
+  encrypted_password, email_confirmed_at,
+  created_at, updated_at,
+  raw_app_meta_data, raw_user_meta_data
+)
+VALUES (
+  '00000000-0000-0000-0000-00000000da11',
+  '00000000-0000-0000-0000-000000000000',
+  'authenticated', 'authenticated',
+  'daily-oracle@system.local',
+  '', NOW(), NOW(), NOW(),
+  '{"provider":"email","providers":["email"]}'::jsonb,
+  '{}'::jsonb
+)
+ON CONFLICT (id) DO NOTHING;
+
 INSERT INTO public.users (id, email, username, role)
 VALUES (
   '00000000-0000-0000-0000-00000000da11',
