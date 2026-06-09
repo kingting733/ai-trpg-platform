@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback, useRef, type CSSProperties, type Reac
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { currentSkillValue, SKILL_KEY_BY_ZH } from "@/lib/game/skills";
+import { ChatDrawer } from "@/components/ChatDrawer";
 
 interface Character {
   id: string;
@@ -390,6 +391,12 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
 
   return (
     <>
+    {/* OOC player chat — floating button + slide-over drawer (GM never sees it) */}
+    <ChatDrawer
+      roomId={params.id}
+      currentUserId={currentUserId}
+      authorName={myCharacter?.name ?? currentUserEmail?.split("@")[0] ?? "玩家"}
+    />
     {/* Faint occult texture behind the whole play view */}
     <div className="fixed inset-0 -z-10 pointer-events-none opacity-[0.04]" aria-hidden
       style={{ backgroundImage: "radial-gradient(circle, #c9a96e 1px, transparent 1px)", backgroundSize: "42px 42px" }} />
