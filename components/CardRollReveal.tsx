@@ -63,6 +63,19 @@ interface Step {
   sides: number; base: number; dice: number[]; total: number;
 }
 
+// Short, player-facing note on what each stat governs in play.
+const STAT_DESC: Record<string, string> = {
+  str:  "近戰傷害與力量檢定（搬、推、抓握）",
+  con:  "生命值，以及抵抗疾病與毒素的能力",
+  siz:  "生命值與近戰傷害加值（體格越大越痛）",
+  dex:  "行動順序、閃避，以及各種身手檢定",
+  app:  "魅惑與社交第一印象的基礎",
+  int:  "推理、靈感檢定，並提供技能點數",
+  pow:  "魔力上限、理智抵抗與意志對抗",
+  edu:  "知識類技能，並提供大量技能點數",
+  luck: "運氣檢定與面對隨機事件的命運",
+};
+
 function buildSteps(card: RevealCard): Step[] {
   const rd = card.roll_details;
   if (!rd) {
@@ -117,7 +130,7 @@ function baseForSkill(s: typeof SKILLS[number], dex: number, app: number = 50): 
   return s.base;
 }
 
-function SkillAllocator({ card, onSaved }: { card: RevealCard; onSaved: () => void }) {
+function SkillAllocator({ card, onSaved, onRequestSkip }: { card: RevealCard; onSaved: () => void; onRequestSkip: () => void }) {
   const totalPool = card.edu * 2 + card.int * 2;
   const [allocated, setAllocated] = useState<Partial<Record<SkillKey, number>>>({});
   const [saving, setSaving] = useState(false);
@@ -234,7 +247,7 @@ function SkillAllocator({ card, onSaved }: { card: RevealCard; onSaved: () => vo
         style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07", boxShadow: "0 0 16px rgba(201,169,110,0.18)" }}>
         {saving ? "儲存中…" : "確認技能並加入收藏"}
       </button>
-      <button onClick={onSaved} className="mt-2 w-full text-xs text-zinc-600 hover:text-zinc-400">
+      <button onClick={onRequestSkip} className="mt-2 w-full text-xs text-zinc-600 hover:text-zinc-400">
         跳過（使用基礎值）
       </button>
     </div>
@@ -382,21 +395,45 @@ function OccupationReveal({
 
 // ─── Die face ─────────────────────────────────────────────────────────────────
 
-function Die({ value, rolling, sides }: { value: number; rolling: boolean; sides: number }) {
+type DieState = "idle" | "rolling" | "settled";
+
+function Die({ value, state, sides, delay = 0 }: { value: number; state: DieState; sides: number; delay?: number }) {
   const [display, setDisplay] = useState(value);
+  // Per-die settle stagger: while the stat is "rolling", each die keeps tumbling
+  // a touch longer than the previous one, then locks onto its real face.
+  const [locked, setLocked] = useState(state === "settled");
+
   useEffect(() => {
-    if (!rolling) { setDisplay(value); return; }
-    const t = setInterval(() => setDisplay(Math.floor(Math.random() * sides) + 1), 70);
-    return () => clearInterval(t);
-  }, [rolling, value, sides]);
+    if (state === "idle") { setLocked(false); return; }
+    if (state === "settled") { setLocked(true); setDisplay(value); return; }
+    // rolling
+    setLocked(false);
+    const spin = setInterval(() => setDisplay(Math.floor(Math.random() * sides) + 1), 70);
+    const stop = setTimeout(() => { setDisplay(value); setLocked(true); clearInterval(spin); }, 520 + delay);
+    return () => { clearInterval(spin); clearTimeout(stop); };
+  }, [state, value, sides, delay]);
+
+  const tumbling = state === "rolling" && !locked;
+  const showSettled = locked && state !== "idle";
 
   return (
-    <span className="inline-flex items-center justify-center w-12 h-12 rounded-lg text-xl font-bold select-none transition-all"
-      style={rolling
-        ? { background: "#1a150e", border: "1px solid rgba(201,169,110,0.20)", color: "rgba(201,169,110,0.45)", transform: "scale(0.95)" }
-        : { background: "linear-gradient(150deg,#1c1813,#0f0c08)", border: "1px solid rgba(201,169,110,0.55)", color: "#e4d8be", boxShadow: "0 0 12px rgba(201,169,110,0.15)" }
+    <span
+      className="inline-flex items-center justify-center w-14 h-14 rounded-xl text-2xl font-bold select-none"
+      style={
+        state === "idle"
+          ? { background: "#0e0c08", border: "1.5px solid rgba(201,169,110,0.25)", color: "rgba(201,169,110,0.4)",
+              boxShadow: "inset 0 0 8px rgba(0,0,0,0.5)" }
+          : tumbling
+          ? { background: "#1a150e", border: "1.5px solid rgba(201,169,110,0.3)", color: "rgba(201,169,110,0.6)",
+              boxShadow: "inset 0 0 8px rgba(0,0,0,0.4)",
+              animation: "dieWobble 0.22s linear infinite" }
+          : showSettled
+          ? { background: "linear-gradient(150deg,#1c1813,#0f0c08)", border: "1.5px solid rgba(201,169,110,0.6)",
+              color: "#e4d8be", boxShadow: "0 0 14px rgba(201,169,110,0.45), inset 0 0 8px rgba(0,0,0,0.4)",
+              transition: "box-shadow 0.3s, border-color 0.3s" }
+          : {}
       }>
-      {display}
+      {state === "idle" ? "✦" : display}
     </span>
   );
 }
@@ -406,8 +443,9 @@ function Die({ value, rolling, sides }: { value: number; rolling: boolean; sides
 export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () => void }) {
   const steps = useRef(buildSteps(card)).current;
   const [index, setIndex] = useState(0);
-  const [rolling, setRolling] = useState(true);
+  const [rollState, setRollState] = useState<DieState>("idle");
   const [phase, setPhase] = useState<"rolling" | "occupation" | "summary" | "skills">("rolling");
+  const [confirmSkip, setConfirmSkip] = useState(false);
   const completed = steps.slice(0, index).map((s) => ({ label: s.labelZh, total: s.total }));
   const rarity = RARITY_ACCENT[card.rarity];
 
@@ -421,20 +459,25 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
       })
     : [];
 
+  // The stat roll is now fully click-driven. When "rolling" begins we let the
+  // dice tumble, then settle the stat total a beat after the last die locks.
   useEffect(() => {
-    if (phase !== "rolling") return;
-    if (index >= steps.length) {
-      // After stats finish rolling → occupation reveal (only if there is one)
+    if (rollState !== "rolling") return;
+    const settle = setTimeout(() => setRollState("settled"), 900);
+    return () => clearTimeout(settle);
+  }, [rollState]);
+
+  function nextStat() {
+    if (index + 1 >= steps.length) {
       setPhase(card.occupation ? "occupation" : "summary");
-      return;
+    } else {
+      setIndex((i) => i + 1);
+      setRollState("idle");
     }
-    setRolling(true);
-    const rollTime = setTimeout(() => setRolling(false), 650);
-    const advance  = setTimeout(() => setIndex((i) => i + 1), 1250);
-    return () => { clearTimeout(rollTime); clearTimeout(advance); };
-  }, [index, steps.length, phase, card.occupation]);
+  }
 
   const step = steps[index];
+  const lastStat = index + 1 >= steps.length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -483,20 +526,29 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
           {/* ── Rolling phase ── */}
           {phase === "rolling" && step ? (
             <div>
-              <div className="text-center py-4 rounded-xl mb-4"
+              {/* progress pip */}
+              <p className="text-center text-[10px] tracking-[0.2em] mb-2" style={{ color: "rgba(201,169,110,0.45)" }}>
+                {index + 1} / {steps.length}
+              </p>
+
+              <div className="text-center py-4 px-3 rounded-xl mb-4"
                 style={{ background: "rgba(14,12,8,0.6)", border: "1px solid #2a2010" }}>
                 <p className="text-xs mb-0.5 tracking-[0.2em] uppercase" style={{ color: "rgba(201,169,110,0.6)" }}>{step.label}</p>
-                <p className="text-zinc-500 text-xs mb-4">{step.labelZh}</p>
-                <div className="flex items-center justify-center gap-2 mb-4 flex-wrap">
+                <p className="text-zinc-300 text-base font-serif mb-1">{step.labelZh}</p>
+                {/* what this stat affects */}
+                <p className="text-[11px] leading-snug mb-4 px-2" style={{ color: "rgba(201,169,110,0.5)" }}>
+                  {STAT_DESC[step.key] ?? ""}
+                </p>
+
+                <div className="flex items-center justify-center gap-2.5 mb-4 flex-wrap">
                   {step.dice.map((d, i) => (
-                    <Die key={i} value={d} rolling={rolling} sides={step.sides} />
+                    <Die key={i} value={d} state={rollState} sides={step.sides} delay={i * 130} />
                   ))}
                 </div>
+
                 <div className="h-10 flex items-center justify-center">
-                  {rolling ? (
-                    <span className="text-3xl font-bold" style={{ color: "rgba(201,169,110,0.25)" }}>…</span>
-                  ) : (
-                    <span className="text-3xl font-bold" style={{ color: "#c9a96e" }}>
+                  {rollState === "settled" ? (
+                    <span className="text-3xl font-bold" style={{ color: "#c9a96e", textShadow: "0 0 18px rgba(201,169,110,0.4)" }}>
                       {step.base > 0 && (
                         <span className="text-lg mr-1" style={{ color: "rgba(201,169,110,0.5)" }}>
                           {step.base} + {step.total - step.base} =
@@ -504,13 +556,36 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
                       )}
                       {step.total}
                     </span>
+                  ) : (
+                    <span className="text-3xl font-bold" style={{ color: "rgba(201,169,110,0.2)" }}>
+                      {rollState === "rolling" ? "…" : "?"}
+                    </span>
                   )}
                 </div>
               </div>
 
+              {/* Action button: roll, then advance */}
+              {rollState === "idle" ? (
+                <button onClick={() => setRollState("rolling")}
+                  className="w-full py-2.5 rounded-lg font-serif text-sm tracking-wide transition-all hover:brightness-110"
+                  style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07", boxShadow: "0 0 16px rgba(201,169,110,0.2)" }}>
+                  擲骰！
+                </button>
+              ) : rollState === "settled" ? (
+                <button onClick={nextStat}
+                  className="w-full py-2.5 rounded-lg font-serif text-sm tracking-wide transition-all hover:brightness-110"
+                  style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07", boxShadow: "0 0 16px rgba(201,169,110,0.2)" }}>
+                  {lastStat ? (card.occupation ? "抽取職業 →" : "查看屬性總覽 →") : "下一項 →"}
+                </button>
+              ) : (
+                <div className="w-full py-2.5 text-center text-sm font-serif" style={{ color: "rgba(201,169,110,0.5)" }}>
+                  擲骰中…
+                </div>
+              )}
+
               {/* Running tally */}
               {completed.length > 0 && (
-                <div className="grid grid-cols-5 gap-1.5 mb-4">
+                <div className="grid grid-cols-5 gap-1.5 mt-4 mb-2">
                   {completed.map((c) => (
                     <div key={c.label} className="rounded-lg px-1 py-1.5 text-center"
                       style={{ background: "rgba(14,12,8,0.6)", border: "1px solid #2a2010" }}>
@@ -522,7 +597,7 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
               )}
 
               <button onClick={() => setPhase(card.occupation ? "occupation" : "summary")}
-                className="w-full text-xs text-zinc-600 hover:text-zinc-400 py-1">
+                className="w-full text-xs text-zinc-600 hover:text-zinc-400 py-1 mt-1">
                 跳過動畫
               </button>
             </div>
@@ -579,17 +654,54 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
                 style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07", boxShadow: "0 0 16px rgba(201,169,110,0.2)" }}>
                 分配技能點數 →
               </button>
-              <button onClick={onDone} className="mt-2 w-full text-xs text-zinc-600 hover:text-zinc-400">
+              <button onClick={() => setConfirmSkip(true)} className="mt-2 w-full text-xs text-zinc-600 hover:text-zinc-400">
                 跳過，直接加入收藏
               </button>
             </div>
 
           /* ── Skill allocation phase ── */
           ) : (
-            <SkillAllocator card={card} onSaved={onDone} />
+            <SkillAllocator card={card} onSaved={onDone} onRequestSkip={() => setConfirmSkip(true)} />
           )}
         </div>
+
+        {/* Skip-allocation warning */}
+        {confirmSkip && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl p-6"
+            style={{ background: "rgba(5,4,2,0.82)", backdropFilter: "blur(2px)" }}
+            onClick={(e) => e.stopPropagation()}>
+            <div className="w-full rounded-xl p-5 text-center" style={{ ...PANEL, border: "1px solid rgba(201,169,110,0.4)" }}>
+              <div className="text-3xl mb-2">⚠️</div>
+              <h3 className="font-serif text-base mb-2" style={{ color: "#e4d8be" }}>尚未分配技能點數</h3>
+              <p className="text-xs leading-relaxed mb-4" style={{ color: "rgba(201,169,110,0.6)" }}>
+                你還有 <span className="font-bold" style={{ color: "#c9a96e" }}>{card.edu * 2 + card.int * 2}</span> 點技能點數未使用。
+                跳過後角色將只保留基礎值，且<span style={{ color: "#e0b0b0" }}>無法再重新分配</span>。確定要跳過嗎？
+              </p>
+              <div className="flex gap-2">
+                <button onClick={() => setConfirmSkip(false)}
+                  className="flex-1 py-2 rounded-lg font-serif text-sm transition-all hover:brightness-110"
+                  style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07" }}>
+                  返回分配
+                </button>
+                <button onClick={() => { setConfirmSkip(false); onDone(); }}
+                  className="flex-1 py-2 rounded-lg text-sm transition-all hover:brightness-110"
+                  style={{ background: "rgba(14,12,8,0.8)", border: "1px solid #2e2416", color: "#a1a1aa" }}>
+                  仍要跳過
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* die tumble animation */}
+      <style>{`
+        @keyframes dieWobble {
+          0%   { transform: translateY(0) rotate(-4deg) scale(0.96); }
+          50%  { transform: translateY(-3px) rotate(4deg) scale(1.02); }
+          100% { transform: translateY(0) rotate(-4deg) scale(0.96); }
+        }
+      `}</style>
     </div>
   );
 }
