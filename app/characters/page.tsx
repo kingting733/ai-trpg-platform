@@ -368,11 +368,17 @@ function CardView({
                 </div>
               </div>
             ) : (
-              <div className="flex items-start gap-2.5 min-w-0">
-                {card.occupation && OCCUPATION_ICON[card.occupation] && (
+              <div className="flex items-center gap-3 min-w-0">
+                {card.occupation && OCCUPATION_ICON[card.occupation] ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={OCCUPATION_ICON[card.occupation]} alt={card.occupation}
-                    width={32} height={32} className="mt-0.5 shrink-0" style={{ objectFit: "contain" }} />
+                    width={64} height={64} className="shrink-0 rounded-xl"
+                    style={{ objectFit: "cover", border: "1px solid rgba(201,169,110,0.25)" }} />
+                ) : (
+                  <div className="w-16 h-16 shrink-0 rounded-xl flex items-center justify-center"
+                    style={{ background: "rgba(14,12,8,0.6)", border: "1px solid rgba(201,169,110,0.2)" }}>
+                    <span className="text-2xl opacity-40">🎭</span>
+                  </div>
                 )}
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
@@ -386,7 +392,7 @@ function CardView({
                     </button>
                   </div>
                   {card.occupation && (
-                    <p className="text-[11px] mt-0.5" style={{ color: "rgba(201,169,110,0.65)" }}>{card.occupation}</p>
+                    <p className="text-sm mt-0.5" style={{ color: "rgba(201,169,110,0.65)" }}>{card.occupation}</p>
                   )}
                 </div>
               </div>

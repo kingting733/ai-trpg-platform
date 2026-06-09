@@ -172,21 +172,27 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
 
               <div className="relative">
                 {/* Name + rarity chip */}
-                <div className="flex items-start justify-between mb-4 gap-2">
-                  <div className="flex items-start gap-2.5 min-w-0">
-                    {card.occupation && OCCUPATION_ICON[card.occupation] && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={OCCUPATION_ICON[card.occupation]} alt={card.occupation}
-                        width={32} height={32} className="mt-0.5 shrink-0" style={{ objectFit: "contain" }} />
-                    )}
-                    <div className="min-w-0">
-                      <h3 className="font-serif text-base truncate" style={{ color: "#e4d8be" }}>{card.name}</h3>
-                      {card.occupation && (
-                        <p className="text-[10px] mt-0.5" style={{ color: "rgba(201,169,110,0.65)" }}>{card.occupation}</p>
-                      )}
+                <div className="flex items-center gap-3 mb-4">
+                  {card.occupation && OCCUPATION_ICON[card.occupation] ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={OCCUPATION_ICON[card.occupation]} alt={card.occupation}
+                      width={64} height={64} className="shrink-0 rounded-xl"
+                      style={{ objectFit: "cover", border: "1px solid rgba(201,169,110,0.25)" }} />
+                  ) : (
+                    <div className="w-16 h-16 shrink-0 rounded-xl flex items-center justify-center"
+                      style={{ background: "rgba(14,12,8,0.6)", border: "1px solid rgba(201,169,110,0.2)" }}>
+                      <span className="text-2xl opacity-40">🎭</span>
                     </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="font-serif text-base truncate" style={{ color: "#e4d8be" }}>{card.name}</h3>
+                      <span className={`text-xs px-2 py-0.5 rounded border bg-black/30 shrink-0 ${accent.chip}`}>{card.rarity}</span>
+                    </div>
+                    {card.occupation && (
+                      <p className="text-sm mt-0.5" style={{ color: "rgba(201,169,110,0.65)" }}>{card.occupation}</p>
+                    )}
                   </div>
-                  <span className={`text-xs px-2 py-0.5 rounded border bg-black/30 shrink-0 ${accent.chip}`}>{card.rarity}</span>
                 </div>
 
                 {/* HP / SAN / MP */}

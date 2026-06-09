@@ -520,7 +520,7 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
             </div>
             <div className="flex items-center gap-3 mt-1">
               {card.occupation && (phase === "summary" || phase === "skills") && (
-                <OccupationImg name={card.occupation} size={40} className="shrink-0" />
+                <OccupationImg name={card.occupation} size={56} className="shrink-0 rounded-xl" />
               )}
               <div>
                 <h2 className="font-serif text-xl" style={{ color: "#e4d8be", letterSpacing: "0.04em" }}>{card.name}</h2>
