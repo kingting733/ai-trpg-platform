@@ -117,23 +117,33 @@ export function assembleSeed(config: DailySeedConfig, date: Date, dateStr: strin
 // ── Prompt construction ──────────────────────────────────────────────────────
 
 function buildSystemPrompt(): string {
-  return `你是一個多人文字 TRPG 平台的「每日劇本」設計師。你要從零原創一個完整、可實際遊玩的冒險劇本，讓 AI 主持人能從頭到尾跑完——這不是大綱，而是一份可直接運行的模組。
+  return `你是一個多人文字 TRPG 平台的「每日劇本」設計師。你要從零原創一個完整、可實際遊玩的冒險劇本——不是大綱、不是摘要，而是一份「主持人拿了就能從頭跑到尾」的完整模組，包含一篇完整的故事原文。
 
 輸出格式：只回傳一個原始 JSON 物件。不要 markdown 圍欄、不要任何說明文字。以 { 開始、以 } 結束。
 
 語言：所有文字欄位一律使用繁體中文 (zh-TW)。
 
-深度要求（最重要）：
-- locations：物件陣列 {"name","clues","items"}。每個地點要有生動描述（寫在 name 內）、可發現的線索（clues）、可取得的物品（items）。
-- npcs：物件陣列 {"name","hp","mp","str","con","siz","dex","app","int","pow","edu","luck","personality","goal"}。每個重要角色一筆，依其能力設定數值（未知則填 50）。personality 寫角色定位與言行；goal 寫動機與隱藏的秘密。
-- winning_targets：任一玩家完成即代表全隊勝利的目標，編號清單（例 "1. ...\\n2. ..."）。
-- each_player_targets：每位存活玩家都必須各自完成的目標，編號清單，否則 null。
-- failure_conditions：會導致冒險以失敗告終的事件，編號清單。
-- failure_turn_limit：若有回合時限則填整數，否則 null。
-- ending_conditions / gm_notes：其餘結局分支與主持要點。
+═══ 最重要：完整故事原文 full_story ═══
+你必須寫出一篇完整、自成一體的故事原文（約 1500–3500 字），作為這個模組的「正典」。它要像一份真正的 TRPG 模組正文，包含：
+- 背景與前情：事件的來龍去脈、真相、誰做了什麼、為什麼。
+- 分幕結構：第一幕（鉤子與佈局）→ 第二幕（調查與升溫）→ 第三幕（真相與高潮）→ 結局。
+- 每一幕的關鍵場景、會發生的事件、可揭露的線索、NPC 的行動與對白範例。
+- 所有秘密、轉折、機關、敵人能力與弱點。
+- 多種結局分支（成功 / 失敗 / 隱藏結局）與各自的觸發條件。
+這是主持人在遊玩時會持續參照的正典，請寫得具體、有血有肉，不要含糊。
 
-必填 JSON 鍵：
+═══ 文字深度要求（不要只給標籤，要寫出有畫面的散文）═══
+- opening_scene：電影感的開場敘述，約 150–300 字，第二人稱「你們」，營造氣氛與代入感，並給玩家第一個抉擇。
+- gm_notes：分幕節奏指引、轉折揭曉的時機、玩家脫稿時的處理方式、敵人調整建議、伏筆與祕密機制。
+- locations[].name：寫成一段有畫面的場景描述（不只是地名），帶感官細節。
+- locations[].clues：玩家會發現什麼、發現時的感受、暗示了什麼真相。
+- locations[].items：可取得的物品，必要時附帶遊戲效果。
+- npcs[].personality：說話方式、行為舉止、緊張時的破綻、會對什麼說謊。
+- npcs[].goal：隱藏的真實動機、願意為此犧牲什麼、藏著什麼秘密。
+
+═══ 必填 JSON 鍵 ═══
 - language：固定為 "zh-TW"
+- full_story：上述的完整故事原文（字串）
 - title：劇本名稱
 - genre：原樣為這其中之一 [${IMPORT_GENRES.join(", ")}]（系統列舉值，不可翻譯）
 - difficulty：[Story, Normal, Hard, Nightmare] 之一
@@ -142,18 +152,22 @@ function buildSystemPrompt(): string {
 - max_players：整數
 - estimated_play_time：整數（分鐘）或 null
 - tags：3–6 個短字串陣列
-- opening_scene：生動的開場敘述
-- locations：地點物件陣列
-- npcs：NPC 物件陣列
-- winning_targets / each_player_targets / failure_conditions / ending_conditions / gm_notes：如上，缺漏用 null
-- failure_turn_limit：整數或 null
+- opening_scene：如上的開場敘述
+- locations：物件陣列 {"name","clues","items"}
+- npcs：物件陣列 {"name","hp","mp","str","con","siz","dex","app","int","pow","edu","luck","personality","goal"}，未知數值填 50
+- winning_targets：任一玩家完成即代表全隊勝利的目標，編號清單
+- each_player_targets：每位存活玩家都必須各自完成的目標，編號清單，或 null
+- failure_conditions：會導致冒險失敗的事件，編號清單
+- failure_turn_limit：回合時限整數，或 null
+- ending_conditions：其餘結局分支說明，或 null
+- gm_notes：如上的主持要點
 
 規則：
-- title, genre, difficulty, description, objective 必須一定填寫。
-- description 給瀏覽中的玩家看，務必無雷；所有秘密、轉折、機制都放進 GM 專用欄位（gm_notes / ending_conditions / npcs.goal 等）。
+- description 給瀏覽中的玩家看，務必無雷；所有秘密、轉折、機制都放進 full_story / gm_notes / npcs.goal 等 GM 專用欄位。
+- full_story 與結構化欄位必須彼此呼應一致（同樣的 NPC、地點、真相）。
 - 空陣列用 []、缺漏文字欄位用 null。
-- 發揮創意，讓劇本獨一無二、有記憶點，並提供足以從頭跑到尾的細節。
-- 確保 JSON 完整且每個括號與引號都正確閉合。`;
+- 發揮創意，讓劇本獨一無二、有記憶點。
+- 確保 JSON 完整且每個括號與引號都正確閉合（特別注意 full_story 內的換行請用 \\n、引號請正確跳脫）。`;
 }
 
 function buildUserMessage(seed: DailySeed): string {
@@ -182,7 +196,9 @@ function buildUserMessage(seed: DailySeed): string {
 
 // ── AI call (dedicated model, falls back to the platform default) ────────────
 
-const DAILY_MAX_TOKENS = Number(process.env.AI_DAILY_MAX_TOKENS) || 8000;
+// Higher than the importer's budget because we ALSO emit a full story module
+// (full_story) on top of the structured fields. Tunable via env.
+const DAILY_MAX_TOKENS = Number(process.env.AI_DAILY_MAX_TOKENS) || 12000;
 const DAILY_TIMEOUT_MS = Number(process.env.AI_DAILY_TIMEOUT_MS) || 110000;
 
 async function callDailyAI(system: string, user: string): Promise<string> {
@@ -251,6 +267,9 @@ async function callDailyAI(system: string, user: string): Promise<string> {
 
 export interface GeneratedDaily {
   scenario: ImportedScenario;
+  /** The complete story module text — stored on the scenario's source_document
+   *  and injected into the GM's context at play time (the canonical "原文"). */
+  sourceDocument: string;
   seed: DailySeed;
 }
 
@@ -281,5 +300,9 @@ export async function generateDailyScenario(
   // Daily scenarios are always zh-TW and bounded by the seed's player range.
   scenario.language = "zh-TW";
   scenario.max_players = Math.min(config.max_players, Math.max(config.min_players, scenario.max_players));
-  return { scenario, seed };
+
+  // The full story module → stored on source_document for the GM to run from.
+  const sourceDocument = typeof parsed?.full_story === "string" ? parsed.full_story.trim() : "";
+
+  return { scenario, sourceDocument, seed };
 }

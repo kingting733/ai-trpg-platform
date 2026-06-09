@@ -61,7 +61,7 @@ export async function runDailyGeneration(opts: { force?: boolean } = {}): Promis
   const usedCustomIdea = config.today_idea.trim().length > 0;
 
   // 3. Generate.
-  const { scenario } = await generateDailyScenario(config, new Date(), date);
+  const { scenario, sourceDocument } = await generateDailyScenario(config, new Date(), date);
 
   // 4. If forcing a regenerate, drop any existing draft for today so the unique
   //    index doesn't reject the insert.
@@ -92,6 +92,7 @@ export async function runDailyGeneration(opts: { force?: boolean } = {}): Promis
       failure_turn_limit: scenario.failure_turn_limit,
       ending_conditions: scenario.ending_conditions,
       gm_notes: scenario.gm_notes,
+      source_document: sourceDocument || null,  // full story module (canonical 原文)
       status: "draft",        // <-- NOT published; waits for admin approval
       is_daily: true,
       daily_date: date,
