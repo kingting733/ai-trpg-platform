@@ -20,17 +20,17 @@ interface CharacterCard {
 }
 
 const OCCUPATION_ICON: Record<string, string> = {
-  "記者":     "📰",
-  "警探":     "🔍",
-  "大學生":   "📚",
-  "醫生":     "🏥",
-  "黑幫成員": "🔫",
-  "風水師":   "☯️",
-  "退役軍人": "🎖️",
-  "YouTuber": "📱",
-  "前邪教成員":"🕯️",
-  "賭徒":     "🃏",
-  "走私司機": "🚗",
+  "記者":     "/reporter.png",
+  "警探":     "/detective.png",
+  "大學生":   "/student.png",
+  "醫生":     "/doctor.png",
+  "黑幫成員": "/gangster.png",
+  "風水師":   "/fengshui.png",
+  "退役軍人": "/veteran.png",
+  "YouTuber": "/youtuber.png",
+  "前邪教成員":"/cultist.png",
+  "賭徒":     "/gambler.png",
+  "走私司機": "/smuggler.png",
 };
 
 // Rarity accents tuned to the occult / aged-parchment palette.
@@ -369,10 +369,10 @@ function CardView({
               </div>
             ) : (
               <div className="flex items-start gap-2.5 min-w-0">
-                {card.occupation && (
-                  <span className="text-2xl leading-none mt-0.5 shrink-0">
-                    {OCCUPATION_ICON[card.occupation] ?? "🎭"}
-                  </span>
+                {card.occupation && OCCUPATION_ICON[card.occupation] && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={OCCUPATION_ICON[card.occupation]} alt={card.occupation}
+                    width={32} height={32} className="mt-0.5 shrink-0" style={{ objectFit: "contain" }} />
                 )}
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">

@@ -2,18 +2,25 @@
 import { useEffect, useRef, useState } from "react";
 
 const OCCUPATION_ICON: Record<string, string> = {
-  "記者":     "📰",
-  "警探":     "🔍",
-  "大學生":   "📚",
-  "醫生":     "🏥",
-  "黑幫成員": "🔫",
-  "風水師":   "☯️",
-  "退役軍人": "🎖️",
-  "YouTuber": "📱",
-  "前邪教成員":"🕯️",
-  "賭徒":     "🃏",
-  "走私司機": "🚗",
+  "記者":     "/reporter.png",
+  "警探":     "/detective.png",
+  "大學生":   "/student.png",
+  "醫生":     "/doctor.png",
+  "黑幫成員": "/gangster.png",
+  "風水師":   "/fengshui.png",
+  "退役軍人": "/veteran.png",
+  "YouTuber": "/youtuber.png",
+  "前邪教成員":"/cultist.png",
+  "賭徒":     "/gambler.png",
+  "走私司機": "/smuggler.png",
 };
+
+function OccupationImg({ name, className, size = 40 }: { name: string; className?: string; size?: number }) {
+  const src = OCCUPATION_ICON[name];
+  if (!src) return <span className={className} style={{ fontSize: size * 0.7 }}>🎭</span>;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} alt={name} width={size} height={size} className={className} style={{ objectFit: "contain" }} />;
+}
 
 const ALL_OCCUPATIONS = Object.keys(OCCUPATION_ICON);
 import type { SkillKey } from "@/lib/cards/dice";
@@ -314,7 +321,7 @@ function OccupationReveal({
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [occupation]);
 
-  const icon = OCCUPATION_ICON[displayed] ?? "🎭";
+  const icon = OCCUPATION_ICON[displayed];
   const isLocked = spinPhase === "locked";
 
   return (
@@ -331,14 +338,17 @@ function OccupationReveal({
         style={isLocked
           ? { background: "rgba(201,169,110,0.07)", border: "1px solid rgba(201,169,110,0.45)", boxShadow: "0 0 28px rgba(201,169,110,0.18)" }
           : { background: "rgba(14,12,8,0.7)", border: "1px solid #2a2010" }}>
-        <span
-          className="text-6xl transition-all select-none"
+        <div
+          className="transition-all select-none"
           style={{ filter: isLocked ? "drop-shadow(0 0 12px rgba(201,169,110,0.6))" : "none",
             transform: spinPhase === "spinning" ? "scale(0.9)" : "scale(1)",
             transition: "transform 0.2s, filter 0.3s" }}
         >
-          {icon}
-        </span>
+          {icon
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={icon} alt={displayed} width={72} height={72} style={{ objectFit: "contain" }} />
+            : <span className="text-6xl">🎭</span>}
+        </div>
         <span
           className="font-serif text-2xl tracking-wide transition-all"
           style={{ color: isLocked ? "#e4d8be" : "rgba(201,169,110,0.4)",
@@ -510,9 +520,7 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
             </div>
             <div className="flex items-center gap-3 mt-1">
               {card.occupation && (phase === "summary" || phase === "skills") && (
-                <span className="text-3xl leading-none shrink-0">
-                  {OCCUPATION_ICON[card.occupation] ?? "🎭"}
-                </span>
+                <OccupationImg name={card.occupation} size={40} className="shrink-0" />
               )}
               <div>
                 <h2 className="font-serif text-xl" style={{ color: "#e4d8be", letterSpacing: "0.04em" }}>{card.name}</h2>
