@@ -201,12 +201,40 @@ function buildUserMessage(seed: DailySeed): string {
 const DAILY_MAX_TOKENS = Number(process.env.AI_DAILY_MAX_TOKENS) || 12000;
 const DAILY_TIMEOUT_MS = Number(process.env.AI_DAILY_TIMEOUT_MS) || 110000;
 
+/** Pull a short snippet of the provider's error body so a 401/4xx says WHY
+ *  (bad key, unknown model, wrong endpoint…) instead of just a status code. */
+async function errBody(res: Response): Promise<string> {
+  try {
+    const text = (await res.text()).trim();
+    if (!text) return "";
+    return `: ${text.slice(0, 300)}`;
+  } catch {
+    return "";
+  }
+}
+
+/** Resolve the chat-completions endpoint. A token 中轉站 / relay exposes its own
+ *  base URL (the official keys won't work against api.openai.com), so we honour
+ *  an explicit override and tolerate whether it already includes `/v1`. */
+function resolveChatUrl(provider: string, override?: string): string {
+  if (override && override.trim()) {
+    let base = override.trim().replace(/\/+$/, "");
+    if (/\/chat\/completions$/.test(base)) return base;       // full path given
+    if (/\/v1$/.test(base)) return `${base}/chat/completions`; // ends at /v1
+    return `${base}/v1/chat/completions`;                      // host only
+  }
+  const host = provider === "deepseek" ? "https://api.deepseek.com" : "https://api.openai.com";
+  return `${host}/v1/chat/completions`;
+}
+
 async function callDailyAI(system: string, user: string): Promise<string> {
   // The daily generator can run on a DIFFERENT (e.g. stronger) model than the
   // rest of the platform. AI_DAILY_* takes precedence, then the global default.
   const provider = process.env.AI_DAILY_PROVIDER ?? process.env.AI_PROVIDER ?? "deepseek";
   const model = process.env.AI_DAILY_MODEL ?? process.env.AI_MODEL ?? "deepseek-chat";
   const apiKey = process.env.AI_DAILY_API_KEY ?? process.env.AI_API_KEY;
+  // Custom endpoint for a relay / 中轉站 / self-hosted gateway.
+  const baseOverride = process.env.AI_DAILY_BASE_URL ?? process.env.AI_BASE_URL;
 
   if (!apiKey) {
     throw new Error(
@@ -218,7 +246,10 @@ async function callDailyAI(system: string, user: string): Promise<string> {
   const timer = setTimeout(() => controller.abort(), DAILY_TIMEOUT_MS);
   try {
     if (provider === "anthropic") {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const anthropicUrl = baseOverride?.trim()
+        ? `${baseOverride.trim().replace(/\/+$/, "").replace(/\/v1$/, "")}/v1/messages`
+        : "https://api.anthropic.com/v1/messages";
+      const res = await fetch(anthropicUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -233,13 +264,12 @@ async function callDailyAI(system: string, user: string): Promise<string> {
         }),
         signal: controller.signal,
       });
-      if (!res.ok) throw new Error(`Daily AI request failed (${res.status}).`);
+      if (!res.ok) throw new Error(`Daily AI request failed (${res.status})${await errBody(res)}`);
       const data = await res.json();
       return data.content?.[0]?.text?.trim() ?? "";
     }
 
-    const baseUrl = provider === "deepseek" ? "https://api.deepseek.com" : "https://api.openai.com";
-    const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+    const res = await fetch(resolveChatUrl(provider, baseOverride), {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
@@ -250,7 +280,7 @@ async function callDailyAI(system: string, user: string): Promise<string> {
       }),
       signal: controller.signal,
     });
-    if (!res.ok) throw new Error(`Daily AI request failed (${res.status}).`);
+    if (!res.ok) throw new Error(`Daily AI request failed (${res.status})${await errBody(res)}`);
     const data = await res.json();
     return data.choices?.[0]?.message?.content?.trim() ?? "";
   } catch (e: any) {
