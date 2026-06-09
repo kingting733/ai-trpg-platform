@@ -274,19 +274,21 @@ export default function ScenariosPage() {
       const BASE = "id, title, genre, description, max_players, difficulty, estimated_play_time, tags, cover_image_url";
       // Try to include the daily columns, but never let their absence (e.g. the
       // daily migration hasn't been run yet) wipe out the whole library.
-      let { data, error } = await supabase
+      const primary = await supabase
         .from("scenarios")
         .select(`${BASE}, is_daily, daily_date`)
         .eq("status", "published")
         .order("created_at", { ascending: false });
-      if (error) {
-        ({ data } = await supabase
+      let rows: any[] | null = primary.data;
+      if (primary.error) {
+        const fallback = await supabase
           .from("scenarios")
           .select(BASE)
           .eq("status", "published")
-          .order("created_at", { ascending: false }));
+          .order("created_at", { ascending: false });
+        rows = fallback.data;
       }
-      const list = (data ?? []) as Scenario[];
+      const list = (rows ?? []) as Scenario[];
       setScenarios(list);
       setGenres(Array.from(new Set(list.map((s) => s.genre))));
       setLoading(false);
