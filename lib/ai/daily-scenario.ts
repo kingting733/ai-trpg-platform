@@ -198,8 +198,8 @@ function buildUserMessage(seed: DailySeed): string {
 
 // Higher than the importer's budget because we ALSO emit a full story module
 // (full_story) on top of the structured fields. Tunable via env.
-const DAILY_MAX_TOKENS = Number(process.env.AI_DAILY_MAX_TOKENS) || 12000;
-const DAILY_TIMEOUT_MS = Number(process.env.AI_DAILY_TIMEOUT_MS) || 110000;
+const DAILY_MAX_TOKENS = Number(process.env.AI_DAILY_MAX_TOKENS) || 6000;
+const DAILY_TIMEOUT_MS = Number(process.env.AI_DAILY_TIMEOUT_MS) || 55000;
 
 /** Pull a short snippet of the provider's error body so a 401/4xx says WHY
  *  (bad key, unknown model, wrong endpoint…) instead of just a status code. */
