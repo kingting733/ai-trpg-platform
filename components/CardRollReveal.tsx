@@ -509,14 +509,14 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
               <div className="h-px flex-1" style={{ background: "linear-gradient(to left, transparent, rgba(201,169,110,0.3))" }} />
             </div>
             <div className="flex items-center gap-3 mt-1">
-              {card.occupation && (
+              {card.occupation && phase !== "rolling" && (
                 <span className="text-3xl leading-none shrink-0">
                   {OCCUPATION_ICON[card.occupation] ?? "🎭"}
                 </span>
               )}
               <div>
                 <h2 className="font-serif text-xl" style={{ color: "#e4d8be", letterSpacing: "0.04em" }}>{card.name}</h2>
-                {card.occupation && (
+                {card.occupation && phase !== "rolling" && (
                   <p className="text-[11px] mt-0.5" style={{ color: "rgba(201,169,110,0.65)" }}>{card.occupation}</p>
                 )}
               </div>
