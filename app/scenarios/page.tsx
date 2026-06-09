@@ -271,11 +271,21 @@ export default function ScenariosPage() {
   useEffect(() => {
     async function load() {
       const supabase = createClient();
-      const { data } = await supabase
+      const BASE = "id, title, genre, description, max_players, difficulty, estimated_play_time, tags, cover_image_url";
+      // Try to include the daily columns, but never let their absence (e.g. the
+      // daily migration hasn't been run yet) wipe out the whole library.
+      let { data, error } = await supabase
         .from("scenarios")
-        .select("id, title, genre, description, max_players, difficulty, estimated_play_time, tags, cover_image_url, is_daily, daily_date")
+        .select(`${BASE}, is_daily, daily_date`)
         .eq("status", "published")
         .order("created_at", { ascending: false });
+      if (error) {
+        ({ data } = await supabase
+          .from("scenarios")
+          .select(BASE)
+          .eq("status", "published")
+          .order("created_at", { ascending: false }));
+      }
       const list = (data ?? []) as Scenario[];
       setScenarios(list);
       setGenres(Array.from(new Set(list.map((s) => s.genre))));
