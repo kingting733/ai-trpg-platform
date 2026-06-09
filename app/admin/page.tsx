@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { AdminClient, AdminScenario, AdminRoom } from "./AdminClient";
+import { AdminClient, AdminScenario, AdminRoom, DailyDraft } from "./AdminClient";
+import { coerceSeedConfig, type DailySeedConfig } from "@/lib/ai/daily-scenario";
 
 // Server-side gate: only users whose role = 'admin' may see this page. The data
 // fetch and the delete API routes are protected again by RLS + server checks.
@@ -62,5 +63,38 @@ export default async function AdminPage() {
     playerCount: Array.isArray(r.room_players) ? (r.room_players[0]?.count ?? 0) : 0,
   }));
 
-  return <AdminClient scenarios={scenarios} rooms={rooms} />;
+  // Daily scenarios awaiting approval (draft) + recently published ones.
+  const { data: dailyRows } = await supabase
+    .from("scenarios")
+    .select("id, title, status, genre, difficulty, daily_date, created_at")
+    .eq("is_daily", true)
+    .order("daily_date", { ascending: false })
+    .limit(30);
+
+  const dailyDrafts: DailyDraft[] = (dailyRows ?? []).map((d: any) => ({
+    id: d.id,
+    title: d.title,
+    status: d.status,
+    genre: d.genre,
+    difficulty: d.difficulty,
+    dailyDate: d.daily_date,
+    created_at: d.created_at,
+  }));
+
+  // Editable seed config (single row).
+  const { data: seedRow } = await supabase
+    .from("daily_seed_config")
+    .select("config")
+    .eq("id", 1)
+    .maybeSingle();
+  const seedConfig: DailySeedConfig = coerceSeedConfig(seedRow?.config);
+
+  return (
+    <AdminClient
+      scenarios={scenarios}
+      rooms={rooms}
+      dailyDrafts={dailyDrafts}
+      seedConfig={seedConfig}
+    />
+  );
 }

@@ -283,7 +283,7 @@ async function callAI(system: string, user: string): Promise<string> {
   }
 }
 
-function extractFirstJSON(s: string): string {
+export function extractFirstJSON(s: string): string {
   // Strip markdown code fences
   s = s.replace(/^```(?:json)?\s*/im, "").replace(/```\s*$/im, "").trim();
 

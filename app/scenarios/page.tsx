@@ -13,6 +13,13 @@ interface Scenario {
   estimated_play_time: number | null;
   tags: string[] | null;
   cover_image_url: string | null;
+  is_daily?: boolean;
+  daily_date?: string | null;
+}
+
+// YYYY-MM-DD for "now" in Hong Kong time (UTC+8) — matches the daily publish day.
+function hktToday(): string {
+  return new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
 function toCaseId(id: string, genre: string): string {
@@ -266,7 +273,7 @@ export default function ScenariosPage() {
       const supabase = createClient();
       const { data } = await supabase
         .from("scenarios")
-        .select("id, title, genre, description, max_players, difficulty, estimated_play_time, tags, cover_image_url")
+        .select("id, title, genre, description, max_players, difficulty, estimated_play_time, tags, cover_image_url, is_daily, daily_date")
         .eq("status", "published")
         .order("created_at", { ascending: false });
       const list = (data ?? []) as Scenario[];
@@ -276,6 +283,9 @@ export default function ScenariosPage() {
     }
     load();
   }, []);
+
+  const todayStr = hktToday();
+  const todayDaily = scenarios.find((s) => s.is_daily && s.daily_date === todayStr);
 
   let filtered = activeGenre === ALL ? scenarios : scenarios.filter((s) => s.genre === activeGenre);
   if (difficulty) filtered = filtered.filter((s) => s.difficulty === difficulty);
@@ -294,6 +304,32 @@ export default function ScenariosPage() {
         difficulty={difficulty} onDifficulty={setDifficulty}
         maxPlayers={maxPlayers} onMaxPlayers={setMaxPlayers}
         duration={duration} onDuration={setDuration} />
+
+      {!loading && todayDaily && (
+        <Link href={`/scenarios/${todayDaily.id}`} className="block mt-6">
+          <div className="relative overflow-hidden rounded-2xl p-5 sm:p-6 transition-all hover:brightness-110"
+            style={{
+              background: "linear-gradient(135deg,#1c1813 0%,#13100b 60%,#0f0c08 100%)",
+              border: "1px solid rgba(201,169,110,0.45)",
+              boxShadow: "0 0 30px rgba(201,169,110,0.12)",
+            }}>
+            <div className="absolute inset-0 pointer-events-none opacity-[0.05]"
+              style={{ backgroundImage: "radial-gradient(circle, #c9a96e 1px, transparent 1px)", backgroundSize: "18px 18px" }} />
+            <div className="relative flex items-center gap-4">
+              <span className="text-4xl shrink-0">✦</span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[10px] tracking-[0.25em] uppercase" style={{ color: "rgba(201,169,110,0.7)" }}>今日劇本</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: "rgba(201,169,110,0.12)", border: "1px solid rgba(201,169,110,0.3)", color: "#c9a96e" }}>每日更新</span>
+                </div>
+                <h3 className="font-serif text-xl truncate" style={{ color: "#e4d8be" }}>{todayDaily.title}</h3>
+                <p className="text-sm mt-1 line-clamp-2" style={{ color: "#9a8f7a" }}>{todayDaily.description}</p>
+              </div>
+              <span className="ml-auto shrink-0 text-sm hidden sm:inline" style={{ color: "rgba(201,169,110,0.7)" }}>立即遊玩 →</span>
+            </div>
+          </div>
+        </Link>
+      )}
 
       {loading ? (
         <div className="text-center py-24 text-zinc-700 text-sm">載入劇本中...</div>
