@@ -261,22 +261,55 @@ export async function POST(request: Request) {
         ? (room as any).revealed_locations
         : [];
 
-      const hit = locs.find(
-        (l) =>
-          l.name.trim().length > 0 &&
-          actionText.includes(l.name.trim()) &&
-          ((l.reveal_image && l.reveal_image.trim()) || (l.reveal_text && l.reveal_text.trim())) &&
-          !alreadyRevealed.includes(l.name.trim())
-      );
+      // Location "name" fields are often full scene DESCRIPTIONS (the scenario
+      // format encourages vivid multi-sentence names), so requiring the action
+      // text to contain the whole name almost never matched. Instead, score each
+      // location by the longest contiguous overlap between the action text and
+      // the location's short name (text before the first punctuation), and accept
+      // the best location whose overlap is long enough to be meaningful.
+      const shortName = (name: string) =>
+        name.trim().split(/[：:，,。．\.\n——–\-（(【\[]/)[0].trim().slice(0, 30);
+      // Break a place name into noun segments: 「百年大宅深處的書房」 →
+      // ["百年大宅深處","書房"]. The action mentions the place if it contains
+      // ANY segment (CJK segments ≥2 chars; latin words ≥4 letters).
+      const nameSegments = (sn: string): string[] =>
+        sn
+          .split(/[的之\s、與和及]+/)
+          .map((t) => t.trim())
+          .filter((t) => (/^[\x00-\x7F]+$/.test(t) ? t.length >= 4 : t.length >= 2));
+
+      const actionLower = actionText.toLowerCase();
+      let hit: LocationEntry | null = null;
+      let hitScore = 0;
+      for (const l of locs) {
+        const hasMedia = (l.reveal_image && l.reveal_image.trim()) || (l.reveal_text && l.reveal_text.trim());
+        if (!hasMedia || alreadyRevealed.includes(l.name.trim())) continue;
+        const sn = shortName(l.name);
+        if (!sn) continue;
+        // Exact short-name hit scores highest; otherwise the longest matched
+        // segment wins. Best-scoring location across all candidates is revealed.
+        let score = 0;
+        if (actionLower.includes(sn.toLowerCase())) score = sn.length + 100;
+        else {
+          for (const seg of nameSegments(sn)) {
+            if (actionLower.includes(seg.toLowerCase()) && seg.length > score) score = seg.length;
+          }
+        }
+        if (score > 0 && score > hitScore) {
+          hit = l;
+          hitScore = score;
+        }
+      }
 
       if (hit) {
         const name = hit.name.trim();
+        const displayName = shortName(hit.name);
         const body = hit.reveal_text?.trim();
         await supabase.from("story_logs").insert({
           room_id: roomId,
           round_number: room.current_round,
           entry_type: "location_media",
-          content: body && body.length > 0 ? body : `🔍 你在「${name}」搜索到了一些東西。`,
+          content: body && body.length > 0 ? body : `🔍 你在「${displayName}」搜索到了一些東西。`,
           media_url: hit.reveal_image?.trim() || null,
         });
         await supabase
