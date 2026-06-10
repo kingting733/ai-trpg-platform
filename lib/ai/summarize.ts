@@ -50,12 +50,17 @@ ${logText}
 Respond with ONLY the 2-sentence summary, nothing else.`;
 
   try {
-    const baseUrl = provider === "deepseek" ? "https://api.deepseek.com" : "https://api.openai.com";
+    const baseOverride = process.env.AI_BASE_URL?.trim().replace(/\/+$/, "");
+    const defaultBase = provider === "deepseek" ? "https://api.deepseek.com" : "https://api.openai.com";
+    const baseUrl = baseOverride ?? defaultBase;
+    // Use AI_CLASSIFY_MODEL (fast non-thinking model) for this cheap summarisation
+    // call so it doesn't block behind a reasoning model's thinking time.
+    const model = process.env.AI_CLASSIFY_MODEL ?? process.env.AI_MODEL ?? "deepseek-v4-flash";
     const res = await fetch(`${baseUrl}/v1/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: process.env.AI_MODEL ?? "deepseek-chat",
+        model,
         messages: [{ role: "user", content: prompt }],
         max_tokens: 120,
         temperature: 0.3,

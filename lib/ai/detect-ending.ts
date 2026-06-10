@@ -16,7 +16,9 @@ const VALID_TYPES: EndingType[] = ["best", "normal", "bad", "failure"];
 
 async function callAI(system: string, user: string): Promise<string> {
   const provider = process.env.AI_PROVIDER ?? "deepseek";
-  const model = process.env.AI_MODEL ?? "deepseek-chat";
+  // Use AI_CLASSIFY_MODEL (fast non-thinking model) — ending detection is a
+  // simple yes/no classification and doesn't need a reasoning model.
+  const model = process.env.AI_CLASSIFY_MODEL ?? process.env.AI_MODEL ?? "deepseek-v4-flash";
   const apiKey = process.env.AI_API_KEY;
   if (!apiKey) return "{}";
 
@@ -41,7 +43,9 @@ async function callAI(system: string, user: string): Promise<string> {
       return data.content?.[0]?.text?.trim() ?? "{}";
     }
 
-    const baseUrl = provider === "deepseek" ? "https://api.deepseek.com" : "https://api.openai.com";
+    const baseOverride = process.env.AI_BASE_URL?.trim().replace(/\/+$/, "");
+    const defaultBase = provider === "deepseek" ? "https://api.deepseek.com" : "https://api.openai.com";
+    const baseUrl = baseOverride ?? defaultBase;
     const res = await fetch(`${baseUrl}/v1/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
