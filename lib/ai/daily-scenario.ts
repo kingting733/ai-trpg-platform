@@ -227,6 +227,46 @@ function resolveChatUrl(provider: string, override?: string): string {
   return `${host}/v1/chat/completions`;
 }
 
+/** Consume an SSE / NDJSON stream and accumulate the full assistant text.
+ *  Handles both Anthropic's `event: content_block_delta` SSE format and the
+ *  OpenAI-compatible `data: {"choices":[{"delta":{"content":"..."}}]}` format.
+ *  Streaming keeps the first byte flowing so Cloudflare / relay gateways never
+ *  declare a 504 on what would otherwise be a long-running silent request. */
+async function collectStream(res: Response, provider: string): Promise<string> {
+  if (!res.body) throw new Error("No response body from AI stream.");
+  const decoder = new TextDecoder();
+  let buf = "";
+  let text = "";
+  const reader = res.body.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop() ?? "";
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed === "data: [DONE]" || trimmed.startsWith(": ")) continue;
+        const jsonStr = trimmed.startsWith("data: ") ? trimmed.slice(6) : trimmed;
+        let chunk: any;
+        try { chunk = JSON.parse(jsonStr); } catch { continue; }
+        if (provider === "anthropic") {
+          // Anthropic SSE: event: content_block_delta → delta.text
+          const delta = chunk?.delta?.text ?? chunk?.delta?.thinking ?? "";
+          text += delta;
+        } else {
+          // OpenAI-compatible: choices[0].delta.content
+          text += chunk?.choices?.[0]?.delta?.content ?? "";
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return text.trim();
+}
+
 async function callDailyAI(system: string, user: string): Promise<string> {
   // The daily generator can run on a DIFFERENT (e.g. stronger) model than the
   // rest of the platform. AI_DAILY_* takes precedence, then the global default.
@@ -261,12 +301,12 @@ async function callDailyAI(system: string, user: string): Promise<string> {
           system,
           messages: [{ role: "user", content: user }],
           max_tokens: DAILY_MAX_TOKENS,
+          stream: true,
         }),
         signal: controller.signal,
       });
       if (!res.ok) throw new Error(`Daily AI request failed (${res.status})${await errBody(res)}`);
-      const data = await res.json();
-      return data.content?.[0]?.text?.trim() ?? "";
+      return await collectStream(res, "anthropic");
     }
 
     const res = await fetch(resolveChatUrl(provider, baseOverride), {
@@ -276,13 +316,13 @@ async function callDailyAI(system: string, user: string): Promise<string> {
         model,
         messages: [{ role: "system", content: system }, { role: "user", content: user }],
         max_tokens: DAILY_MAX_TOKENS,
-        temperature: 0.9, // higher than import — we WANT inventive variety
+        temperature: 0.9,
+        stream: true,
       }),
       signal: controller.signal,
     });
     if (!res.ok) throw new Error(`Daily AI request failed (${res.status})${await errBody(res)}`);
-    const data = await res.json();
-    return data.choices?.[0]?.message?.content?.trim() ?? "";
+    return await collectStream(res, provider);
   } catch (e: any) {
     if (e?.name === "AbortError") {
       throw new Error("每日劇本生成逾時，請稍後重試或調整 AI_DAILY_MODEL 為較快的模型。");
