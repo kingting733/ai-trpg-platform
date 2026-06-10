@@ -238,7 +238,22 @@ export const ROSTER_CONSTRAINT =
 
 function buildGMContextBlock(ctx: ScenarioGMContext): string {
   const parts: string[] = [];
-  if (ctx.openingScene) parts.push(`Opening Scene Context:\n${ctx.openingScene}`);
+
+  // ── STORY FIRST — canonical source gets top position so the model attends to
+  // it strongly. Mechanical details (locations, NPCs, objectives) follow as a
+  // fast-access index; everything in them must be consistent with the story.
+  if (ctx.sourceDocument) {
+    parts.push(
+      `FULL STORY / ORIGINAL MODULE TEXT — this is the canonical truth of the adventure. Follow it faithfully: honour the plot, the NPCs' secrets, the intended pacing, and the ending branches. Gate all information behind appropriate skill checks; never dump the plot on players unprompted:\n${ctx.sourceDocument}`
+    );
+  }
+
+  // GM pacing notes right after the story, before mechanical details, so the
+  // model reads act structure / twist timing BEFORE processing locations & NPCs.
+  if (ctx.gmNotes) parts.push(`GM PACING NOTES — read before every turn to keep the story on track:\n${ctx.gmNotes}`);
+
+  if (ctx.openingScene) parts.push(`Opening Scene (for atmosphere reference):\n${ctx.openingScene}`);
+
   if (ctx.locations.length) {
     const locLines = ctx.locations.map((l) => {
       let s = `  - ${l.name}`;
@@ -246,33 +261,25 @@ function buildGMContextBlock(ctx: ScenarioGMContext): string {
       if (l.items) s += `\n    Items: ${l.items}`;
       return s;
     }).join("\n");
-    parts.push(`Key Locations:\n${locLines}`);
+    parts.push(`Key Locations (clues and items are locked behind checks — do not volunteer them):\n${locLines}`);
   }
+
   if (ctx.npcs.length) {
     const npcLines = ctx.npcs.map((n) => {
       const immuneTag = n.social_immune ? " | ⚠ SOCIAL IMMUNE (social skills have zero effect)" : "";
-      return `  - ${n.name} | HP ${n.hp} MP ${n.mp} | STR ${n.str} CON ${n.con} SIZ ${n.siz} DEX ${n.dex} APP ${n.app} INT ${n.int} POW ${n.pow} EDU ${n.edu} LUCK ${n.luck}${immuneTag}\n    Personality: ${n.personality}\n    Goal: ${n.goal}`;
+      return `  - ${n.name} | HP ${n.hp} MP ${n.mp} | STR ${n.str} CON ${n.con} SIZ ${n.siz} DEX ${n.dex} APP ${n.app} INT ${n.int} POW ${n.pow} EDU ${n.edu} LUCK ${n.luck}${immuneTag}\n    Personality: ${n.personality}\n    Goal/Secret: ${n.goal}`;
     }).join("\n");
-    parts.push(`NPCs (play them per their goals, knowledge, and reactions):\n${npcLines}`);
+    parts.push(`NPCs — play each consistently per their goal and secret; they lie, deflect, and act to protect their own interests:\n${npcLines}`);
   }
-  if (ctx.winningTargets) parts.push(`Winning Targets — any ONE player completing each satisfies it (game ends when all required ones are met):\n${ctx.winningTargets}`);
-  if (ctx.eachPlayerTargets) parts.push(`Per-Player Targets — EVERY surviving player must personally complete each of these:\n${ctx.eachPlayerTargets}`);
-  if (ctx.failureConditions) parts.push(`Failure Conditions — if any of these occurs, the adventure ends in defeat. Steer outcomes honestly; do not contrive to avoid them:\n${ctx.failureConditions}`);
-  if (ctx.failureTurnLimit != null) parts.push(`Failure Turn Limit: Game ends in defeat if round reaches ${ctx.failureTurnLimit}`);
-  if (ctx.endingConditions) parts.push(`Additional Ending Notes:\n${ctx.endingConditions}`);
-  if (ctx.gmNotes) parts.push(`Additional GM Notes:\n${ctx.gmNotes}`);
-  // The complete original story. It lives in the STATIC system prefix, so it is
-  // cached after the first turn of a session — paid once per cold start, then
-  // billed at the cheap cache-hit rate every subsequent turn (NOT re-sent per
-  // turn). The curated fields above are a fast index; this is the canonical text
-  // so the GM can stay faithful to the author's plot, atmosphere, and details.
-  if (ctx.sourceDocument) {
-    parts.push(
-      `FULL STORY — ORIGINAL MODULE TEXT (canonical; everything above is extracted from this. Follow it faithfully, but still gate information behind checks and never dump it on players):\n${ctx.sourceDocument}`
-    );
-  }
+
+  if (ctx.winningTargets) parts.push(`Victory Conditions (any ONE player completing each satisfies the whole party):\n${ctx.winningTargets}`);
+  if (ctx.eachPlayerTargets) parts.push(`Per-Player Victory Conditions (EVERY surviving player must personally complete each):\n${ctx.eachPlayerTargets}`);
+  if (ctx.failureConditions) parts.push(`Failure Conditions — steer outcomes honestly; do not contrive to avoid these:\n${ctx.failureConditions}`);
+  if (ctx.failureTurnLimit != null) parts.push(`Failure Turn Limit: game ends in defeat if round reaches ${ctx.failureTurnLimit}`);
+  if (ctx.endingConditions) parts.push(`Additional Ending Branches:\n${ctx.endingConditions}`);
+
   if (!parts.length) return "";
-  return `\nGM WORLD CONTEXT (never share this with players directly):\n${parts.join("\n\n")}`;
+  return `\nGM WORLD CONTEXT (never share this directly with players):\n${parts.join("\n\n")}`;
 }
 
 /**
@@ -300,6 +307,19 @@ ${ROSTER_CONSTRAINT}
 
 PARTY ROSTER (${partySize} character${partySize > 1 ? "s" : ""}) — the only valid character names are: ${names}
 ${roster}
+
+YOUR ROLE AS STORY GUIDE (read this before every turn):
+You are not only a narrator — you are the story's engine. Your job is to move the adventure forward toward its intended climax while making players feel agency. Before writing each narration, ask yourself:
+1. WHERE is the story right now? Which act/phase does the current round suggest?
+2. WHAT has not been discovered yet? Are there key clues, NPCs, or locations from the module that the party has never encountered?
+3. ARE THE PLAYERS STUCK OR DRIFTING? If the party has repeated similar actions for several turns with no new story progress, the story must move — introduce an NPC, an environmental event, an unexpected sound, or a new visible clue. A real GM never lets players spin in place.
+4. WHAT SHOULD HAPPEN NEXT? Use the GM Pacing Notes and the full story text above to decide: is it time to introduce a threat? Reveal a partial truth? Escalate tension?
+
+STORY-GUIDING ACTIONS you may always take regardless of what the player does:
+- Have NPCs pursue their own agendas and appear when dramatically appropriate — they don't just wait for players to find them.
+- Let the environment react: if the party lingers somewhere too long, have something change (a door slams, a light flickers, a body is discovered).
+- Offer an NPC dropping an unsolicited, cryptic hint when players have been searching without progress for 3+ turns.
+- Always ensure at least ONE of your 3 suggested choices points toward an unexplored story thread or unmet clue — guide the party's attention naturally.
 
 NARRATION RULES:
 - This is a MULTIPLAYER game. Narrate in THIRD PERSON as a neutral Game Master.
@@ -366,7 +386,7 @@ OUTPUT FORMAT — every turn, respond ONLY with valid JSON, no markdown, no extr
  * climb without bound as a game gets longer. Older key facts are already folded
  * into the rolling story summary, so only the recent tail needs to be sent raw.
  */
-export const LEDGER_TURN_LIMIT = 12;
+export const LEDGER_TURN_LIMIT = 20;
 
 /**
  * DYNAMIC per-turn user message — everything that changes each turn. Placed
@@ -382,10 +402,15 @@ export const LEDGER_TURN_LIMIT = 12;
 export function buildTurnMessage(input: GMAIInput): string {
   const liveStatus = buildLiveStatus(input.characters, input.actingCharacterName);
   const diceBlock = buildDiceDirective(input);
-  const recentLog = input.storyLogSoFar.slice(-4).join("\n");
+  // Show more recent narrative history and keep it readable. System entries
+  // (dice rolls, HP changes, round markers) are filtered out — the GM only
+  // needs to see what was SAID and what HAPPENED in the story, not the
+  // mechanical bookkeeping. This is pre-filtered by the route before being
+  // placed in storyLogSoFar (see respond/route.ts).
+  const recentLog = input.storyLogSoFar.slice(-10).join("\n");
 
   const summaryBlock = input.storySummary
-    ? `STORY SO FAR:\n${input.storySummary}\n`
+    ? `STORY STATE BRIEF (auto-generated from full history — use this to orient yourself before narrating):\n${input.storySummary}\n`
     : "";
 
   const recentLedger = input.storyLedger.slice(-LEDGER_TURN_LIMIT);

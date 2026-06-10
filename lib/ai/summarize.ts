@@ -39,7 +39,13 @@ export async function refreshStorySummary(
     ? `PREVIOUS SUMMARY (build on this, don't repeat it verbatim):\n${currentSummary}`
     : "";
 
-  const prompt = `You are a TRPG story archivist. Write a 2-sentence story arc summary of what has happened so far in "${scenarioTitle}". Focus on what the players discovered, who they met, and what changed — not individual dice rolls. Be concise. ${langNote}
+  const prompt = `You are a TRPG story archivist writing a GM briefing for "${scenarioTitle}". Produce a SHORT structured brief in 4 lines (no headers, just the 4 lines) so the GM can instantly know the story state. ${langNote}
+
+Format — 4 lines exactly:
+SITUATION: [1 sentence — where the party is and what they are currently doing]
+DISCOVERED: [key clues, items, or facts already found — list up to 4, or "none yet"]
+UNRESOLVED: [the most important 1-2 threads still open — what the party hasn't found or figured out yet]
+THREAT: [current danger level and any active threats — or "none yet"]
 
 ${prevNote}
 
@@ -47,7 +53,7 @@ ${ledgerText}
 
 ${logText}
 
-Respond with ONLY the 2-sentence summary, nothing else.`;
+Respond with ONLY the 4 lines above, no extra text.`;
 
   try {
     const baseOverride = process.env.AI_BASE_URL?.trim().replace(/\/+$/, "");
@@ -62,7 +68,7 @@ Respond with ONLY the 2-sentence summary, nothing else.`;
       body: JSON.stringify({
         model,
         messages: [{ role: "user", content: prompt }],
-        max_tokens: 120,
+        max_tokens: 220,
         temperature: 0.3,
       }),
     });

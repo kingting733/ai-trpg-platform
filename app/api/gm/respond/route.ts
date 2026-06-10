@@ -361,22 +361,25 @@ export async function POST(request: Request) {
     });
   }
 
-  // Fetch last N turns for immediate continuity — older history lives in summary+ledger.
-  // Must cover at least one full round so the GM always sees every player's last action
-  // regardless of party size (a 4-player round has 4 consecutive turns).
+  // Fetch enough entries to cover several full rounds of narration. We fetch
+  // more than we need so that after filtering to narrative-only entries we
+  // still have a rich recent history. System entries (dice results, HP changes,
+  // round markers, location media) are excluded — the GM only needs the
+  // story narrative, not mechanical bookkeeping noise.
   const { data: logs } = await supabase
     .from("story_logs")
     .select("entry_type, content, characters(name)")
     .eq("room_id", roomId)
     .order("created_at", { ascending: false })
-    .limit(8);
+    .limit(40);
 
   const storyLogSoFar = (logs ?? [])
     .reverse()
+    .filter((l: any) => l.entry_type === "action" || l.entry_type === "gm_response")
+    .slice(-16)
     .map((l: any) => {
-      if (l.entry_type === "action") return `${l.characters?.name}: ${l.content}`;
-      if (l.entry_type === "gm_response") return `GM: ${l.content}`;
-      return l.content;
+      if (l.entry_type === "action") return `[${l.characters?.name ?? "Player"}]: ${l.content}`;
+      return `[GM]: ${l.content}`;
     });
 
   // Load the room's persistent memory (summary + ledger)
@@ -647,7 +650,7 @@ export async function POST(request: Request) {
     // the DB row and the per-turn prompt bounded no matter how long the game runs
     // (older facts survive in the summary), which is the main lever on DeepSeek
     // cache-miss cost — an unbounded ledger is re-sent uncached every single turn.
-    const LEDGER_STORE_LIMIT = 30;
+    const LEDGER_STORE_LIMIT = 50;
     let finalSummary = storySummary;
     let ledgerToStore = finalLedger;
     if (nextRound !== room.current_round) {
