@@ -154,12 +154,16 @@ export async function generateGMResponse(input: GMAIInput): Promise<GMResponseWi
       raw = await callOpenAICompatible(apiKey, model, systemPrompt, userMessage, baseUrl);
     }
     raw = raw.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
-    const parsed = JSON.parse(raw) as GMResponseWithChoices;
+    // Reasoning models (and chatty ones) may wrap the JSON in <think> blocks or
+    // a sentence of preamble. Pull out the first balanced {…} object so we parse
+    // the payload, not the chatter around it.
+    const parsed = JSON.parse(extractJSONObject(raw)) as GMResponseWithChoices;
     if (parsed.narration && Array.isArray(parsed.choices) && parsed.choices.length === 3) {
       return parsed;
     }
     throw new Error("Invalid shape");
-  } catch {
+  } catch (e) {
+    console.error("[gm] response parse failed:", e instanceof Error ? e.message : e);
     return {
       narration: "[GM response could not be parsed. Please try again.]",
       choices: ["Look around carefully", "Move forward cautiously", "Wait and listen"],
@@ -534,6 +538,29 @@ INFORMATION RULE: If the outcome is FAILURE or CRITICAL FAILURE on an investigat
 `;
 }
 
+/** Return the first balanced top-level {…} object in a string, stripping any
+ *  <think> reasoning blocks and surrounding prose first. Falls back to the raw
+ *  input so JSON.parse still throws a meaningful error if nothing is found. */
+function extractJSONObject(raw: string): string {
+  const cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  const start = cleaned.indexOf("{");
+  if (start === -1) return cleaned;
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < cleaned.length; i++) {
+    const ch = cleaned[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === "\\") esc = true;
+      else if (ch === '"') inStr = false;
+    } else if (ch === '"') inStr = true;
+    else if (ch === "{") depth++;
+    else if (ch === "}" && --depth === 0) return cleaned.slice(start, i + 1);
+  }
+  return cleaned.slice(start);
+}
+
 async function callOpenAICompatible(apiKey: string, model: string, system: string, user: string, baseUrl: string): Promise<string> {
   // DeepSeek and OpenAI both perform AUTOMATIC prompt caching on the longest
   // repeated prefix — no explicit markers needed. Because `system` is now fully
@@ -545,7 +572,9 @@ async function callOpenAICompatible(apiKey: string, model: string, system: strin
     body: JSON.stringify({
       model,
       messages: [{ role: "system", content: system }, { role: "user", content: user }],
-      max_tokens: 900,
+      // Generous so a reasoning model's thinking tokens don't truncate the JSON
+      // payload. Tunable via env for slower/cheaper models.
+      max_tokens: Number(process.env.AI_MAX_TOKENS) || 2000,
       temperature: 0.8,
     }),
   });
