@@ -226,8 +226,10 @@ export default function NewScenarioPage() {
               <span>✨</span> 從故事文件匯入
             </h2>
             <p className="text-slate-400 text-sm mt-1">
-              上傳 <span className="text-slate-300">.txt</span>、<span className="text-slate-300">.md</span> 或{" "}
-              <span className="text-slate-300">.docx</span>（最大 2MB）。AI 讀取後自動預填表格。
+              上傳 <span className="text-slate-300">.txt</span>、<span className="text-slate-300">.md</span>、{" "}
+              <span className="text-slate-300">.json</span> 或{" "}
+              <span className="text-slate-300">.docx</span>（最大 2MB）。AI 讀取後自動預填表格；
+              若檔案已是本平台的劇本 JSON 格式則直接匯入（不經 AI、即時完成）。
               不會自動儲存或發佈 — 你需逐一確認所有內容。
             </p>
           </div>
@@ -242,7 +244,7 @@ export default function NewScenarioPage() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".txt,.md,.markdown,.docx"
+            accept=".txt,.md,.markdown,.json,.docx"
             onChange={handleFileSelect}
             className="hidden"
           />

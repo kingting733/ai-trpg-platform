@@ -28,11 +28,11 @@ export async function POST(request: Request) {
   }
 
   const name = file.name.toLowerCase();
-  const isText = name.endsWith(".txt") || name.endsWith(".md") || name.endsWith(".markdown");
+  const isText = name.endsWith(".txt") || name.endsWith(".md") || name.endsWith(".markdown") || name.endsWith(".json");
   const isDocx = name.endsWith(".docx");
   if (!isText && !isDocx) {
     return NextResponse.json(
-      { error: "Unsupported file type. Upload .txt, .md, or .docx. Scanned PDFs and images are not supported yet." },
+      { error: "Unsupported file type. Upload .txt, .md, .json, or .docx. Scanned PDFs and images are not supported yet." },
       { status: 415 }
     );
   }
