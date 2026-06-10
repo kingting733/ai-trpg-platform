@@ -583,7 +583,14 @@ async function callOpenAICompatible(apiKey: string, model: string, system: strin
     throw new Error(`AI API error: ${err}`);
   }
   const data = await res.json();
-  return data.choices?.[0]?.message?.content?.trim() ?? "[No response from AI]";
+  const msg = data.choices?.[0]?.message;
+  // deepseek-reasoner (and possibly -v4-pro in thinking mode) puts the final
+  // answer in `content` and the chain-of-thought in `reasoning_content`.
+  // Always prefer `content`; fall back to `reasoning_content` so we don't
+  // silently return empty string if the shape changes.
+  const text = (msg?.content ?? msg?.reasoning_content ?? "").trim();
+  if (!text) console.warn("[gm] empty response body:", JSON.stringify(data).slice(0, 400));
+  return text || "[No response from AI]";
 }
 
 async function callAnthropic(apiKey: string, model: string, system: string, user: string): Promise<string> {
