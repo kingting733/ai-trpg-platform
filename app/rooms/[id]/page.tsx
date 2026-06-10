@@ -351,6 +351,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   // A GM choice may be tagged like "[偵查] <Name> 翻找抽屜". Pull the skill out so
   // the roll matches the tag, and strip the tag from the action text we submit.
   function submitChoice(choice: string) {
+    if (typeof choice !== "string" || !choice.trim()) return;
     const m = choice.match(/^\s*[\[【]\s*([^\]】]+?)\s*[\]】]\s*([\s\S]*)$/);
     if (m) {
       const key = SKILL_KEY_BY_ZH[m[1].trim()] ?? null;
@@ -521,7 +522,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
             <div className="grid grid-cols-1 gap-2">
               {room.current_choices!.map((c, i) => {
                 // Split a "[技能] 行動" choice so the skill tag renders as its own chip.
-                const m = c.match(/^\s*[\[【]\s*([^\]】]+?)\s*[\]】]\s*([\s\S]*)$/);
+                const m = typeof c === "string" ? c.match(/^\s*[\[【]\s*([^\]】]+?)\s*[\]】]\s*([\s\S]*)$/) : null;
                 const tag = m ? m[1].trim() : null;
                 const bodyText = m ? (m[2].trim() || c) : c;
                 return (
