@@ -566,18 +566,35 @@ async function callOpenAICompatible(apiKey: string, model: string, system: strin
   // repeated prefix — no explicit markers needed. Because `system` is now fully
   // static per room (all dynamic content moved into `user`), the system prefix
   // is reused across every turn and billed at the cheaper cache-hit rate.
-  const res = await fetch(`${baseUrl}/v1/chat/completions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "system", content: system }, { role: "user", content: user }],
-      // Generous so a reasoning model's thinking tokens don't truncate the JSON
-      // payload. Tunable via env for slower/cheaper models.
-      max_tokens: Number(process.env.AI_MAX_TOKENS) || 2000,
-      temperature: 0.8,
-    }),
-  });
+  // Abort before Vercel's function ceiling (60s on Hobby) so a hung/slow model
+  // returns a graceful fallback instead of the whole request being killed with
+  // no narration AND no choices saved. Tunable via env.
+  const controller = new AbortController();
+  const timeoutMs = Number(process.env.AI_TIMEOUT_MS) || 50000;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "system", content: system }, { role: "user", content: user }],
+        // Generous so a reasoning model's thinking tokens don't truncate the JSON
+        // payload. Tunable via env for slower/cheaper models.
+        max_tokens: Number(process.env.AI_MAX_TOKENS) || 2000,
+        temperature: 0.8,
+      }),
+      signal: controller.signal,
+    });
+  } catch (e: any) {
+    if (e?.name === "AbortError") {
+      throw new Error(`AI request timed out after ${timeoutMs}ms (model=${model})`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) {
     const err = await res.text();
     throw new Error(`AI API error: ${err}`);

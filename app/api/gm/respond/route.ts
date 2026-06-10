@@ -560,6 +560,17 @@ export async function POST(request: Request) {
       content: gmResponse.narration,
     });
 
+    // Persist the next player's choices IMMEDIATELY — before the (potentially
+    // slow) objective/ending/failure detection calls below. Otherwise, if any of
+    // those AI calls runs long or the function times out, the narration would be
+    // saved with no choices, leaving the next player stuck. If an ending IS later
+    // triggered, the early-return paths below overwrite room status to completed,
+    // and the UI hides choices for a finished game, so writing them now is safe.
+    await supabase.from("rooms").update({
+      current_choices: gmResponse.choices,
+      current_choices_for_player_id: nextPlayerId,
+    }).eq("id", roomId);
+
     // === GM-FLAGGED INJURY — server rolls & applies the actual damage ===
     // The GM only classifies WHO got hurt and HOW BADLY; the dice math and HP
     // writes are entirely server-side, preserving tamper-resistance.
