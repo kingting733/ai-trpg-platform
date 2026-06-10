@@ -125,7 +125,9 @@ Respond ONLY with valid JSON in this exact format (no markdown, no extra text):
       const data = await res.json();
       raw = data.content?.[0]?.text?.trim() ?? "";
     } else {
-      const baseUrl = provider === "deepseek" ? "https://api.deepseek.com" : "https://api.openai.com";
+      const baseOverride = process.env.AI_BASE_URL?.trim().replace(/\/+$/, "");
+      const defaultBase = provider === "deepseek" ? "https://api.deepseek.com" : "https://api.openai.com";
+      const baseUrl = baseOverride ?? defaultBase;
       const res = await fetch(`${baseUrl}/v1/chat/completions`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },

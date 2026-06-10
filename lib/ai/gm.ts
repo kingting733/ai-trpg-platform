@@ -148,7 +148,9 @@ export async function generateGMResponse(input: GMAIInput): Promise<GMResponseWi
     if (provider === "anthropic") {
       raw = await callAnthropic(apiKey, model, systemPrompt, userMessage);
     } else {
-      const baseUrl = provider === "deepseek" ? "https://api.deepseek.com" : "https://api.openai.com";
+      const baseOverride = process.env.AI_BASE_URL?.trim().replace(/\/+$/, "");
+      const defaultBase = provider === "deepseek" ? "https://api.deepseek.com" : "https://api.openai.com";
+      const baseUrl = baseOverride ?? defaultBase;
       raw = await callOpenAICompatible(apiKey, model, systemPrompt, userMessage, baseUrl);
     }
     raw = raw.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
