@@ -90,7 +90,7 @@ export function LocationGraphEditor({
               onChange={(e) => update(i, { id: e.target.value })}
             />
             <input
-              className={smallCls}
+              className={`${smallCls} min-w-0 flex-1`}
               placeholder="地點名稱（如 阿澤住所）"
               value={node.name}
               onChange={(e) => update(i, { name: e.target.value })}
@@ -192,7 +192,7 @@ export function LocationGraphEditor({
                   onChange={(ev) => updateEvidence(i, ei, { id: ev.target.value })}
                 />
                 <input
-                  className={smallCls}
+                  className={`${smallCls} min-w-0 flex-1`}
                   placeholder="名稱（舊工程圖）"
                   value={e.name}
                   onChange={(ev) => updateEvidence(i, ei, { name: ev.target.value })}
@@ -206,7 +206,7 @@ export function LocationGraphEditor({
                   }
                 />
                 <input
-                  className={smallCls}
+                  className={`${smallCls} min-w-0 flex-1`}
                   placeholder="取得方式（搜索書桌）"
                   value={e.how}
                   onChange={(ev) => updateEvidence(i, ei, { how: ev.target.value })}
