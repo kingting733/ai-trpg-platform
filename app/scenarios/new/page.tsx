@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import type { ImportedScenario } from "@/lib/ai/import-scenario";
 import type { LocationEntry, NpcEntry } from "@/lib/ai/gm";
 import { CoverImageUpload } from "@/components/CoverImageUpload";
+import { LocationGraphEditor } from "@/components/LocationGraphEditor";
+import { coerceLocationGraph, type LocationNode } from "@/lib/game/locations";
 
 const GENRES = ["Fantasy", "Cyberpunk", "Horror", "Sci-Fi", "Mystery", "Historical", "Other"];
 const DIFFICULTIES = ["Story", "Normal", "Hard", "Nightmare"] as const;
@@ -59,6 +61,7 @@ export default function NewScenarioPage() {
   const [gmNotes, setGmNotes] = useState("");
   const [locations, setLocations] = useState<LocationEntry[]>([]);
   const [npcs, setNpcs] = useState<NpcEntry[]>([]);
+  const [locNodes, setLocNodes] = useState<LocationNode[]>([]);
 
   const [language, setLanguage] = useState("zh-TW");
 
@@ -90,6 +93,7 @@ export default function NewScenarioPage() {
     setFailureTurnLimit(d.failure_turn_limit != null ? String(d.failure_turn_limit) : "");
     setEndingConditions(d.ending_conditions ?? "");
     setGmNotes(d.gm_notes ?? "");
+    setLocNodes(((d as any).location_graph?.nodes as LocationNode[]) ?? []);
     if (d.language) setLanguage(d.language);
     setActiveTab("player");
   }
@@ -189,6 +193,7 @@ export default function NewScenarioPage() {
         gm_notes: gmNotes.trim() || null,
         source_document: sourceDocument.trim() || null,
         cover_image_url: coverImageUrl.trim() || null,
+        location_graph: locNodes.length ? coerceLocationGraph({ nodes: locNodes }) : null,
         language,
         status,
       })
@@ -475,6 +480,12 @@ export default function NewScenarioPage() {
                   + 新增 NPC
                 </button>
               </div>
+            </div>
+
+            {/* Location unlock graph */}
+            <div>
+              <label className="block text-sm text-slate-400 mb-2">🗺 地點解鎖系統（選填）</label>
+              <LocationGraphEditor nodes={locNodes} onChange={setLocNodes} />
             </div>
           </div>
         )}

@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { LocationEntry, NpcEntry } from "@/lib/ai/gm";
 import { CoverImageUpload } from "@/components/CoverImageUpload";
+import { LocationGraphEditor } from "@/components/LocationGraphEditor";
+import { coerceLocationGraph, type LocationNode } from "@/lib/game/locations";
 
 const GENRES = ["Fantasy", "Cyberpunk", "Horror", "Sci-Fi", "Mystery", "Historical", "Other"];
 const DIFFICULTIES = ["Story", "Normal", "Hard", "Nightmare"] as const;
@@ -54,6 +56,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
   const [coverImageUrl, setCoverImageUrl] = useState("");
   const [locations, setLocations] = useState<LocationEntry[]>([]);
   const [npcs, setNpcs] = useState<NpcEntry[]>([]);
+  const [locNodes, setLocNodes] = useState<LocationNode[]>([]);
   const [currentStatus, setCurrentStatus] = useState<Status>("draft");
   const [language, setLanguage] = useState("zh-TW");
 
@@ -102,6 +105,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
       setFailureTurnLimit(data.failure_turn_limit != null ? String(data.failure_turn_limit) : "");
       setEndingConditions(data.ending_conditions ?? "");
       setGmNotes(data.gm_notes ?? "");
+      setLocNodes((coerceLocationGraph(data.location_graph)?.nodes as LocationNode[]) ?? []);
       setCoverImageUrl(data.cover_image_url ?? "");
       setCurrentStatus(data.status ?? "draft");
       setLanguage(data.language ?? "zh-TW");
@@ -151,6 +155,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
         gm_notes: gmNotes.trim() || null,
         source_document: sourceDocument.trim() || null,
         cover_image_url: coverImageUrl.trim() || null,
+        location_graph: locNodes.length ? coerceLocationGraph({ nodes: locNodes }) : null,
         language,
         status,
       })
@@ -418,6 +423,12 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
                   + 新增 NPC
                 </button>
               </div>
+            </div>
+
+            {/* Location unlock graph */}
+            <div>
+              <label className="block text-sm text-slate-400 mb-2">🗺 地點解鎖系統（選填）</label>
+              <LocationGraphEditor nodes={locNodes} onChange={setLocNodes} />
             </div>
           </div>
         )}

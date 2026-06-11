@@ -2,6 +2,7 @@
 // fields to PRE-FILL the creation form. It never saves or publishes anything.
 
 import type { LocationEntry, NpcEntry } from "@/lib/ai/gm";
+import { coerceLocationGraph, type LocationGraph } from "@/lib/game/locations";
 
 export const IMPORT_GENRES = ["Fantasy", "Cyberpunk", "Horror", "Sci-Fi", "Mystery", "Historical", "Other"];
 export const IMPORT_DIFFICULTIES = ["Story", "Normal", "Hard", "Nightmare"];
@@ -29,6 +30,8 @@ export interface ImportedScenario {
   failure_turn_limit: number | null;
   ending_conditions: string | null;
   gm_notes: string | null;
+  /** Optional server-authoritative location unlock graph. */
+  location_graph: LocationGraph | null;
   /** BCP-47 language tag auto-detected from the source document. */
   language: string;
 }
@@ -160,6 +163,7 @@ export function normalizeImported(raw: any): ImportedScenario {
     failure_turn_limit: normalizeFailureTurnLimit(raw?.failure_turn_limit),
     ending_conditions: asNullableString(raw?.ending_conditions),
     gm_notes: asNullableString(raw?.gm_notes),
+    location_graph: coerceLocationGraph(raw?.location_graph),
     language: normalizeLanguage(raw?.language),
   };
 }
