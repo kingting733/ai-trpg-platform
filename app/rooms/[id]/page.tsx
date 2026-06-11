@@ -63,6 +63,7 @@ interface StoryLogEntry {
 
 interface Room {
   id: string;
+  scenario_id: string;
   name: string;
   room_code: string;
   status: string;
@@ -76,6 +77,18 @@ interface Room {
   ending_summary: string | null;
   objectives: { id: string; text: string; required: boolean; scope?: "party" | "each_player" }[] | null;
   objective_progress: Record<string, { done: boolean; round: number | null; character: string | null; by?: Record<string, number> }> | null;
+  location_state: {
+    current: string | null;
+    status: Record<string, "hidden" | "discovered" | "unlocked">;
+    visited: string[];
+    evidence_found: string[];
+  } | null;
+}
+
+interface LocGraphNode {
+  id: string;
+  name: string;
+  evidence?: { id: string; name: string }[];
 }
 
 interface RoomPlayer {
@@ -217,6 +230,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   const logEndRef = useRef<HTMLDivElement>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const [atBottom, setAtBottom] = useState(true);
+  const [locGraphNodes, setLocGraphNodes] = useState<LocGraphNode[] | null>(null);
   function toggleSkills(id: string) { setSkillsOpen((p) => ({ ...p, [id]: !p[id] })); }
 
   const fetchAll = useCallback(async () => {
@@ -253,6 +267,26 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     const interval = setInterval(fetchAll, 3000);
     return () => clearInterval(interval);
   }, [fetchAll]);
+
+  // The scenario's location graph is static for the whole game — fetch once.
+  useEffect(() => {
+    if (!room?.scenario_id) return;
+    const supabase = createClient();
+    supabase
+      .from("scenarios")
+      .select("location_graph")
+      .eq("id", room.scenario_id)
+      .single()
+      .then(({ data }) => {
+        const nodes = (data?.location_graph as any)?.nodes;
+        setLocGraphNodes(
+          Array.isArray(nodes)
+            ? nodes.filter((n: any) => n && typeof n.id === "string" && typeof n.name === "string")
+            : null
+        );
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room?.scenario_id]);
 
   // No auto-scroll — the player controls the scroll position entirely. A manual
   // "jump to latest" button (below) lets them return to the bottom on demand.
@@ -675,6 +709,47 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
 
       {/* Sidebar */}
       <div className="flex flex-col gap-3 overflow-y-auto">
+
+        {/* Location map — unlocked & known-but-locked places (hidden ones never shown) */}
+        {locGraphNodes && room.location_state && (() => {
+          const ls = room.location_state!;
+          const short = (n: string) => n.split(/[：:，,。．\.\n——–\-（(【\[]/)[0].trim().slice(0, 30);
+          const visible = locGraphNodes.filter((n) => ls.status[n.id] === "unlocked" || ls.status[n.id] === "discovered");
+          if (visible.length === 0) return null;
+          const evidenceCount = ls.evidence_found.length;
+          return (
+            <Panel className="p-4 shrink-0">
+              <PanelHeader title="地點" />
+              <div className="flex flex-col gap-1.5">
+                {visible.map((n) => {
+                  const st = ls.status[n.id];
+                  const isCurrent = ls.current === n.id;
+                  const visited = ls.visited.includes(n.id);
+                  return (
+                    <div key={n.id} className="flex items-center gap-2 text-xs">
+                      <span className="shrink-0 w-4 text-center">
+                        {isCurrent ? "📍" : st === "unlocked" ? (visited ? "✓" : "○") : "🔒"}
+                      </span>
+                      <span className={
+                        isCurrent ? "text-gold font-semibold"
+                        : st === "unlocked" ? (visited ? "text-zinc-500" : "text-zinc-300")
+                        : "text-zinc-600"
+                      }>
+                        {short(n.name)}
+                        {st === "discovered" && <span className="ml-1 text-[10px] text-zinc-700">尚未能進入</span>}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              {evidenceCount > 0 && (
+                <p className="mt-2.5 pt-2 text-[10px] text-zinc-600" style={{ borderTop: "1px solid rgba(201,169,110,0.12)" }}>
+                  🔎 已取得證物 <span className="text-gold">{evidenceCount}</span> 件
+                </p>
+              )}
+            </Panel>
+          );
+        })()}
 
         {/* Objective Tracker — restricted to a single account */}
         {currentUserEmail === "kingtingtai@gmail.com" && room.objectives && room.objectives.length > 0 && (

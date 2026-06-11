@@ -20,6 +20,18 @@ import {
   Objective,
   ObjectiveProgress,
 } from "@/lib/ai/objectives";
+import {
+  coerceLocationGraph,
+  coerceLocationState,
+  detectTravelTarget,
+  looksLikeTravel,
+  matchEvidence,
+  applyDiscovers,
+  evaluateUnlocks,
+  buildLocationBlock,
+  locationShortName,
+  type TravelDirective,
+} from "@/lib/game/locations";
 
 export async function POST(request: Request) {
   const supabase = createClient();
@@ -38,7 +50,7 @@ export async function POST(request: Request) {
   // Verify caller is a room participant and it's actually their turn
   const { data: room } = await supabase
     .from("rooms")
-    .select("*, scenarios(title, background, objective, rules, opening_scene, locations, npcs, winning_targets, each_player_targets, failure_conditions, failure_turn_limit, ending_conditions, gm_notes, source_document, language)")
+    .select("*, scenarios(title, background, objective, rules, opening_scene, locations, npcs, winning_targets, each_player_targets, failure_conditions, failure_turn_limit, ending_conditions, gm_notes, source_document, language, location_graph)")
     .eq("id", roomId)
     .single();
   if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -320,6 +332,102 @@ export async function POST(request: Request) {
     }
   }
 
+  // === LOCATION SYSTEM (server-authoritative) ===
+  // Optional per scenario. The server owns travel, evidence, and unlock state;
+  // the AI GM is only given the resulting facts plus narration directives.
+  const locationGraph = coerceLocationGraph((room as any).scenarios?.location_graph);
+  let locState = locationGraph ? coerceLocationState(room.location_state, locationGraph) : null;
+  let travelDirective: TravelDirective | null = null;
+  let locationProgress = false;
+  const locationLedgerEntries: LedgerEntry[] = [];
+
+  if (locationGraph && locState) {
+    // 1. TRAVEL — only when the action reads like movement, so merely
+    //    mentioning another place (e.g. comparing notes) doesn't teleport.
+    if (looksLikeTravel(actionText)) {
+      const target = detectTravelTarget(actionText, locationGraph, locState);
+      if (target) {
+        if (target.status === "unlocked") {
+          const firstVisit = !locState.visited.includes(target.node.id);
+          locState.current = target.node.id;
+          if (firstVisit) {
+            locState.visited.push(target.node.id);
+            locState.entered_round[target.node.id] = room.current_round;
+            const discovered = applyDiscovers(locationGraph, locState, target.node.id);
+            for (const d of discovered) {
+              await supabase.from("story_logs").insert({
+                room_id: roomId,
+                round_number: room.current_round,
+                entry_type: "system",
+                content: `🧭 得知新地點：${locationShortName(d.name)}`,
+              });
+            }
+          }
+          travelDirective = { kind: "arrived", node: target.node, firstVisit };
+          locationProgress = true;
+          await supabase.from("story_logs").insert({
+            room_id: roomId,
+            round_number: room.current_round,
+            entry_type: "system",
+            content: `📍 隊伍前往：${locationShortName(target.node.name)}`,
+          });
+        } else if (target.status === "discovered") {
+          travelDirective = { kind: "soft_wall", node: target.node };
+        } else {
+          travelDirective = { kind: "unknown_place", node: target.node };
+        }
+      }
+    }
+
+    // 2. EVIDENCE — a successful search at the current location can award a
+    //    defined evidence piece (named in the action, or the only one left).
+    const searchOk =
+      !!roll?.requires_check &&
+      (roll.outcome === "success" || roll.outcome === "critical_success") &&
+      /搜|調查|檢查|查看|探索|翻找|偵查|察看|閱|讀|search|investigate|examin|inspect|look|explor|read/i.test(actionText);
+    if (searchOk) {
+      const ev = matchEvidence(actionText, locationGraph, locState);
+      if (ev) {
+        locState.evidence_found.push(ev.id);
+        locationProgress = true;
+        await supabase.from("story_logs").insert({
+          room_id: roomId,
+          round_number: room.current_round,
+          entry_type: "system",
+          content: `🔎 取得證物：${ev.name}`,
+        });
+        locationLedgerEntries.push({
+          turn: room.current_round,
+          type: "clue",
+          character: resolvedActor?.name ?? "Unknown",
+          fact: `取得證物「${ev.name}」`,
+        });
+      }
+    }
+
+    // 3. UNLOCKS — pure-code re-evaluation of every gated node.
+    const changes = evaluateUnlocks(locationGraph, locState, room.current_round);
+    for (const n of changes.unlocked) {
+      locationProgress = true;
+      await supabase.from("story_logs").insert({
+        room_id: roomId,
+        round_number: room.current_round,
+        entry_type: "system",
+        content: `🗺 新地點解鎖：${locationShortName(n.name)}`,
+      });
+      locationLedgerEntries.push({
+        turn: room.current_round,
+        type: "event",
+        character: resolvedActor?.name ?? "Unknown",
+        fact: `解鎖新地點「${locationShortName(n.name)}」`,
+      });
+    }
+
+    // 4. STUCK VALVE — count turns without progress; surface the location's
+    //    hint via the GM directive after 3 stalled turns.
+    locState.stuck_counter = locationProgress ? 0 : locState.stuck_counter + 1;
+  }
+
   // === FIRST AID — heals a TARGET (any roster member, including self) ===
   // Tied to the 急救 skill check the actor just rolled. Each character may only
   // be healed once per "scene" (approximated by round number — resets when the
@@ -377,12 +485,13 @@ export async function POST(request: Request) {
   }
   nextPlayerId = nextActor?.user_id ?? user.id;
 
-  // Clear old choices immediately
+  // Clear old choices immediately (and persist location state if active)
   await supabase.from("rooms").update({
     current_turn_player_id: nextPlayerId,
     current_round: nextRound,
     current_choices: [],
     current_choices_for_player_id: null,
+    ...(locationGraph && locState ? { location_state: locState } : {}),
   }).eq("id", roomId);
 
   if (nextRound !== room.current_round) {
@@ -501,7 +610,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const updatedLedger = [...storyLedger, ...newLedgerEntries, ...attackLedgerEntries];
+  const updatedLedger = [...storyLedger, ...newLedgerEntries, ...attackLedgerEntries, ...locationLedgerEntries];
 
   // === OBJECTIVE STATUS (GM-only) ===
   // Tell the GM which objectives are already satisfied as of the start of this
@@ -528,6 +637,19 @@ export async function POST(request: Request) {
       `Treat "已完成" goals as DONE: do not re-introduce them, hint they are unmet, or make players redo them. Steer the unfinished ones, but only through natural play — never announce the checklist.`;
   }
 
+  // Location directive — authoritative state + travel/stuck narration orders.
+  const locationDirective =
+    locationGraph && locState
+      ? buildLocationBlock(
+          locationGraph,
+          locState,
+          travelDirective,
+          locState.stuck_counter >= 3
+            ? locationGraph.nodes.find((n) => n.id === locState!.current)?.stuck_hint || null
+            : null
+        )
+      : null;
+
   const input: GMAIInput = {
     scenarioTitle: scenario?.title ?? "Unknown Scenario",
     scenarioBackground: scenario?.background ?? null,
@@ -541,6 +663,7 @@ export async function POST(request: Request) {
     storyLogSoFar,
     npcStates: (room.npc_states && typeof room.npc_states === "object") ? room.npc_states : null,
     objectiveDirective,
+    locationDirective,
     currentRound: room.current_round,
     actingCharacterName: resolvedActor?.name ?? "Unknown",
     nextCharacterName: nextActor?.name ?? "Unknown",
