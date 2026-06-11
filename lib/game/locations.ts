@@ -412,8 +412,9 @@ export function buildLocationBlock(
       lines.push(
         [
           `OFF-GRAPH MOVEMENT: the actor wants to go to a place that is NOT in the scenario's location list. Judge it:`,
-          `(a) MUNDANE & PLAUSIBLE for this setting (e.g. a shop, café, street corner, public office) — you may play a SHORT side-scene there: atmosphere, rumors, or a soft hint pointing toward the known locations at most. You must NOT award any listed evidence, confirm any hidden place, or advance unlock conditions. The side-scene lasts THIS TURN ONLY — do not open an ongoing storyline there; afterwards the party is back at their current location.`,
+          `(a) MUNDANE & PLAUSIBLE for this setting (e.g. a shop, café, street corner, public office) — play a side-scene there: atmosphere, rumors, NPC chatter, or soft hints pointing toward the known locations. The party may stay as long as the players wish, but you must NOT award any listed evidence, confirm any hidden place, or advance unlock conditions there — anything truly important always lives at the listed locations, so naturally nudge them back when the scene runs dry.`,
           `(b) A PLOT-RELEVANT place from your story notes that is not yet open, or an attempt to bypass locked areas, or something that doesn't fit the world — deny it with an in-world reason (road closed, no address, too dangerous) and steer the players toward the known locations listed above. Give no confirmation the place exists.`,
+          `If the party is already in such a side-scene (see recent story log), keep narrating from there — they can move on to any 可前往 location at any time, or to another mundane place under the same rules.`,
         ].join(" ")
       );
     }
