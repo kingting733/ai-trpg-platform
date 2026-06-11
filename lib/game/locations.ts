@@ -352,11 +352,11 @@ export function matchEvidence(
 
 // ── GM directive block ────────────────────────────────────────────────────────
 
-export interface TravelDirective {
-  kind: "arrived" | "soft_wall" | "unknown_place";
-  node: LocationNode;
-  firstVisit?: boolean;
-}
+export type TravelDirective =
+  | { kind: "arrived"; node: LocationNode; firstVisit?: boolean }
+  | { kind: "soft_wall"; node: LocationNode }
+  | { kind: "unknown_place"; node: LocationNode }
+  | { kind: "off_graph" };
 
 /** Compact per-turn block telling the GM the authoritative location state. */
 export function buildLocationBlock(
@@ -404,9 +404,13 @@ export function buildLocationBlock(
           travel.node.locked_narration ? `（建議：${travel.node.locked_narration}）` : ""
         }. You may hint at what might open the way, but do NOT let them in. The party stays where it is.`
       );
-    } else {
+    } else if (travel.kind === "unknown_place") {
       lines.push(
         `UNKNOWN PLACE: the actor referred to a place the party has not learned about. Treat it as in-character speculation — the world gives no confirmation it exists.`
+      );
+    } else if (travel.kind === "off_graph") {
+      lines.push(
+        `OFF-GRAPH MOVEMENT: the actor mentioned a place that is NOT in the scenario's location list. If it exists in your story notes, narrate an in-world reason the party cannot reach or enter it right now (road closed, too dangerous, locked, etc.) — do NOT let them freely enter. If it does not exist in your story at all, treat the mention as in-character speculation and give no confirmation.`
       );
     }
   }

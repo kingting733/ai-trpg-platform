@@ -376,6 +376,10 @@ export async function POST(request: Request) {
         } else {
           travelDirective = { kind: "unknown_place", node: target.node };
         }
+      } else {
+        // Player seems to be moving but no graph node matched — place is not
+        // part of this scenario's location list at all.
+        travelDirective = { kind: "off_graph" };
       }
     }
 
