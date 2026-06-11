@@ -28,9 +28,11 @@ import {
   matchEvidence,
   applyDiscovers,
   evaluateUnlocks,
+  evaluateEncounters,
   buildLocationBlock,
   locationShortName,
   type TravelDirective,
+  type NpcEncounter,
 } from "@/lib/game/locations";
 
 export async function POST(request: Request) {
@@ -340,6 +342,7 @@ export async function POST(request: Request) {
   let travelDirective: TravelDirective | null = null;
   let locationProgress = false;
   const locationLedgerEntries: LedgerEntry[] = [];
+  let locationFiredEncounters: NpcEncounter[] = [];
 
   if (locationGraph && locState) {
     // 1. TRAVEL — only when the action reads like movement, so merely
@@ -458,7 +461,25 @@ export async function POST(request: Request) {
       });
     }
 
-    // 4. STUCK VALVE — count turns without progress; surface the location's
+    // 4. NPC ENCOUNTERS — one-shot triggers that fire when conditions are met.
+    locationFiredEncounters = evaluateEncounters(locationGraph, locState, room.current_round);
+    for (const enc of locationFiredEncounters) {
+      locationProgress = true;
+      await supabase.from("story_logs").insert({
+        room_id: roomId,
+        round_number: room.current_round,
+        entry_type: "system",
+        content: `⚡ NPC 事件觸發：${enc.npc}`,
+      });
+      locationLedgerEntries.push({
+        turn: room.current_round,
+        type: "event",
+        character: enc.npc,
+        fact: `觸發 NPC 事件（${enc.beat.slice(0, 60)}）`,
+      });
+    }
+
+    // 5. STUCK VALVE — count turns without progress; surface the location's
     //    hint via the GM directive after 3 stalled turns.
     locState.stuck_counter = locationProgress ? 0 : locState.stuck_counter + 1;
   }
@@ -681,7 +702,9 @@ export async function POST(request: Request) {
           travelDirective,
           locState.stuck_counter >= 3
             ? locationGraph.nodes.find((n) => n.id === locState!.current)?.stuck_hint || null
-            : null
+            : null,
+          room.current_round,
+          locationFiredEncounters,
         )
       : null;
 

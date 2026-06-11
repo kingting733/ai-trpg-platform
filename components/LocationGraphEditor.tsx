@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import {
   type LocationNode,
   type EvidenceDef,
+  type NpcPlacement,
+  type NpcEncounter,
   coerceLocationGraph,
   validateLocationGraph,
 } from "@/lib/game/locations";
@@ -30,6 +32,14 @@ export function emptyLocationNode(): LocationNode {
     node_image: "",
     node_text: "",
   };
+}
+
+export function emptyNpcPlacement(): NpcPlacement {
+  return { npc: "", at: "", when: [] };
+}
+
+export function emptyNpcEncounter(): NpcEncounter {
+  return { npc: "", when: [], beat: "" };
 }
 
 function serializeUnlock(unlock: string[][]): string {
@@ -81,20 +91,34 @@ const FIELD_TIPS = {
   evidenceHow: "玩家要怎麼取得這件證物，例：「成功搜查書桌（偵查 60）」。系統用這段文字來判斷玩家行動是否在找這件物品。",
   nodeMedia: "玩家「第一次抵達」此地點時，系統會直接揭示給玩家的圖片與／或文字（例如場景照片、初見描述）。可留空。",
   evidenceMedia: "玩家成功取得這件證物時，系統會直接揭示給玩家的圖片與／或文字（例如信件照片、線索內容）。可留空。",
+  npcAt: "此 NPC 所在的地點 ID（與上方地點節點的 id 相同）。",
+  npcWhen: `這個位置的生效條件（同解鎖條件語法）。留空 = 一直在此。\n多筆同一 NPC 的設定會依序套用，最後一條滿足的為準。\n例：round:5 表示第 5 回合後才移到這個地點。`,
+  npcEncounterWhen: `觸發條件，不可留空（留空不會觸發）。每個事件只觸發一次。\n語法同解鎖條件，例：item:e3 表示玩家取得 e3 後觸發。`,
+  npcEncounterBeat: "NPC 出現時 GM 收到的指示，例：「老闆突然推門而入，神色慌張，要求玩家立刻離開」。",
 };
 
 export function LocationGraphEditor({
   nodes,
   onChange,
+  npcPlacements = [],
+  onNpcPlacementsChange,
+  npcEncounters = [],
+  onNpcEncountersChange,
+  npcNames = [],
 }: {
   nodes: LocationNode[];
   onChange: (nodes: LocationNode[]) => void;
+  npcPlacements?: NpcPlacement[];
+  onNpcPlacementsChange?: (v: NpcPlacement[]) => void;
+  npcEncounters?: NpcEncounter[];
+  onNpcEncountersChange?: (v: NpcEncounter[]) => void;
+  npcNames?: string[];
 }) {
   const warnings = useMemo(() => {
     if (nodes.length === 0) return [];
-    const graph = coerceLocationGraph({ nodes });
-    return graph ? validateLocationGraph(graph) : [];
-  }, [nodes]);
+    const graph = coerceLocationGraph({ nodes, npc_placements: npcPlacements, npc_encounters: npcEncounters });
+    return graph ? validateLocationGraph(graph, npcNames.length ? new Set(npcNames) : undefined) : [];
+  }, [nodes, npcPlacements, npcEncounters, npcNames]);
 
   function update(i: number, patch: Partial<LocationNode>) {
     onChange(nodes.map((n, j) => (j === i ? { ...n, ...patch } : n)));
@@ -104,6 +128,14 @@ export function LocationGraphEditor({
     const node = nodes[i];
     const evidence = node.evidence.map((e, j) => (j === ei ? { ...e, ...patch } : e));
     update(i, { evidence });
+  }
+
+  function updatePlacement(pi: number, patch: Partial<NpcPlacement>) {
+    onNpcPlacementsChange?.(npcPlacements.map((p, j) => (j === pi ? { ...p, ...patch } : p)));
+  }
+
+  function updateEncounter(ei: number, patch: Partial<NpcEncounter>) {
+    onNpcEncountersChange?.(npcEncounters.map((e, j) => (j === ei ? { ...e, ...patch } : e)));
   }
 
   return (
@@ -328,6 +360,152 @@ export function LocationGraphEditor({
       >
         + 新增地點節點
       </button>
+
+      {/* ── NPC 位置設定 ─────────────────────────────────────────────────────── */}
+      {onNpcPlacementsChange && (
+        <div className="bg-slate-800/40 border border-slate-700 rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-slate-300 font-medium">🧑 NPC 位置設定</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">伺服器根據條件告訴 GM 誰在當前地點，GM 不能自行決定 NPC 的位置。</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onNpcPlacementsChange([...npcPlacements, emptyNpcPlacement()])}
+              className="text-zinc-400 hover:text-white text-[11px]"
+            >
+              + 新增
+            </button>
+          </div>
+
+          {npcPlacements.length > 0 && (
+            <div className="grid grid-cols-[1fr_1fr_2fr_auto] gap-1.5 text-[10px] text-slate-500 px-0.5">
+              <FieldLabel label="NPC 名稱" tip="必須與上方 NPC 列表的名稱完全相同。" />
+              <FieldLabel label="所在地點 ID" tip={FIELD_TIPS.npcAt} />
+              <FieldLabel label="條件（可留空）" tip={FIELD_TIPS.npcWhen} />
+              <span />
+            </div>
+          )}
+
+          {npcPlacements.map((p, pi) => (
+            <div key={pi} className="grid grid-cols-[1fr_1fr_2fr_auto] gap-1.5 items-center">
+              {npcNames.length > 0 ? (
+                <select
+                  className={`${baseCls} w-full`}
+                  value={p.npc}
+                  onChange={(e) => updatePlacement(pi, { npc: e.target.value })}
+                >
+                  <option value="">選擇 NPC</option>
+                  {npcNames.map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              ) : (
+                <input
+                  className={`${baseCls} w-full`}
+                  placeholder="NPC 名稱"
+                  value={p.npc}
+                  onChange={(e) => updatePlacement(pi, { npc: e.target.value })}
+                />
+              )}
+              <input
+                className={`${baseCls} w-full font-mono`}
+                placeholder="地點 ID"
+                value={p.at}
+                onChange={(e) => updatePlacement(pi, { at: e.target.value })}
+              />
+              <input
+                className={`${baseCls} w-full`}
+                placeholder="留空 = 一直在此；例：round:5"
+                value={serializeUnlock(p.when)}
+                onChange={(e) => updatePlacement(pi, { when: parseUnlock(e.target.value) })}
+              />
+              <button
+                type="button"
+                onClick={() => onNpcPlacementsChange(npcPlacements.filter((_, j) => j !== pi))}
+                className="text-red-400/70 hover:text-red-400 text-xs"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+
+          {npcPlacements.length === 0 && (
+            <p className="text-[11px] text-slate-600 italic">尚無設定。不設定則 GM 可自由安排 NPC 位置。</p>
+          )}
+        </div>
+      )}
+
+      {/* ── NPC 觸發事件 ─────────────────────────────────────────────────────── */}
+      {onNpcEncountersChange && (
+        <div className="bg-slate-800/40 border border-slate-700 rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-slate-300 font-medium">⚡ NPC 觸發事件</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">條件成立時，NPC 會主動找上玩家（無論位置），每個事件只觸發一次。</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onNpcEncountersChange([...npcEncounters, emptyNpcEncounter()])}
+              className="text-zinc-400 hover:text-white text-[11px]"
+            >
+              + 新增
+            </button>
+          </div>
+
+          {npcEncounters.map((enc, ei) => (
+            <div key={ei} className="bg-slate-900/40 border border-slate-700/60 rounded-lg p-3 space-y-2">
+              <div className="grid grid-cols-[1fr_2fr_auto] gap-1.5 items-center">
+                {npcNames.length > 0 ? (
+                  <select
+                    className={`${baseCls} w-full`}
+                    value={enc.npc}
+                    onChange={(e) => updateEncounter(ei, { npc: e.target.value })}
+                  >
+                    <option value="">選擇 NPC</option>
+                    {npcNames.map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                ) : (
+                  <input
+                    className={`${baseCls} w-full`}
+                    placeholder="NPC 名稱"
+                    value={enc.npc}
+                    onChange={(e) => updateEncounter(ei, { npc: e.target.value })}
+                  />
+                )}
+                <div>
+                  <FieldLabel label="觸發條件" tip={FIELD_TIPS.npcEncounterWhen} />
+                  <input
+                    className={`${baseCls} w-full`}
+                    placeholder="例：item:e3 | visit:C"
+                    value={serializeUnlock(enc.when)}
+                    onChange={(e) => updateEncounter(ei, { when: parseUnlock(e.target.value) })}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onNpcEncountersChange(npcEncounters.filter((_, j) => j !== ei))}
+                  className="text-red-400/70 hover:text-red-400 text-xs self-end pb-1.5"
+                >
+                  ✕
+                </button>
+              </div>
+              <div>
+                <FieldLabel label="出現方式／GM 提示" tip={FIELD_TIPS.npcEncounterBeat} />
+                <textarea
+                  className={`${blockCls} resize-none`}
+                  rows={2}
+                  placeholder="例：老闆突然推門而入，神色慌張，要求玩家立刻離開"
+                  value={enc.beat}
+                  onChange={(e) => updateEncounter(ei, { beat: e.target.value })}
+                />
+              </div>
+            </div>
+          ))}
+
+          {npcEncounters.length === 0 && (
+            <p className="text-[11px] text-slate-600 italic">尚無設定。</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,10 +1,10 @@
 // Server-authoritative location unlock system.
 //
-// The SCENARIO defines a location graph (nodes + unlock conditions). The ROOM
-// carries the live state (current location, per-node status, evidence found).
-// All state transitions happen in code — the AI GM is only TOLD the state and
-// given narration directives; it never decides what is locked or unlocked.
-// This mirrors the objectives/npc_states pattern used elsewhere.
+// The SCENARIO defines a location graph (nodes + unlock conditions + NPC
+// placement rules + triggered NPC encounters). The ROOM carries the live
+// state. All state transitions happen in code — the AI GM is only TOLD the
+// state and given narration directives; it never decides what is locked,
+// unlocked, or who is present.
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -55,8 +55,35 @@ export interface LocationNode {
   node_text?: string;
 }
 
+/**
+ * Where an NPC is at a given moment.
+ * Rows are evaluated in order; the LAST row whose `when` is satisfied wins.
+ * `when` empty = always satisfied (good as a baseline row).
+ * This lets you express "老闆 is normally at shop, but after round 5 at dock":
+ *   { npc:"老闆", at:"shop", when:[] }
+ *   { npc:"老闆", at:"dock", when:[["round:5"]] }
+ */
+export interface NpcPlacement {
+  npc: string;
+  at: string;
+  when: UnlockTerm[][];
+}
+
+/**
+ * A one-shot NPC encounter that fires when `when` first becomes true.
+ * The server logs it once and instructs the GM via the `beat`.
+ */
+export interface NpcEncounter {
+  npc: string;
+  when: UnlockTerm[][];
+  /** GM directive describing how the NPC arrives / what they want. */
+  beat: string;
+}
+
 export interface LocationGraph {
   nodes: LocationNode[];
+  npc_placements: NpcPlacement[];
+  npc_encounters: NpcEncounter[];
 }
 
 export interface LocationState {
@@ -68,6 +95,8 @@ export interface LocationState {
   evidence_found: string[];
   /** Consecutive turns with no travel/evidence/unlock progress. */
   stuck_counter: number;
+  /** Keys of NpcEncounters already fired (format "enc:<index>"). */
+  encounters_fired: string[];
 }
 
 // ── Coercion / validation ─────────────────────────────────────────────────────
@@ -104,6 +133,30 @@ function coerceEvidence(v: unknown): EvidenceDef[] {
     .slice(0, 20);
 }
 
+function coerceNpcPlacements(v: unknown): NpcPlacement[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((p) => p && typeof p === "object" && asStr((p as any).npc) && asStr((p as any).at))
+    .map((p: any) => ({
+      npc: asStr(p.npc),
+      at: asStr(p.at),
+      when: coerceUnlock(p.when),
+    }))
+    .slice(0, 100);
+}
+
+function coerceNpcEncounters(v: unknown): NpcEncounter[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((e) => e && typeof e === "object" && asStr((e as any).npc) && Array.isArray((e as any).when) && (e as any).when.length > 0)
+    .map((e: any) => ({
+      npc: asStr(e.npc),
+      when: coerceUnlock(e.when),
+      beat: asStr(e.beat),
+    }))
+    .slice(0, 50);
+}
+
 /** Coerce arbitrary JSON into a valid LocationGraph, or null if unusable. */
 export function coerceLocationGraph(raw: any): LocationGraph | null {
   const nodesRaw = Array.isArray(raw?.nodes) ? raw.nodes : Array.isArray(raw) ? raw : null;
@@ -131,42 +184,64 @@ export function coerceLocationGraph(raw: any): LocationGraph | null {
   if (deduped.length === 0) return null;
   // At least one node must be initially enterable, or the game can never start.
   if (!deduped.some((n) => n.initial === "unlocked")) deduped[0].initial = "unlocked";
-  return { nodes: deduped };
+  return {
+    nodes: deduped,
+    npc_placements: coerceNpcPlacements(raw?.npc_placements),
+    npc_encounters: coerceNpcEncounters(raw?.npc_encounters),
+  };
 }
 
-/** Authoring-time validation — returns human-readable warnings (zh-TW). */
-export function validateLocationGraph(graph: LocationGraph): string[] {
+/** Authoring-time validation — returns human-readable warnings (zh-TW).
+ *  Pass `npcNames` (from the scenario's NPC roster) to also validate NPC references. */
+export function validateLocationGraph(graph: LocationGraph, npcNames?: Set<string>): string[] {
   const warnings: string[] = [];
   const ids = new Set(graph.nodes.map((n) => n.id));
   const evidenceIds = new Set(graph.nodes.flatMap((n) => n.evidence.map((e) => e.id)));
   const evidenceTags = new Set(graph.nodes.flatMap((n) => n.evidence.flatMap((e) => e.tags)));
 
-  for (const n of graph.nodes) {
-    for (const ref of n.discovers) {
-      if (!ids.has(ref)) warnings.push(`地點「${n.name}」的 discovers 引用了不存在的地點 id：${ref}`);
-    }
-    for (const group of n.unlock) {
+  function validateTerms(terms: UnlockTerm[][], context: string) {
+    for (const group of terms) {
       for (const term of group) {
         const parts = term.split(":");
         const kind = parts[0];
         if (kind === "visit" || kind === "after") {
-          if (!ids.has(parts[1] ?? "")) warnings.push(`地點「${n.name}」的解鎖條件引用了不存在的地點 id：${term}`);
+          if (!ids.has(parts[1] ?? "")) warnings.push(`${context} 引用了不存在的地點 id：${term}`);
         } else if (kind === "item") {
-          if (!evidenceIds.has(parts[1] ?? "")) warnings.push(`地點「${n.name}」的解鎖條件引用了不存在的證物 id：${term}`);
+          if (!evidenceIds.has(parts[1] ?? "")) warnings.push(`${context} 引用了不存在的證物 id：${term}`);
         } else if (kind === "count") {
-          if (!evidenceTags.has(parts[1] ?? "")) warnings.push(`地點「${n.name}」的解鎖條件引用了沒有任何證物使用的標籤：${term}`);
-          if (!Number.isFinite(Number(parts[2]))) warnings.push(`地點「${n.name}」的 count 條件缺少數量：${term}`);
+          if (!evidenceTags.has(parts[1] ?? "")) warnings.push(`${context} 引用了沒有任何證物使用的標籤：${term}`);
+          if (!Number.isFinite(Number(parts[2]))) warnings.push(`${context} 的 count 條件缺少數量：${term}`);
         } else if (kind === "round") {
-          if (!Number.isFinite(Number(parts[1]))) warnings.push(`地點「${n.name}」的 round 條件缺少回合數：${term}`);
+          if (!Number.isFinite(Number(parts[1]))) warnings.push(`${context} 的 round 條件缺少回合數：${term}`);
         } else {
-          warnings.push(`地點「${n.name}」含無法識別的解鎖條件：${term}（支援 visit:/item:/count:/round:/after:）`);
+          warnings.push(`${context} 含無法識別的解鎖條件：${term}（支援 visit:/item:/count:/round:/after:）`);
         }
       }
     }
+  }
+
+  for (const n of graph.nodes) {
+    for (const ref of n.discovers) {
+      if (!ids.has(ref)) warnings.push(`地點「${n.name}」的 discovers 引用了不存在的地點 id：${ref}`);
+    }
+    validateTerms(n.unlock, `地點「${n.name}」的解鎖條件`);
     if (n.initial !== "unlocked" && n.unlock.length === 0 && !graph.nodes.some((m) => m.discovers.includes(n.id))) {
       warnings.push(`地點「${n.name}」被鎖定但沒有任何解鎖條件，也沒有其他地點能發現它 — 玩家永遠到不了。`);
     }
   }
+
+  for (const p of graph.npc_placements) {
+    if (!ids.has(p.at)) warnings.push(`NPC「${p.npc}」的位置設定引用了不存在的地點 id：${p.at}`);
+    if (npcNames && p.npc && !npcNames.has(p.npc)) warnings.push(`NPC 位置設定中的「${p.npc}」不在此劇本的 NPC 名單中。`);
+    validateTerms(p.when, `NPC「${p.npc}」的位置條件`);
+  }
+
+  for (let i = 0; i < graph.npc_encounters.length; i++) {
+    const e = graph.npc_encounters[i];
+    if (npcNames && e.npc && !npcNames.has(e.npc)) warnings.push(`NPC 觸發事件中的「${e.npc}」不在此劇本的 NPC 名單中。`);
+    validateTerms(e.when, `NPC「${e.npc}」觸發事件 ${i + 1} 的條件`);
+  }
+
   return warnings;
 }
 
@@ -183,6 +258,7 @@ export function initLocationState(graph: LocationGraph): LocationState {
     entered_round: first ? { [first.id]: 1 } : {},
     evidence_found: [],
     stuck_counter: 0,
+    encounters_fired: [],
   };
 }
 
@@ -209,6 +285,7 @@ export function coerceLocationState(raw: any, graph: LocationGraph): LocationSta
         : base.entered_round,
     evidence_found: asStrArr(raw.evidence_found),
     stuck_counter: Number.isFinite(Number(raw.stuck_counter)) ? Number(raw.stuck_counter) : 0,
+    encounters_fired: asStrArr(raw.encounters_fired),
   };
 }
 
@@ -239,6 +316,11 @@ function evalTerm(term: UnlockTerm, state: LocationState, graph: LocationGraph, 
     default:
       return false;
   }
+}
+
+function condSatisfied(when: UnlockTerm[][], state: LocationState, graph: LocationGraph, currentRound: number): boolean {
+  if (when.length === 0) return true;
+  return when.some((group) => group.every((t) => evalTerm(t, state, graph, currentRound)));
 }
 
 function unlockSatisfied(node: LocationNode, state: LocationState, graph: LocationGraph, currentRound: number): boolean {
@@ -279,6 +361,65 @@ export function applyDiscovers(graph: LocationGraph, state: LocationState, enter
     }
   }
   return out;
+}
+
+/**
+ * Return NPC names present at the current node this turn.
+ *
+ * For each unique NPC, find all placements in order. The LAST satisfied row
+ * determines where the NPC is. If that row's `at` is the current node, the
+ * NPC is present.
+ */
+export function evaluateNpcPlacements(
+  graph: LocationGraph,
+  state: LocationState,
+  currentRound: number
+): string[] {
+  if (!state.current || graph.npc_placements.length === 0) return [];
+
+  // Group placements by NPC, preserving insertion order.
+  const byNpc = new Map<string, NpcPlacement[]>();
+  for (const p of graph.npc_placements) {
+    if (!byNpc.has(p.npc)) byNpc.set(p.npc, []);
+    byNpc.get(p.npc)!.push(p);
+  }
+
+  const present: string[] = [];
+  byNpc.forEach((placements, npc) => {
+    let lastSatisfied: NpcPlacement | null = null;
+    for (const p of placements) {
+      if (condSatisfied(p.when, state, graph, currentRound)) lastSatisfied = p;
+    }
+    if (lastSatisfied && lastSatisfied.at === state.current) present.push(npc);
+  });
+  return present;
+}
+
+/**
+ * Fire any NPC encounters whose conditions just became true.
+ * Mutates state.encounters_fired so each fires at most once per room.
+ * Returns the newly fired encounters.
+ */
+export function evaluateEncounters(
+  graph: LocationGraph,
+  state: LocationState,
+  currentRound: number
+): NpcEncounter[] {
+  if (graph.npc_encounters.length === 0) return [];
+  const fired: NpcEncounter[] = [];
+  for (let i = 0; i < graph.npc_encounters.length; i++) {
+    const enc = graph.npc_encounters[i];
+    const key = `enc:${i}`;
+    if (state.encounters_fired.includes(key)) continue;
+    // encounters need an explicit when (they can't fire "always" — that would
+    // be every turn)
+    if (enc.when.length === 0) continue;
+    if (condSatisfied(enc.when, state, graph, currentRound)) {
+      state.encounters_fired.push(key);
+      fired.push(enc);
+    }
+  }
+  return fired;
 }
 
 // ── Fuzzy matching (shared with the media-reveal logic style) ─────────────────
@@ -370,12 +511,16 @@ export type TravelDirective =
   | { kind: "unknown_place"; node: LocationNode }
   | { kind: "off_graph" };
 
-/** Compact per-turn block telling the GM the authoritative location state. */
+/** Compact per-turn block telling the GM the authoritative location state.
+ *  `currentRound` is needed to evaluate NPC placement conditions.
+ *  `firedEncounters` are NPC encounter events that fired this turn. */
 export function buildLocationBlock(
   graph: LocationGraph,
   state: LocationState,
   travel: TravelDirective | null,
-  stuckHint: string | null
+  stuckHint: string | null,
+  currentRound: number,
+  firedEncounters: NpcEncounter[] = [],
 ): string {
   const current = graph.nodes.find((n) => n.id === state.current);
   const lines: string[] = ["LOCATION SYSTEM (server-authoritative — you MUST follow this; you cannot move the party or reveal places yourself):"];
@@ -390,6 +535,15 @@ export function buildLocationBlock(
           .join("、")}`
       );
     }
+  }
+
+  // NPC presence — server-computed, GM must not add or remove NPCs from the scene.
+  const npcsHere = evaluateNpcPlacements(graph, state, currentRound);
+  if (graph.npc_placements.length > 0) {
+    if (npcsHere.length > 0) {
+      lines.push(`NPCS PRESENT HERE: ${npcsHere.join("、")}`);
+    }
+    lines.push("NPCs not listed above are NOT at this location — do not introduce them into the current scene unless an encounter fires.");
   }
 
   const found = graph.nodes.flatMap((n) => n.evidence).filter((e) => state.evidence_found.includes(e.id));
@@ -430,6 +584,13 @@ export function buildLocationBlock(
         ].join(" ")
       );
     }
+  }
+
+  // Triggered NPC encounters this turn.
+  for (const enc of firedEncounters) {
+    lines.push(
+      `NPC ENCOUNTER THIS TURN — ${enc.npc} arrives / makes contact with the party regardless of location. Weave this into the scene immediately. Beat: ${enc.beat}`
+    );
   }
 
   if (stuckHint) {

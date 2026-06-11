@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { LocationEntry, NpcEntry } from "@/lib/ai/gm";
 import { CoverImageUpload } from "@/components/CoverImageUpload";
 import { LocationGraphEditor } from "@/components/LocationGraphEditor";
-import { coerceLocationGraph, type LocationNode } from "@/lib/game/locations";
+import { coerceLocationGraph, type LocationNode, type NpcPlacement, type NpcEncounter } from "@/lib/game/locations";
 
 const GENRES = ["Fantasy", "Cyberpunk", "Horror", "Sci-Fi", "Mystery", "Historical", "Other"];
 const DIFFICULTIES = ["Story", "Normal", "Hard", "Nightmare"] as const;
@@ -57,6 +57,8 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
   const [locations, setLocations] = useState<LocationEntry[]>([]);
   const [npcs, setNpcs] = useState<NpcEntry[]>([]);
   const [locNodes, setLocNodes] = useState<LocationNode[]>([]);
+  const [locNpcPlacements, setLocNpcPlacements] = useState<NpcPlacement[]>([]);
+  const [locNpcEncounters, setLocNpcEncounters] = useState<NpcEncounter[]>([]);
   const [currentStatus, setCurrentStatus] = useState<Status>("draft");
   const [language, setLanguage] = useState("zh-TW");
 
@@ -105,7 +107,10 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
       setFailureTurnLimit(data.failure_turn_limit != null ? String(data.failure_turn_limit) : "");
       setEndingConditions(data.ending_conditions ?? "");
       setGmNotes(data.gm_notes ?? "");
-      setLocNodes((coerceLocationGraph(data.location_graph)?.nodes as LocationNode[]) ?? []);
+      const loadedGraph = coerceLocationGraph(data.location_graph);
+      setLocNodes((loadedGraph?.nodes as LocationNode[]) ?? []);
+      setLocNpcPlacements((loadedGraph?.npc_placements as NpcPlacement[]) ?? []);
+      setLocNpcEncounters((loadedGraph?.npc_encounters as NpcEncounter[]) ?? []);
       setCoverImageUrl(data.cover_image_url ?? "");
       setCurrentStatus(data.status ?? "draft");
       setLanguage(data.language ?? "zh-TW");
@@ -155,7 +160,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
         gm_notes: gmNotes.trim() || null,
         source_document: sourceDocument.trim() || null,
         cover_image_url: coverImageUrl.trim() || null,
-        location_graph: locNodes.length ? coerceLocationGraph({ nodes: locNodes }) : null,
+        location_graph: locNodes.length ? coerceLocationGraph({ nodes: locNodes, npc_placements: locNpcPlacements, npc_encounters: locNpcEncounters }) : null,
         language,
         status,
       })
@@ -428,7 +433,15 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
             {/* Location unlock graph */}
             <div>
               <label className="block text-sm text-slate-400 mb-2">🗺 地點解鎖系統（選填）</label>
-              <LocationGraphEditor nodes={locNodes} onChange={setLocNodes} />
+              <LocationGraphEditor
+                nodes={locNodes}
+                onChange={setLocNodes}
+                npcPlacements={locNpcPlacements}
+                onNpcPlacementsChange={setLocNpcPlacements}
+                npcEncounters={locNpcEncounters}
+                onNpcEncountersChange={setLocNpcEncounters}
+                npcNames={npcs.map((n) => n.name).filter(Boolean)}
+              />
             </div>
           </div>
         )}
