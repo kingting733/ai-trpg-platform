@@ -410,7 +410,11 @@ export function buildLocationBlock(
       );
     } else if (travel.kind === "off_graph") {
       lines.push(
-        `OFF-GRAPH MOVEMENT: the actor mentioned a place that is NOT in the scenario's location list. If it exists in your story notes, narrate an in-world reason the party cannot reach or enter it right now (road closed, too dangerous, locked, etc.) — do NOT let them freely enter. If it does not exist in your story at all, treat the mention as in-character speculation and give no confirmation.`
+        [
+          `OFF-GRAPH MOVEMENT: the actor wants to go to a place that is NOT in the scenario's location list. Judge it:`,
+          `(a) MUNDANE & PLAUSIBLE for this setting (e.g. a shop, café, street corner, public office) — you may play a SHORT side-scene there: atmosphere, rumors, or a soft hint pointing toward the known locations at most. You must NOT award any listed evidence, confirm any hidden place, or advance unlock conditions. The side-scene lasts THIS TURN ONLY — do not open an ongoing storyline there; afterwards the party is back at their current location.`,
+          `(b) A PLOT-RELEVANT place from your story notes that is not yet open, or an attempt to bypass locked areas, or something that doesn't fit the world — deny it with an in-world reason (road closed, no address, too dangerous) and steer the players toward the known locations listed above. Give no confirmation the place exists.`,
+        ].join(" ")
       );
     }
   }
