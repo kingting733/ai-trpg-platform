@@ -26,6 +26,10 @@ export interface EvidenceDef {
   tags: string[];
   /** How it can be obtained — matched against the player's action text. */
   how: string;
+  /** Optional image revealed to the players the moment this evidence is awarded. */
+  reveal_image?: string;
+  /** Optional text revealed to the players the moment this evidence is awarded. */
+  reveal_text?: string;
 }
 
 export interface LocationNode {
@@ -45,6 +49,10 @@ export interface LocationNode {
   stuck_hint: string;
   /** Node ids that become "discovered" when the party first enters this node. */
   discovers: string[];
+  /** Optional image revealed to the players on the party's FIRST entry here. */
+  node_image?: string;
+  /** Optional text revealed to the players on the party's FIRST entry here. */
+  node_text?: string;
 }
 
 export interface LocationGraph {
@@ -90,6 +98,8 @@ function coerceEvidence(v: unknown): EvidenceDef[] {
       name: asStr(e.name) || asStr(e.id),
       tags: asStrArr(e.tags),
       how: asStr(e.how),
+      reveal_image: asStr(e.reveal_image) || undefined,
+      reveal_text: asStr(e.reveal_text) || undefined,
     }))
     .slice(0, 20);
 }
@@ -111,6 +121,8 @@ export function coerceLocationGraph(raw: any): LocationGraph | null {
       locked_narration: asStr(n.locked_narration),
       stuck_hint: asStr(n.stuck_hint),
       discovers: asStrArr(n.discovers),
+      node_image: asStr(n.node_image) || undefined,
+      node_text: asStr(n.node_text) || undefined,
     }))
     .slice(0, 40);
   // Dedupe ids — first definition wins.

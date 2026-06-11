@@ -7,6 +7,7 @@ import {
   coerceLocationGraph,
   validateLocationGraph,
 } from "@/lib/game/locations";
+import { CoverImageUpload } from "@/components/CoverImageUpload";
 
 // Base input styles — no w-full so flex rows work correctly
 const baseCls =
@@ -26,6 +27,8 @@ export function emptyLocationNode(): LocationNode {
     locked_narration: "",
     stuck_hint: "",
     discovers: [],
+    node_image: "",
+    node_text: "",
   };
 }
 
@@ -76,6 +79,8 @@ const FIELD_TIPS = {
   evidenceName: "玩家看到的證物名稱，例：「舊工程圖」、「血跡照片」。",
   evidenceTags: `用於解鎖條件 count:<標籤>:<數量>。\n例如標籤填「身份證據」，條件 count:身份證據:3 = 累積 3 件有此標籤的證物。\n多個標籤用逗號分隔。`,
   evidenceHow: "玩家要怎麼取得這件證物，例：「成功搜查書桌（偵查 60）」。系統用這段文字來判斷玩家行動是否在找這件物品。",
+  nodeMedia: "玩家「第一次抵達」此地點時，系統會直接揭示給玩家的圖片與／或文字（例如場景照片、初見描述）。可留空。",
+  evidenceMedia: "玩家成功取得這件證物時，系統會直接揭示給玩家的圖片與／或文字（例如信件照片、線索內容）。可留空。",
 };
 
 export function LocationGraphEditor({
@@ -219,6 +224,22 @@ export function LocationGraphEditor({
             </div>
           </div>
 
+          {/* Row 5: first-visit media reveal */}
+          <div className="pt-3 border-t border-slate-700/60">
+            <FieldLabel label="首次抵達揭示給玩家（圖片與／或文字，可留空）" tip={FIELD_TIPS.nodeMedia} />
+            <CoverImageUpload
+              value={node.node_image ?? ""}
+              onChange={(url) => update(i, { node_image: url })}
+            />
+            <textarea
+              className={`${blockCls} resize-none mt-2`}
+              rows={2}
+              placeholder="第一次抵達時直接顯示給玩家的文字（例如初見場景描述）"
+              value={node.node_text ?? ""}
+              onChange={(e) => update(i, { node_text: e.target.value })}
+            />
+          </div>
+
           {/* Evidence list */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -242,41 +263,57 @@ export function LocationGraphEditor({
             )}
 
             {node.evidence.map((e, ei) => (
-              <div key={ei} className="grid grid-cols-4 gap-1.5 items-center">
-                <input
-                  className={`${baseCls} w-full font-mono`}
-                  placeholder="e1"
-                  value={e.id}
-                  onChange={(ev) => updateEvidence(i, ei, { id: ev.target.value })}
-                />
-                <input
-                  className={`${baseCls} w-full`}
-                  placeholder="舊工程圖"
-                  value={e.name}
-                  onChange={(ev) => updateEvidence(i, ei, { name: ev.target.value })}
-                />
-                <input
-                  className={`${baseCls} w-full`}
-                  placeholder="身份證據"
-                  value={e.tags.join(",")}
-                  onChange={(ev) =>
-                    updateEvidence(i, ei, { tags: ev.target.value.split(",").map((s) => s.trim()).filter(Boolean) })
-                  }
-                />
-                <div className="flex gap-1 items-center">
+              <div key={ei} className="space-y-1.5 bg-slate-900/40 border border-slate-700/60 rounded-lg p-2">
+                <div className="grid grid-cols-4 gap-1.5 items-center">
+                  <input
+                    className={`${baseCls} w-full font-mono`}
+                    placeholder="e1"
+                    value={e.id}
+                    onChange={(ev) => updateEvidence(i, ei, { id: ev.target.value })}
+                  />
                   <input
                     className={`${baseCls} w-full`}
-                    placeholder="搜查書桌（偵查 60）"
-                    value={e.how}
-                    onChange={(ev) => updateEvidence(i, ei, { how: ev.target.value })}
+                    placeholder="舊工程圖"
+                    value={e.name}
+                    onChange={(ev) => updateEvidence(i, ei, { name: ev.target.value })}
                   />
-                  <button
-                    type="button"
-                    onClick={() => update(i, { evidence: node.evidence.filter((_, j) => j !== ei) })}
-                    className="text-red-400/70 hover:text-red-400 text-xs shrink-0"
-                  >
-                    ✕
-                  </button>
+                  <input
+                    className={`${baseCls} w-full`}
+                    placeholder="身份證據"
+                    value={e.tags.join(",")}
+                    onChange={(ev) =>
+                      updateEvidence(i, ei, { tags: ev.target.value.split(",").map((s) => s.trim()).filter(Boolean) })
+                    }
+                  />
+                  <div className="flex gap-1 items-center">
+                    <input
+                      className={`${baseCls} w-full`}
+                      placeholder="搜查書桌（偵查 60）"
+                      value={e.how}
+                      onChange={(ev) => updateEvidence(i, ei, { how: ev.target.value })}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => update(i, { evidence: node.evidence.filter((_, j) => j !== ei) })}
+                      className="text-red-400/70 hover:text-red-400 text-xs shrink-0"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+                <div className="pt-1">
+                  <FieldLabel label="取得後揭示給玩家（圖片與／或文字，可留空）" tip={FIELD_TIPS.evidenceMedia} />
+                  <CoverImageUpload
+                    value={e.reveal_image ?? ""}
+                    onChange={(url) => updateEvidence(i, ei, { reveal_image: url })}
+                  />
+                  <textarea
+                    className={`${baseCls} w-full resize-none mt-1.5`}
+                    rows={2}
+                    placeholder="取得此證物時直接顯示給玩家的文字（例如信件內容）"
+                    value={e.reveal_text ?? ""}
+                    onChange={(ev) => updateEvidence(i, ei, { reveal_text: ev.target.value })}
+                  />
                 </div>
               </div>
             ))}

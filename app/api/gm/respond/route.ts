@@ -371,6 +371,23 @@ export async function POST(request: Request) {
             entry_type: "system",
             content: `📍 隊伍前往：${locationShortName(target.node.name)}`,
           });
+          // First-visit node media: reveal the creator's image/text on arrival.
+          if (firstVisit) {
+            const nodeImage = target.node.node_image?.trim();
+            const nodeText = target.node.node_text?.trim();
+            if (nodeImage || nodeText) {
+              await supabase.from("story_logs").insert({
+                room_id: roomId,
+                round_number: room.current_round,
+                entry_type: "location_media",
+                content:
+                  nodeText && nodeText.length > 0
+                    ? nodeText
+                    : `📍 你抵達了「${locationShortName(target.node.name)}」。`,
+                media_url: nodeImage || null,
+              });
+            }
+          }
         } else if (target.status === "discovered") {
           travelDirective = { kind: "soft_wall", node: target.node };
         } else {
@@ -400,6 +417,20 @@ export async function POST(request: Request) {
           entry_type: "system",
           content: `🔎 取得證物：${ev.name}`,
         });
+        // If the creator attached media to this evidence, reveal it to the
+        // players immediately (the server's own award is the trigger — no fuzzy
+        // name matching needed, unlike the legacy 關鍵地點 reveal above).
+        const evImage = ev.reveal_image?.trim();
+        const evText = ev.reveal_text?.trim();
+        if (evImage || evText) {
+          await supabase.from("story_logs").insert({
+            room_id: roomId,
+            round_number: room.current_round,
+            entry_type: "location_media",
+            content: evText && evText.length > 0 ? evText : `🔍 你取得了「${ev.name}」。`,
+            media_url: evImage || null,
+          });
+        }
         locationLedgerEntries.push({
           turn: room.current_round,
           type: "clue",
