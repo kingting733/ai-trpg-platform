@@ -7,6 +7,8 @@ import type { LocationEntry, NpcEntry } from "@/lib/ai/gm";
 import { CoverImageUpload } from "@/components/CoverImageUpload";
 import { LocationGraphEditor } from "@/components/LocationGraphEditor";
 import { coerceLocationGraph, type LocationNode, type NpcPlacement, type NpcEncounter } from "@/lib/game/locations";
+import { EndingsEditor, emptyEnding } from "@/components/EndingsEditor";
+import { coerceEndings, type ScenarioEnding } from "@/lib/game/endings";
 
 const GENRES = ["Fantasy", "Cyberpunk", "Horror", "Sci-Fi", "Mystery", "Historical", "Other"];
 const DIFFICULTIES = ["Story", "Normal", "Hard", "Nightmare"] as const;
@@ -64,6 +66,7 @@ export default function NewScenarioPage() {
   const [locNodes, setLocNodes] = useState<LocationNode[]>([]);
   const [locNpcPlacements, setLocNpcPlacements] = useState<NpcPlacement[]>([]);
   const [locNpcEncounters, setLocNpcEncounters] = useState<NpcEncounter[]>([]);
+  const [endings, setEndings] = useState<ScenarioEnding[]>([]);
 
   const [language, setLanguage] = useState("zh-TW");
 
@@ -98,6 +101,7 @@ export default function NewScenarioPage() {
     setLocNodes(((d as any).location_graph?.nodes as LocationNode[]) ?? []);
     setLocNpcPlacements(((d as any).location_graph?.npc_placements as NpcPlacement[]) ?? []);
     setLocNpcEncounters(((d as any).location_graph?.npc_encounters as NpcEncounter[]) ?? []);
+    setEndings(coerceEndings((d as any).endings));
     if (d.language) setLanguage(d.language);
     setActiveTab("player");
   }
@@ -198,6 +202,7 @@ export default function NewScenarioPage() {
         source_document: sourceDocument.trim() || null,
         cover_image_url: coverImageUrl.trim() || null,
         location_graph: locNodes.length ? coerceLocationGraph({ nodes: locNodes, npc_placements: locNpcPlacements, npc_encounters: locNpcEncounters }) : null,
+        endings: endings.length ? endings : [],
         language,
         status,
       })
@@ -496,6 +501,16 @@ export default function NewScenarioPage() {
                 onNpcPlacementsChange={setLocNpcPlacements}
                 npcEncounters={locNpcEncounters}
                 onNpcEncountersChange={setLocNpcEncounters}
+                npcNames={npcs.map((n) => n.name).filter(Boolean)}
+              />
+            </div>
+
+            {/* Multi-endings */}
+            <div>
+              <label className="block text-sm text-slate-400 mb-2">🎭 多重結局（選填）</label>
+              <EndingsEditor
+                endings={endings}
+                onChange={setEndings}
                 npcNames={npcs.map((n) => n.name).filter(Boolean)}
               />
             </div>

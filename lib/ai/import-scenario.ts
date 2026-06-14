@@ -3,6 +3,7 @@
 
 import type { LocationEntry, NpcEntry } from "@/lib/ai/gm";
 import { coerceLocationGraph, type LocationGraph } from "@/lib/game/locations";
+import { coerceEndings, type ScenarioEnding } from "@/lib/game/endings";
 
 export const IMPORT_GENRES = ["Fantasy", "Cyberpunk", "Horror", "Sci-Fi", "Mystery", "Historical", "Other"];
 export const IMPORT_DIFFICULTIES = ["Story", "Normal", "Hard", "Nightmare"];
@@ -32,6 +33,8 @@ export interface ImportedScenario {
   gm_notes: string | null;
   /** Optional server-authoritative location unlock graph. */
   location_graph: LocationGraph | null;
+  /** Named endings with pure-code trigger conditions and AI epilogue directives. */
+  endings: ScenarioEnding[];
   /** BCP-47 language tag auto-detected from the source document. */
   language: string;
 }
@@ -119,6 +122,10 @@ function normalizeNpcs(v: unknown): NpcEntry[] {
     .slice(0, 20);
 }
 
+function normalizeEndings(v: unknown): ScenarioEnding[] {
+  return coerceEndings(v);
+}
+
 function normalizeFailureTurnLimit(v: unknown): number | null {
   if (v == null) return null;
   const n = Math.round(Number(v));
@@ -164,6 +171,7 @@ export function normalizeImported(raw: any): ImportedScenario {
     ending_conditions: asNullableString(raw?.ending_conditions),
     gm_notes: asNullableString(raw?.gm_notes),
     location_graph: coerceLocationGraph(raw?.location_graph),
+    endings: normalizeEndings(raw?.endings),
     language: normalizeLanguage(raw?.language),
   };
 }
@@ -184,6 +192,7 @@ DEPTH REQUIREMENTS — the most important part. For these fields, PRESERVE the s
 - failure_conditions: events that should END the adventure in DEFEAT (e.g. "聖石被敵人奪走", "神廟在隊伍逃出前坍塌"), as a numbered list. null if none.
 - failure_turn_limit: if the story specifies a time limit in rounds/turns (e.g. "players have 20 rounds"), extract the integer here; otherwise null.
 - ending_conditions: any remaining ending nuance/branch notes not captured above, or null.
+- endings: array of named endings (see below). Leave [] if no distinct named endings exist.
 - gm_notes: anything else needed to run it well (foreshadowing, optional content, scaling, adjudication tips, secret mechanics, pacing).
 
 Required JSON keys:
@@ -204,6 +213,9 @@ Required JSON keys:
 - failure_conditions: numbered list of events that end the game in defeat, or null
 - failure_turn_limit: integer round limit that triggers auto-failure, or null
 - ending_conditions: remaining ending notes, or null
+- endings: array of named-ending objects — [] if none. Each object:
+  {"id":"snake_case_id","name":"結局名稱","type":"victory"|"failure"|"neutral","condition":[["term1","term2"]],"description":"AI epilogue directive","priority":0}
+  condition is an array-of-arrays (OR of ANDs) using terms: visit:nodeId, item:evidenceId, count:tag:N, round:N, after:nodeId:N, npc_dead:name, npc_alive:name, objective:id. Extract as many named endings as the document describes.
 - gm_notes: extra GM guidance or null
 
 Notes:
