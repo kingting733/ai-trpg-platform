@@ -1,11 +1,5 @@
 {
   "framework": "nextjs",
-  "crons": [
-    {
-      "path": "/api/cron/daily-scenario",
-      "schedule": "0 16 * * *"
-    }
-  ],
   "functions": {
     "app/api/gm/respond/route.ts": { "maxDuration": 60 },
     "app/api/gm/opening/route.ts": { "maxDuration": 60 }
