@@ -309,11 +309,21 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
               <textarea value={winningTargets} onChange={(e) => setWinningTargets(e.target.value)} rows={4}
                 placeholder={"取回聖石並帶出神廟\n消滅守門者"}
                 className={taCls} />
+              {winningTargets.trim() && (
+                <p className="text-[11px] text-slate-500 mt-1">
+                  各行 ID（可用於多重結局 <span className="font-mono text-slate-400">objective:</span> 條件）：{winningTargets.trim().split("\n").filter(Boolean).map((_, i) => `obj_${i + 1}`).join("、")}
+                </p>
+              )}
             </Field>
             <Field label="每名存活玩家必須完成" hint="每一位存活玩家都必須各自完成的目標——每行一項。需要所有人個別達成，一人完成不算其他人完成。">
               <textarea value={eachPlayerTargets} onChange={(e) => setEachPlayerTargets(e.target.value)} rows={3}
                 placeholder={"懺悔自己的罪行\n找到屬於自己的逃生符咒"}
                 className={taCls} />
+              {eachPlayerTargets.trim() && (
+                <p className="text-[11px] text-slate-500 mt-1">
+                  各行 ID：{eachPlayerTargets.trim().split("\n").filter(Boolean).map((_, i) => `obj_${winningTargets.trim().split("\n").filter(Boolean).length + i + 1}`).join("、")}
+                </p>
+              )}
             </Field>
             <div className="flex flex-col gap-3">
               <Field label="失敗條件（文字）" hint="一旦發生即判定遊戲失敗的事件——每行一項。系統每回合檢查，若觸發則以失敗結局結束遊戲。">

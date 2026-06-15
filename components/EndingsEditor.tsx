@@ -53,6 +53,11 @@ const TYPE_LABELS: Record<EndingType, string> = {
 
 const CONDITION_TIP = `條件成立時此結局自動觸發。用 & 表示「且」、| 表示「或」。
 
+目標條件（對應「通關條件」欄位各行，「世界與故事」頁籤下方有 ID 提示）：
+  objective:obj_1  ── 第 1 行通關條件已完成
+  objective:obj_2  ── 第 2 行通關條件已完成
+  （每名玩家目標接著排，例如第 3 行起是 obj_3…）
+
 地點系統條件（需已啟用地點圖）：
   visit:地點id    ── 去過該地點
   item:證物id     ── 取得該證物
@@ -64,11 +69,8 @@ NPC 條件：
   npc_dead:名稱   ── 該 NPC 已死亡
   npc_alive:名稱  ── 該 NPC 仍然存活
 
-目標條件：
-  objective:id    ── 指定目標已被標記完成
-
 範例：
-  item:e3 & npc_alive:阿澤 | round:20`;
+  objective:obj_1 & npc_alive:阿澤 | round:20`;
 
 const DESCRIPTION_TIP = `AI 在結局觸發時會收到這段文字作為「劇本指示」，並結合玩家的實際行動（劇情日誌）生成個性化的結局描述。
 

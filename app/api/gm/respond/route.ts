@@ -935,20 +935,85 @@ export async function POST(request: Request) {
       ending = { triggered: true, type: "failure", title: tpdTitle, summary: tpdSummary };
     }
 
+    // === SHARED OBJECTIVE TRACKER (runs in BOTH Advanced and Simple mode) ===
+    // Decomposes winning_targets/each_player_targets into a checklist (once per
+    // room) and tracks which objectives were completed this turn. In Advanced Mode
+    // the resulting progress is used by evaluateEndings via objective:<id> terms.
+    // In Simple Mode it drives the allRequiredDone victory check.
+    let sharedObjectives: Objective[] = Array.isArray(room.objectives) ? room.objectives : [];
+    let sharedProgress: ObjectiveProgress =
+      room.objective_progress && typeof room.objective_progress === "object"
+        ? { ...(room.objective_progress as ObjectiveProgress) }
+        : {};
+
+    if (!allDead && (scenario?.winning_targets || scenario?.each_player_targets || scenario?.ending_conditions)) {
+      const partyText = scenario.winning_targets?.trim() ?? "";
+      const eachPlayerText = scenario.each_player_targets?.trim() ?? "";
+
+      if (sharedObjectives.length === 0) {
+        sharedObjectives =
+          partyText || eachPlayerText
+            ? await decomposeStructuredObjectives(partyText, eachPlayerText, scenario?.language ?? null)
+            : await decomposeObjectives(scenario.ending_conditions, scenario?.language ?? null);
+        if (sharedObjectives.length > 0) {
+          await supabase.from("rooms").update({ objectives: sharedObjectives }).eq("id", roomId);
+        }
+      }
+
+      if (sharedObjectives.length > 0) {
+        const livingPlayerNames = sortedByDex.filter((c: any) => c.hp > 0).map((c: any) => c.name);
+        const incomplete = incompleteForActor(sharedObjectives, sharedProgress, actingName);
+        const newlyDone = await checkObjectiveProgress(
+          incomplete,
+          storyLogSoFar,
+          actionText,
+          actingName,
+          gmResponse.narration
+        );
+
+        if (newlyDone.length > 0) {
+          sharedProgress = applyCompletions(
+            sharedObjectives,
+            sharedProgress,
+            newlyDone,
+            actingName,
+            room.current_round,
+            livingPlayerNames
+          );
+          await supabase.from("rooms").update({ objective_progress: sharedProgress }).eq("id", roomId);
+
+          for (const id of newlyDone) {
+            const obj = sharedObjectives.find((o) => o.id === id);
+            if (!obj) continue;
+            let content: string;
+            if (obj.scope === "each_player" && sharedProgress[id]?.done !== true) {
+              const done = Object.keys(sharedProgress[id]?.by ?? {}).length;
+              const total = livingPlayerNames.length;
+              content = isZh
+                ? `✓ ${actingName} 完成了個人目標：${obj.text}（${done}/${total}）`
+                : `✓ ${actingName} completed their part: ${obj.text} (${done}/${total})`;
+            } else {
+              content = isZh ? `✓ 目標達成：${obj.text}` : `✓ Objective complete: ${obj.text}`;
+            }
+            await supabase.from("story_logs").insert({
+              room_id: roomId,
+              round_number: room.current_round,
+              entry_type: "system",
+              content,
+            });
+          }
+        }
+      }
+    }
+
     // === ADVANCED MODE: structured named endings (pure-code condition evaluation) ===
-    // Active when the scenario defines an `endings` array. Fully replaces the
-    // Simple Mode objective tracker + failure condition checks below.
     if (!ending.triggered && !allDead && advancedMode) {
-      const objProgress =
-        room.objective_progress && typeof room.objective_progress === "object"
-          ? (room.objective_progress as Record<string, { done?: boolean }>)
-          : {};
       const firedEnding = evaluateEndings(
         scenarioEndings,
         locState,
         locationGraph,
         npcStateNow as Record<string, { alive: boolean }>,
-        objProgress,
+        sharedProgress as Record<string, { done?: boolean }>,
         room.current_round,
       );
       if (firedEnding) {
@@ -963,100 +1028,27 @@ export async function POST(request: Request) {
       }
     }
 
-    // === SIMPLE MODE: deterministic objective tracker + AI failure check ===
+    // === SIMPLE MODE: allRequiredDone victory + AI failure check ===
     // Only runs when NO named endings are defined (advancedMode === false).
     if (!ending.triggered && !allDead && !advancedMode) {
-      if (
-        scenario?.winning_targets ||
-        scenario?.each_player_targets ||
-        scenario?.ending_conditions
-      ) {
-        // Progress is stored as PERMANENT FLAGS on the room — the AI never has to
-        // remember earlier turns. It only classifies the current action against
-        // the still-incomplete objectives; whether the game ends is pure code.
-
-        const partyText = scenario.winning_targets?.trim() ?? "";
-        const eachPlayerText = scenario.each_player_targets?.trim() ?? "";
-
-        // 1. Ensure the room has a decomposed objective checklist (build once).
-        let objectives: Objective[] = Array.isArray(room.objectives) ? room.objectives : [];
-        if (objectives.length === 0) {
-          objectives =
-            partyText || eachPlayerText
-              ? await decomposeStructuredObjectives(partyText, eachPlayerText, scenario?.language ?? null)
-              : await decomposeObjectives(scenario.ending_conditions, scenario?.language ?? null);
-          if (objectives.length > 0) {
-            await supabase.from("rooms").update({ objectives }).eq("id", roomId);
-          }
-        }
-
-        if (objectives.length > 0) {
-          let progress: ObjectiveProgress =
-            room.objective_progress && typeof room.objective_progress === "object"
-              ? { ...room.objective_progress }
-              : {};
-
-          const livingPlayerNames = sortedByDex.filter((c: any) => c.hp > 0).map((c: any) => c.name);
-          const incomplete = incompleteForActor(objectives, progress, actingName);
-          const newlyDone = await checkObjectiveProgress(
-            incomplete,
+      if (sharedObjectives.length > 0) {
+        if (allRequiredDone(sharedObjectives, sharedProgress)) {
+          const victory = await generateVictoryNarration(
+            scenario?.title ?? "the adventure",
+            sharedObjectives,
             storyLogSoFar,
-            actionText,
-            actingName,
-            gmResponse.narration
-          );
-
-          if (newlyDone.length > 0) {
-            progress = applyCompletions(
-              objectives,
-              progress,
-              newlyDone,
-              actingName,
-              room.current_round,
-              livingPlayerNames
-            );
-            await supabase.from("rooms").update({ objective_progress: progress }).eq("id", roomId);
-
-            for (const id of newlyDone) {
-              const obj = objectives.find((o) => o.id === id);
-              if (!obj) continue;
-              let content: string;
-              if (obj.scope === "each_player" && progress[id]?.done !== true) {
-                const done = Object.keys(progress[id]?.by ?? {}).length;
-                const total = livingPlayerNames.length;
-                content = isZh
-                  ? `✓ ${actingName} 完成了個人目標：${obj.text}（${done}/${total}）`
-                  : `✓ ${actingName} completed their part: ${obj.text} (${done}/${total})`;
-              } else {
-                content = isZh ? `✓ 目標達成：${obj.text}` : `✓ Objective complete: ${obj.text}`;
-              }
-              await supabase.from("story_logs").insert({
-                room_id: roomId,
-                round_number: room.current_round,
-                entry_type: "system",
-                content,
-              });
-            }
-          }
-
-          if (allRequiredDone(objectives, progress)) {
-            const victory = await generateVictoryNarration(
-              scenario?.title ?? "the adventure",
-              objectives,
-              storyLogSoFar,
-              scenario?.language ?? null
-            );
-            ending = { triggered: true, type: victory.type, title: victory.title, summary: victory.summary };
-          }
-        } else {
-          ending = await detectEnding(
-            scenario.ending_conditions,
-            storyLogSoFar,
-            actionText,
-            gmResponse.narration,
             scenario?.language ?? null
           );
+          ending = { triggered: true, type: victory.type, title: victory.title, summary: victory.summary };
         }
+      } else if (scenario?.ending_conditions) {
+        ending = await detectEnding(
+          scenario.ending_conditions,
+          storyLogSoFar,
+          actionText,
+          gmResponse.narration,
+          scenario?.language ?? null
+        );
       }
 
       // Failure conditions (Simple Mode only).
