@@ -10,6 +10,10 @@ import {
   validateLocationGraph,
 } from "@/lib/game/locations";
 import { CoverImageUpload } from "@/components/CoverImageUpload";
+import { ConditionBuilder, type CondKind } from "@/components/ConditionBuilder";
+
+// Location-system conditions support only these kinds (see evalTerm in locations.ts).
+const LOC_KINDS: CondKind[] = ["visit", "item", "count", "round", "after"];
 
 // Base input styles — no w-full so flex rows work correctly
 const baseCls =
@@ -40,17 +44,6 @@ export function emptyNpcPlacement(): NpcPlacement {
 
 export function emptyNpcEncounter(): NpcEncounter {
   return { npc: "", when: [], beat: "" };
-}
-
-function serializeUnlock(unlock: string[][]): string {
-  return unlock.map((g) => g.join(" & ")).join(" | ");
-}
-
-function parseUnlock(text: string): string[][] {
-  return text
-    .split("|")
-    .map((g) => g.split("&").map((t) => t.trim()).filter(Boolean))
-    .filter((g) => g.length > 0);
 }
 
 function FieldLabel({ label, tip }: { label: string; tip: string }) {
@@ -119,6 +112,20 @@ export function LocationGraphEditor({
     const graph = coerceLocationGraph({ nodes, npc_placements: npcPlacements, npc_encounters: npcEncounters });
     return graph ? validateLocationGraph(graph, npcNames.length ? new Set(npcNames) : undefined) : [];
   }, [nodes, npcPlacements, npcEncounters, npcNames]);
+
+  // Options for the ConditionBuilder dropdowns, derived from the graph itself.
+  const nodeOptions = useMemo(
+    () => nodes.filter((n) => n.id).map((n) => ({ id: n.id, name: n.name })),
+    [nodes]
+  );
+  const itemOptions = useMemo(
+    () => nodes.flatMap((n) => n.evidence).filter((e) => e.id).map((e) => ({ id: e.id, name: e.name })),
+    [nodes]
+  );
+  const tagOptions = useMemo(
+    () => Array.from(new Set(nodes.flatMap((n) => n.evidence).flatMap((e) => e.tags))).filter(Boolean),
+    [nodes]
+  );
 
   function update(i: number, patch: Partial<LocationNode>) {
     onChange(nodes.map((n, j) => (j === i ? { ...n, ...patch } : n)));
@@ -217,14 +224,17 @@ export function LocationGraphEditor({
           </div>
 
           {/* Row 3: unlock / discovers */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 items-start">
             <div>
               <FieldLabel label="解鎖條件" tip={FIELD_TIPS.unlock} />
-              <input
-                className={blockCls}
-                placeholder="例：item:e1 & visit:B | round:10"
-                value={serializeUnlock(node.unlock)}
-                onChange={(e) => update(i, { unlock: parseUnlock(e.target.value) })}
+              <ConditionBuilder
+                value={node.unlock}
+                onChange={(v) => update(i, { unlock: v })}
+                kinds={LOC_KINDS}
+                nodes={nodeOptions}
+                items={itemOptions}
+                tags={tagOptions}
+                emptyHint="留空 = 永遠鎖定（只靠 discovers 解開）"
               />
             </div>
             <div>
@@ -388,7 +398,7 @@ export function LocationGraphEditor({
           )}
 
           {npcPlacements.map((p, pi) => (
-            <div key={pi} className="grid grid-cols-[1fr_1fr_2fr_auto] gap-1.5 items-center">
+            <div key={pi} className="grid grid-cols-[1fr_1fr_2fr_auto] gap-1.5 items-start">
               {npcNames.length > 0 ? (
                 <select
                   className={`${baseCls} w-full`}
@@ -412,11 +422,14 @@ export function LocationGraphEditor({
                 value={p.at}
                 onChange={(e) => updatePlacement(pi, { at: e.target.value })}
               />
-              <input
-                className={`${baseCls} w-full`}
-                placeholder="留空 = 一直在此；例：round:5"
-                value={serializeUnlock(p.when)}
-                onChange={(e) => updatePlacement(pi, { when: parseUnlock(e.target.value) })}
+              <ConditionBuilder
+                value={p.when}
+                onChange={(v) => updatePlacement(pi, { when: v })}
+                kinds={LOC_KINDS}
+                nodes={nodeOptions}
+                items={itemOptions}
+                tags={tagOptions}
+                emptyHint="留空 = 一直在此"
               />
               <button
                 type="button"
@@ -453,7 +466,7 @@ export function LocationGraphEditor({
 
           {npcEncounters.map((enc, ei) => (
             <div key={ei} className="bg-slate-900/40 border border-slate-700/60 rounded-lg p-3 space-y-2">
-              <div className="grid grid-cols-[1fr_2fr_auto] gap-1.5 items-center">
+              <div className="grid grid-cols-[1fr_2fr_auto] gap-1.5 items-start">
                 {npcNames.length > 0 ? (
                   <select
                     className={`${baseCls} w-full`}
@@ -473,11 +486,14 @@ export function LocationGraphEditor({
                 )}
                 <div>
                   <FieldLabel label="觸發條件" tip={FIELD_TIPS.npcEncounterWhen} />
-                  <input
-                    className={`${baseCls} w-full`}
-                    placeholder="例：item:e3 | visit:C"
-                    value={serializeUnlock(enc.when)}
-                    onChange={(e) => updateEncounter(ei, { when: parseUnlock(e.target.value) })}
+                  <ConditionBuilder
+                    value={enc.when}
+                    onChange={(v) => updateEncounter(ei, { when: v })}
+                    kinds={LOC_KINDS}
+                    nodes={nodeOptions}
+                    items={itemOptions}
+                    tags={tagOptions}
+                    emptyHint="必填，留空不會觸發"
                   />
                 </div>
                 <button

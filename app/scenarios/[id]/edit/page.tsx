@@ -466,6 +466,13 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
                 endings={endings}
                 onChange={setEndings}
                 npcNames={npcs.map((n) => n.name).filter(Boolean)}
+                nodeOptions={locNodes.filter((n) => n.id).map((n) => ({ id: n.id, name: n.name }))}
+                itemOptions={locNodes.flatMap((n) => n.evidence ?? []).filter((e) => e.id).map((e) => ({ id: e.id, name: e.name }))}
+                tagOptions={Array.from(new Set(locNodes.flatMap((n) => n.evidence ?? []).flatMap((e) => e.tags ?? []))).filter(Boolean)}
+                objectiveOptions={[
+                  ...winningTargets.trim().split("\n").filter(Boolean),
+                  ...eachPlayerTargets.trim().split("\n").filter(Boolean),
+                ].map((line, i) => ({ id: `obj_${i + 1}`, name: line.trim() }))}
               />
             </div>
           </div>

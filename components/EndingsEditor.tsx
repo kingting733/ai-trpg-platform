@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { ScenarioEnding, EndingType } from "@/lib/game/endings";
-import { coerceEndings } from "@/lib/game/endings";
+import { ConditionBuilder, type Option } from "@/components/ConditionBuilder";
 
 const baseCls =
   "bg-slate-900 border border-slate-600 rounded-lg px-2 py-1.5 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-zinc-500";
@@ -10,17 +10,6 @@ const blockCls = `${baseCls} w-full`;
 
 export function emptyEnding(): ScenarioEnding {
   return { id: "", name: "", type: "victory", condition: [], description: "", priority: 0 };
-}
-
-function serializeCond(cond: string[][]): string {
-  return cond.map((g) => g.join(" & ")).join(" | ");
-}
-
-function parseCond(text: string): string[][] {
-  return text
-    .split("|")
-    .map((g) => g.split("&").map((t) => t.trim()).filter(Boolean))
-    .filter((g) => g.length > 0);
 }
 
 function FieldLabel({ label, tip }: { label: string; tip: string }) {
@@ -93,10 +82,18 @@ export function EndingsEditor({
   endings,
   onChange,
   npcNames = [],
+  nodeOptions = [],
+  itemOptions = [],
+  tagOptions = [],
+  objectiveOptions = [],
 }: {
   endings: ScenarioEnding[];
   onChange: (endings: ScenarioEnding[]) => void;
   npcNames?: string[];
+  nodeOptions?: Option[];
+  itemOptions?: Option[];
+  tagOptions?: string[];
+  objectiveOptions?: Option[];
 }) {
   function update(i: number, patch: Partial<ScenarioEnding>) {
     onChange(endings.map((e, j) => (j === i ? { ...e, ...patch } : e)));
@@ -200,17 +197,16 @@ export function EndingsEditor({
           {/* Row 2: condition */}
           <div>
             <FieldLabel label="觸發條件" tip={CONDITION_TIP} />
-            <input
-              className={blockCls}
-              placeholder="例：item:e3 & npc_alive:阿澤 | round:20"
-              value={serializeCond(ending.condition)}
-              onChange={(e) => update(i, { condition: parseCond(e.target.value) })}
+            <ConditionBuilder
+              value={ending.condition}
+              onChange={(v) => update(i, { condition: v })}
+              npcs={npcNames}
+              nodes={nodeOptions}
+              items={itemOptions}
+              tags={tagOptions}
+              objectives={objectiveOptions}
+              emptyHint="尚未設定條件，此結局將永遠不會觸發"
             />
-            {npcNames.length > 0 && (
-              <p className="text-[10px] text-slate-600 mt-1">
-                可用 NPC：{npcNames.map((n) => `npc_alive:${n} / npc_dead:${n}`).join("、")}
-              </p>
-            )}
           </div>
 
           {/* Row 3: description directive */}
