@@ -36,6 +36,7 @@ import {
   type TravelDirective,
   type NpcEncounter,
 } from "@/lib/game/locations";
+import { type NpcRef, resolveNpc, npcStateKey, npcStateEntry, npcDisplayName } from "@/lib/game/npc";
 
 export async function POST(request: Request) {
   const supabase = createClient();
@@ -103,10 +104,14 @@ export async function POST(request: Request) {
   // ACTOR's own STR/搏鬥/skill roll and any self-consequences + SAN check).
 
   // NPC roster known to the room (declared in the scenario + any already damaged).
-  const scenarioNpcs: Array<{ name: string; hp?: number }> = Array.isArray((room as any).scenarios?.npcs)
+  // `id` is the stable reference used by placements/encounters/endings; legacy
+  // rosters without ids resolve by name (see lib/game/npc). The runtime never
+  // mints ids — it only consumes persisted ones.
+  const scenarioNpcs: Array<{ id?: string; name: string; hp?: number }> = Array.isArray((room as any).scenarios?.npcs)
     ? (room as any).scenarios.npcs.filter((n: any) => n && typeof n === "object" && typeof n.name === "string")
     : [];
-  const npcStateNow: Record<string, { hp: number; max_hp: number; alive: boolean }> =
+  const npcRoster: NpcRef[] = scenarioNpcs.map((n) => ({ id: n.id, name: n.name }));
+  let npcStateNow: Record<string, { hp: number; max_hp: number; alive: boolean }> =
     (room.npc_states && typeof room.npc_states === "object") ? room.npc_states : {};
 
   let roll = null as ReturnType<typeof resolveAction> | null;
@@ -129,12 +134,15 @@ export async function POST(request: Request) {
       (c: any) => c.id !== resolvedActor.id && c.hp > 0 && c.san > 0 && actionText.includes(c.name)
     ) ?? null;
     if (!targetChar) {
+      // Match against roster display names; also any NPC already tracked in
+      // state (covers GM-invented NPCs not in the roster).
+      const trackedNames = Object.keys(npcStateNow).map((k) => npcDisplayName(k, npcRoster));
       const knownNpcNames = Array.from(new Set([
-        ...Object.keys(npcStateNow),
+        ...trackedNames,
         ...scenarioNpcs.map((n) => n.name),
       ]));
       targetNpcName = knownNpcNames.find(
-        (name) => actionText.includes(name) && (npcStateNow[name]?.alive !== false)
+        (name) => actionText.includes(name) && (npcStateEntry(name, npcRoster, npcStateNow)?.alive !== false)
       ) ?? null;
     }
   }
@@ -149,17 +157,19 @@ export async function POST(request: Request) {
     if (attack.damage > 0) {
       if (isNpc) {
         const npcStates = { ...npcStateNow };
-        let npc = npcStates[targetName];
+        const stateKey = npcStateKey(targetName, npcRoster);
+        let npc = npcStateEntry(targetName, npcRoster, npcStates);
         if (!npc) {
-          const declared = scenarioNpcs.find((n) => n.name === targetName);
+          const declared = resolveNpc(targetName, scenarioNpcs);
           const maxHp = declared && typeof declared.hp === "number"
             ? declared.hp : 10;
           npc = { hp: maxHp, max_hp: maxHp, alive: true };
         }
         npc = { ...npc, hp: Math.max(0, npc.hp - attack.damage) };
         if (npc.hp <= 0) npc.alive = false;
-        npcStates[targetName] = npc;
+        npcStates[stateKey] = npc;
         await supabase.from("rooms").update({ npc_states: npcStates }).eq("id", roomId);
+        npcStateNow = npcStates; // keep in-memory state current for endings eval
         attack.target_hp_after = npc.hp;
         attack.target_died = !npc.alive;
         attackSystemLog = npc.alive
@@ -471,16 +481,17 @@ export async function POST(request: Request) {
     locationFiredEncounters = evaluateEncounters(locationGraph, locState, room.current_round, objProgress);
     for (const enc of locationFiredEncounters) {
       locationProgress = true;
+      const encNpcName = npcDisplayName(enc.npc, npcRoster);
       await supabase.from("story_logs").insert({
         room_id: roomId,
         round_number: room.current_round,
         entry_type: "system",
-        content: `⚡ NPC 事件觸發：${enc.npc}`,
+        content: `⚡ NPC 事件觸發：${encNpcName}`,
       });
       locationLedgerEntries.push({
         turn: room.current_round,
         type: "event",
-        character: enc.npc,
+        character: encNpcName,
         fact: `觸發 NPC 事件（${enc.beat.slice(0, 60)}）`,
       });
     }
@@ -710,8 +721,17 @@ export async function POST(request: Request) {
           room.current_round,
           locationFiredEncounters,
           objProgress,
+          npcRoster,
         )
       : null;
+
+  // NPC status for the GM prompt — attach display names since state may be
+  // keyed by stable id rather than name.
+  const npcStatesForPrompt = Object.keys(npcStateNow).length
+    ? Object.fromEntries(
+        Object.entries(npcStateNow).map(([key, v]) => [key, { ...v, name: npcDisplayName(key, npcRoster) }])
+      )
+    : null;
 
   const input: GMAIInput = {
     scenarioTitle: scenario?.title ?? "Unknown Scenario",
@@ -724,7 +744,7 @@ export async function POST(request: Request) {
     storySummary,
     storyLedger: updatedLedger,
     storyLogSoFar,
-    npcStates: (room.npc_states && typeof room.npc_states === "object") ? room.npc_states : null,
+    npcStates: npcStatesForPrompt,
     objectiveDirective,
     locationDirective,
     currentRound: room.current_round,
@@ -804,19 +824,20 @@ export async function POST(request: Request) {
       const dmg = rollInjuryDamage(severity);
 
       if (injury.is_npc) {
-        const npcStates: Record<string, { hp: number; max_hp: number; alive: boolean }> =
-          (room.npc_states && typeof room.npc_states === "object") ? { ...room.npc_states } : {};
-        let npc = npcStates[injury.target];
+        const npcStates = { ...npcStateNow };
+        const stateKey = npcStateKey(injury.target, npcRoster);
+        let npc = npcStateEntry(injury.target, npcRoster, npcStates);
         if (!npc) {
-          const declaredNpc = structuredNpcs.find((n: NpcEntry) => n.name === injury.target);
+          const declaredNpc = resolveNpc(injury.target, structuredNpcs);
           const maxHp = declaredNpc ? declaredNpc.hp : Math.max(1, Math.min(30, Math.floor(injury.npc_max_hp ?? 10)));
           npc = { hp: maxHp, max_hp: maxHp, alive: true };
         }
         if (npc.alive) {
           npc = { ...npc, hp: Math.max(0, npc.hp - dmg.amount) };
           if (npc.hp <= 0) npc.alive = false;
-          npcStates[injury.target] = npc;
+          npcStates[stateKey] = npc;
           await supabase.from("rooms").update({ npc_states: npcStates }).eq("id", roomId);
+          npcStateNow = npcStates; // keep in-memory state current for endings eval
 
           await supabase.from("story_logs").insert({
             room_id: roomId,
@@ -1018,6 +1039,7 @@ export async function POST(request: Request) {
         npcStateNow as Record<string, { alive: boolean }>,
         sharedProgress as Record<string, { done?: boolean }>,
         room.current_round,
+        npcRoster,
       );
       if (firedEnding) {
         const narration = await generateEndingNarration(

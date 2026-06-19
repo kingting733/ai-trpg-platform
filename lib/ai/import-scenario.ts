@@ -2,6 +2,7 @@
 // fields to PRE-FILL the creation form. It never saves or publishes anything.
 
 import type { LocationEntry, NpcEntry } from "@/lib/ai/gm";
+import { newNpcId } from "@/lib/game/npc";
 import { coerceLocationGraph, type LocationGraph } from "@/lib/game/locations";
 import { coerceEndings, type ScenarioEnding } from "@/lib/game/endings";
 
@@ -104,6 +105,7 @@ function normalizeNpcs(v: unknown): NpcEntry[] {
   return v
     .filter((x) => x && typeof x === "object" && typeof x.name === "string" && x.name.trim())
     .map((x: any) => ({
+      id: typeof x.id === "string" && x.id.trim() ? x.id.trim() : newNpcId(),
       name: asString(x.name),
       hp: asInt(x.hp, 10),
       mp: asInt(x.mp, 5),

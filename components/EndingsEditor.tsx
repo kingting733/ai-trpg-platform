@@ -81,7 +81,7 @@ const PRIORITY_TIP = `數字越大，優先級越高。當多個結局的條件�
 export function EndingsEditor({
   endings,
   onChange,
-  npcNames = [],
+  npcOptions = [],
   nodeOptions = [],
   itemOptions = [],
   tagOptions = [],
@@ -89,7 +89,7 @@ export function EndingsEditor({
 }: {
   endings: ScenarioEnding[];
   onChange: (endings: ScenarioEnding[]) => void;
-  npcNames?: string[];
+  npcOptions?: Option[];
   nodeOptions?: Option[];
   itemOptions?: Option[];
   tagOptions?: string[];
@@ -200,7 +200,7 @@ export function EndingsEditor({
             <ConditionBuilder
               value={ending.condition}
               onChange={(v) => update(i, { condition: v })}
-              npcs={npcNames}
+              npcs={npcOptions}
               nodes={nodeOptions}
               items={itemOptions}
               tags={tagOptions}

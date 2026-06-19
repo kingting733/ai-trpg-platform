@@ -8,6 +8,7 @@ import { LocationGraphEditor } from "@/components/LocationGraphEditor";
 import { coerceLocationGraph, type LocationNode, type NpcPlacement, type NpcEncounter } from "@/lib/game/locations";
 import { EndingsEditor } from "@/components/EndingsEditor";
 import { coerceEndings, type ScenarioEnding } from "@/lib/game/endings";
+import { newNpcId, ensureNpcIds, migrateNpcRefList, migrateNpcRefsInConditions } from "@/lib/game/npc";
 
 const GENRES = ["Fantasy", "Cyberpunk", "Horror", "Sci-Fi", "Mystery", "Historical", "Other"];
 const DIFFICULTIES = ["Story", "Normal", "Hard", "Nightmare"] as const;
@@ -30,7 +31,7 @@ const taCls = `${inputCls} resize-none`;
 
 function emptyLocation(): LocationEntry { return { name: "", clues: "", items: "" }; }
 function emptyNpc(): NpcEntry {
-  return { name: "", hp: 10, mp: 5, str: 50, con: 50, siz: 50, dex: 50, app: 50, int: 50, pow: 50, edu: 50, luck: 50, personality: "", goal: "" };
+  return { id: newNpcId(), name: "", hp: 10, mp: 5, str: 50, con: 50, siz: 50, dex: 50, app: 50, int: 50, pow: 50, edu: 50, luck: 50, personality: "", goal: "" };
 }
 
 export default function EditScenarioPage({ params }: { params: { id: string } }) {
@@ -99,11 +100,15 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
           ? (data.locations as any[]).filter((l) => l && typeof l === "object" && typeof l.name === "string") as LocationEntry[]
           : []
       );
-      setNpcs(
+      // Backfill stable ids for legacy rosters, then migrate every name-based
+      // reference (placements, encounters, ending conditions) to those ids so
+      // renaming an NPC can no longer break them. A subsequent save persists it.
+      const loadedNpcs = ensureNpcIds(
         Array.isArray(data.npcs)
           ? (data.npcs as any[]).filter((n) => n && typeof n === "object" && typeof n.name === "string" && typeof n.hp === "number") as NpcEntry[]
           : []
       );
+      setNpcs(loadedNpcs);
       setWinningTargets(data.winning_targets ?? "");
       setEachPlayerTargets(data.each_player_targets ?? "");
       setFailureConditions(data.failure_conditions ?? "");
@@ -112,9 +117,14 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
       setGmNotes(data.gm_notes ?? "");
       const loadedGraph = coerceLocationGraph(data.location_graph);
       setLocNodes((loadedGraph?.nodes as LocationNode[]) ?? []);
-      setLocNpcPlacements((loadedGraph?.npc_placements as NpcPlacement[]) ?? []);
-      setLocNpcEncounters((loadedGraph?.npc_encounters as NpcEncounter[]) ?? []);
-      setEndings(coerceEndings(data.endings ?? []));
+      setLocNpcPlacements(migrateNpcRefList((loadedGraph?.npc_placements as NpcPlacement[]) ?? [], loadedNpcs));
+      setLocNpcEncounters(migrateNpcRefList((loadedGraph?.npc_encounters as NpcEncounter[]) ?? [], loadedNpcs));
+      setEndings(
+        coerceEndings(data.endings ?? []).map((e) => ({
+          ...e,
+          condition: migrateNpcRefsInConditions(e.condition, loadedNpcs),
+        }))
+      );
       setCoverImageUrl(data.cover_image_url ?? "");
       setCurrentStatus(data.status ?? "draft");
       setLanguage(data.language ?? "zh-TW");
@@ -455,7 +465,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
                 onNpcPlacementsChange={setLocNpcPlacements}
                 npcEncounters={locNpcEncounters}
                 onNpcEncountersChange={setLocNpcEncounters}
-                npcNames={npcs.map((n) => n.name).filter(Boolean)}
+                npcOptions={npcs.filter((n) => n.name).map((n) => ({ id: n.id, name: n.name }))}
                 objectiveOptions={[
                   ...winningTargets.trim().split("\n").filter(Boolean),
                   ...eachPlayerTargets.trim().split("\n").filter(Boolean),
@@ -469,7 +479,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
               <EndingsEditor
                 endings={endings}
                 onChange={setEndings}
-                npcNames={npcs.map((n) => n.name).filter(Boolean)}
+                npcOptions={npcs.filter((n) => n.name).map((n) => ({ id: n.id, name: n.name }))}
                 nodeOptions={locNodes.filter((n) => n.id).map((n) => ({ id: n.id, name: n.name }))}
                 itemOptions={locNodes.flatMap((n) => n.evidence ?? []).filter((e) => e.id).map((e) => ({ id: e.id, name: e.name }))}
                 tagOptions={Array.from(new Set(locNodes.flatMap((n) => n.evidence ?? []).flatMap((e) => e.tags ?? []))).filter(Boolean)}

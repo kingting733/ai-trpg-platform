@@ -73,19 +73,21 @@ function humanize(
   nodes: Option[],
   items: Option[],
   objectives: Option[],
+  npcs: Option[],
 ): string {
   const { kind, a, b } = parseTerm(term);
   const nodeName = (id: string) => nodes.find((n) => n.id === id)?.name || id;
   const itemName = (id: string) => items.find((n) => n.id === id)?.name || id;
   const objName = (id: string) => objectives.find((n) => n.id === id)?.name || id;
+  const npcName = (id: string) => npcs.find((n) => n.id === id)?.name || id;
   switch (kind) {
     case "visit": return `🚶 去過「${nodeName(a)}」`;
     case "item": return `🔑 取得「${itemName(a)}」`;
     case "count": return `📊 「${a}」標籤 ≥ ${b}`;
     case "round": return `⏱ 第 ${a} 回合`;
     case "after": return `⏳ 進入「${nodeName(a)}」滿 ${b} 回合`;
-    case "npc_dead": return `💀 ${a} 死亡`;
-    case "npc_alive": return `❤️ ${a} 存活`;
+    case "npc_dead": return `💀 ${npcName(a)} 死亡`;
+    case "npc_alive": return `❤️ ${npcName(a)} 存活`;
     case "objective": return `🎯 ${objName(a)}`;
     default: return term;
   }
@@ -111,7 +113,7 @@ function ValueInput({
   nodes: Option[];
   items: Option[];
   tags: string[];
-  npcs: string[];
+  npcs: Option[];
   objectives: Option[];
 }) {
   function optSelect(opts: Option[], placeholder: string) {
@@ -134,11 +136,11 @@ function ValueInput({
     if (npcs.length === 0) {
       return <input className={`${baseCls} w-full`} placeholder="NPC 名稱" value={a} onChange={(e) => setA(e.target.value)} />;
     }
-    const known = npcs.includes(a);
+    const known = npcs.some((n) => n.id === a);
     return (
       <select className={`${baseCls} w-full`} value={a} onChange={(e) => setA(e.target.value)}>
         <option value="">選擇 NPC</option>
-        {npcs.map((n) => <option key={n} value={n}>{n}</option>)}
+        {npcs.map((n) => <option key={n.id} value={n.id}>{n.name || n.id}</option>)}
         {a && !known && <option value={a}>{a}</option>}
       </select>
     );
@@ -198,7 +200,7 @@ export function ConditionBuilder({
   nodes?: Option[];
   items?: Option[];
   tags?: string[];
-  npcs?: string[];
+  npcs?: Option[];
   objectives?: Option[];
   emptyHint?: string;
 }) {
@@ -285,7 +287,7 @@ export function ConditionBuilder({
               <span key={ti} className="inline-flex items-center gap-1">
                 {ti > 0 && <span className="text-[10px] text-emerald-400/70 font-medium px-0.5">且 AND</span>}
                 <span className="inline-flex items-center gap-1 bg-slate-700/70 border border-slate-600 rounded-md pl-2 pr-1 py-0.5 text-[11px] text-slate-100">
-                  {humanize(term, nodes, items, objectives)}
+                  {humanize(term, nodes, items, objectives, npcs)}
                   <button type="button" onClick={() => removeTerm(gi, ti)} className="text-slate-400 hover:text-red-400 leading-none">✕</button>
                 </span>
               </span>

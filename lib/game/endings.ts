@@ -8,6 +8,7 @@
 // (winning_targets / failure_conditions). Both modes co-exist per-scenario.
 
 import type { LocationState, LocationGraph } from "@/lib/game/locations";
+import { type NpcRef, npcStateEntry } from "@/lib/game/npc";
 
 export type EndingType = "victory" | "failure" | "neutral";
 
@@ -84,6 +85,7 @@ function evalEndingTerm(
   npcStates: Record<string, { alive: boolean }>,
   objectiveProgress: Record<string, { done?: boolean }>,
   currentRound: number,
+  npcRoster: NpcRef[],
 ): boolean {
   const colonIdx = term.indexOf(":");
   if (colonIdx === -1) return false;
@@ -92,11 +94,11 @@ function evalEndingTerm(
 
   switch (kind) {
     case "npc_dead": {
-      const s = npcStates[rest];
+      const s = npcStateEntry(rest, npcRoster, npcStates);
       return s !== undefined && s.alive === false;
     }
     case "npc_alive": {
-      const s = npcStates[rest];
+      const s = npcStateEntry(rest, npcRoster, npcStates);
       return s === undefined || s.alive !== false;
     }
     case "objective":
@@ -146,12 +148,13 @@ export function evaluateEndings(
   npcStates: Record<string, { alive: boolean }>,
   objectiveProgress: Record<string, { done?: boolean }>,
   currentRound: number,
+  npcRoster: NpcRef[] = [],
 ): ScenarioEnding | null {
   for (const ending of endings) {
     if (ending.condition.length === 0) continue;
     const satisfied = ending.condition.some((group) =>
       group.every((term) =>
-        evalEndingTerm(term, locState, graph, npcStates, objectiveProgress, currentRound)
+        evalEndingTerm(term, locState, graph, npcStates, objectiveProgress, currentRound, npcRoster)
       )
     );
     if (satisfied) return ending;

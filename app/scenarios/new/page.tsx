@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { ImportedScenario } from "@/lib/ai/import-scenario";
 import type { LocationEntry, NpcEntry } from "@/lib/ai/gm";
+import { newNpcId } from "@/lib/game/npc";
 import { CoverImageUpload } from "@/components/CoverImageUpload";
 import { LocationGraphEditor } from "@/components/LocationGraphEditor";
 import { coerceLocationGraph, type LocationNode, type NpcPlacement, type NpcEncounter } from "@/lib/game/locations";
@@ -31,7 +32,7 @@ const taCls = `${inputCls} resize-none`;
 
 function emptyLocation(): LocationEntry { return { name: "", clues: "", items: "" }; }
 function emptyNpc(): NpcEntry {
-  return { name: "", hp: 10, mp: 5, str: 50, con: 50, siz: 50, dex: 50, app: 50, int: 50, pow: 50, edu: 50, luck: 50, personality: "", goal: "" };
+  return { id: newNpcId(), name: "", hp: 10, mp: 5, str: 50, con: 50, siz: 50, dex: 50, app: 50, int: 50, pow: 50, edu: 50, luck: 50, personality: "", goal: "" };
 }
 
 export default function NewScenarioPage() {
@@ -511,7 +512,7 @@ export default function NewScenarioPage() {
                 onNpcPlacementsChange={setLocNpcPlacements}
                 npcEncounters={locNpcEncounters}
                 onNpcEncountersChange={setLocNpcEncounters}
-                npcNames={npcs.map((n) => n.name).filter(Boolean)}
+                npcOptions={npcs.filter((n) => n.name).map((n) => ({ id: n.id, name: n.name }))}
                 objectiveOptions={[
                   ...winningTargets.trim().split("\n").filter(Boolean),
                   ...eachPlayerTargets.trim().split("\n").filter(Boolean),
@@ -525,7 +526,7 @@ export default function NewScenarioPage() {
               <EndingsEditor
                 endings={endings}
                 onChange={setEndings}
-                npcNames={npcs.map((n) => n.name).filter(Boolean)}
+                npcOptions={npcs.filter((n) => n.name).map((n) => ({ id: n.id, name: n.name }))}
                 nodeOptions={locNodes.filter((n) => n.id).map((n) => ({ id: n.id, name: n.name }))}
                 itemOptions={locNodes.flatMap((n) => n.evidence ?? []).filter((e) => e.id).map((e) => ({ id: e.id, name: e.name }))}
                 tagOptions={Array.from(new Set(locNodes.flatMap((n) => n.evidence ?? []).flatMap((e) => e.tags ?? []))).filter(Boolean)}

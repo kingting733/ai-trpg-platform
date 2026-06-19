@@ -9,6 +9,9 @@ export interface LocationEntry {
 }
 
 export interface NpcEntry {
+  /** Stable id, referenced by location placements/encounters and ending
+   *  conditions so renaming the NPC never breaks those references. */
+  id: string;
   name: string;
   // stats
   hp: number; mp: number;
@@ -63,7 +66,7 @@ export interface GMAIInput {
   /** Last 3 raw turns for immediate continuity. */
   storyLogSoFar: string[];
   /** NPCs that have taken damage — so the GM narrates their condition consistently. */
-  npcStates?: Record<string, { hp: number; max_hp: number; alive: boolean }> | null;
+  npcStates?: Record<string, { hp: number; max_hp: number; alive: boolean; name?: string }> | null;
   /** GM-only objective progress block — so the GM never re-narrates a done goal. */
   objectiveDirective?: string | null;
   /** Server-authoritative location system block (current place, exits, travel
@@ -427,9 +430,10 @@ export function buildTurnMessage(input: GMAIInput): string {
   const trackedNpcs = Object.entries(input.npcStates ?? {});
   const npcBlock = trackedNpcs.length
     ? `NPC STATUS (server-tracked — obey these; a dead NPC cannot act, a wounded one shows it):\n${trackedNpcs
-        .map(([name, s]) =>
-          s.alive ? `- ${name}: HP ${s.hp}/${s.max_hp}（負傷）` : `- ${name}: 已死亡 ☠`
-        )
+        .map(([key, s]) => {
+          const name = s.name ?? key;
+          return s.alive ? `- ${name}: HP ${s.hp}/${s.max_hp}（負傷）` : `- ${name}: 已死亡 ☠`;
+        })
         .join("\n")}\n`
     : "";
 

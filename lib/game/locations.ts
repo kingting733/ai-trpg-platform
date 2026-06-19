@@ -6,6 +6,8 @@
 // state and given narration directives; it never decides what is locked,
 // unlocked, or who is present.
 
+import { type NpcRef, npcDisplayName } from "@/lib/game/npc";
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type LocationStatus = "hidden" | "discovered" | "unlocked";
@@ -69,6 +71,8 @@ export interface LocationNode {
  *   { npc:"老闆", at:"dock", when:[["round:5"]] }
  */
 export interface NpcPlacement {
+  /** NPC reference — the roster entry's stable id (legacy data may hold a name;
+   *  both resolve via lib/game/npc.resolveNpc). */
   npc: string;
   at: string;
   when: UnlockTerm[][];
@@ -197,11 +201,12 @@ export function coerceLocationGraph(raw: any): LocationGraph | null {
 }
 
 /** Authoring-time validation — returns human-readable warnings (zh-TW).
- *  Pass `npcNames` (from the scenario's NPC roster) to also validate NPC references.
+ *  Pass `npcRefs` (the roster's valid NPC references — ids and/or names) to also
+ *  validate NPC references.
  *  Pass `objectiveIds` (from the scenario's objective list) to also validate objective:<id> references. */
 export function validateLocationGraph(
   graph: LocationGraph,
-  npcNames?: Set<string>,
+  npcRefs?: Set<string>,
   objectiveIds?: Set<string>
 ): string[] {
   const warnings: string[] = [];
@@ -244,13 +249,13 @@ export function validateLocationGraph(
 
   for (const p of graph.npc_placements) {
     if (!ids.has(p.at)) warnings.push(`NPC「${p.npc}」的位置設定引用了不存在的地點 id：${p.at}`);
-    if (npcNames && p.npc && !npcNames.has(p.npc)) warnings.push(`NPC 位置設定中的「${p.npc}」不在此劇本的 NPC 名單中。`);
+    if (npcRefs && p.npc && !npcRefs.has(p.npc)) warnings.push(`NPC 位置設定中的「${p.npc}」不在此劇本的 NPC 名單中。`);
     validateTerms(p.when, `NPC「${p.npc}」的位置條件`);
   }
 
   for (let i = 0; i < graph.npc_encounters.length; i++) {
     const e = graph.npc_encounters[i];
-    if (npcNames && e.npc && !npcNames.has(e.npc)) warnings.push(`NPC 觸發事件中的「${e.npc}」不在此劇本的 NPC 名單中。`);
+    if (npcRefs && e.npc && !npcRefs.has(e.npc)) warnings.push(`NPC 觸發事件中的「${e.npc}」不在此劇本的 NPC 名單中。`);
     validateTerms(e.when, `NPC「${e.npc}」觸發事件 ${i + 1} 的條件`);
   }
 
@@ -561,6 +566,7 @@ export function buildLocationBlock(
   currentRound: number,
   firedEncounters: NpcEncounter[] = [],
   objectiveProgress: ObjectiveProgressLike = {},
+  npcRoster: NpcRef[] = [],
 ): string {
   const current = graph.nodes.find((n) => n.id === state.current);
   const lines: string[] = ["LOCATION SYSTEM (server-authoritative — you MUST follow this; you cannot move the party or reveal places yourself):"];
@@ -581,7 +587,7 @@ export function buildLocationBlock(
   const npcsHere = evaluateNpcPlacements(graph, state, currentRound, objectiveProgress);
   if (graph.npc_placements.length > 0) {
     if (npcsHere.length > 0) {
-      lines.push(`NPCS PRESENT HERE: ${npcsHere.join("、")}`);
+      lines.push(`NPCS PRESENT HERE: ${npcsHere.map((ref) => npcDisplayName(ref, npcRoster)).join("、")}`);
     }
     lines.push("NPCs not listed above are NOT at this location — do not introduce them into the current scene unless an encounter fires.");
   }
@@ -629,7 +635,7 @@ export function buildLocationBlock(
   // Triggered NPC encounters this turn.
   for (const enc of firedEncounters) {
     lines.push(
-      `NPC ENCOUNTER THIS TURN — ${enc.npc} arrives / makes contact with the party regardless of location. Weave this into the scene immediately. Beat: ${enc.beat}`
+      `NPC ENCOUNTER THIS TURN — ${npcDisplayName(enc.npc, npcRoster)} arrives / makes contact with the party regardless of location. Weave this into the scene immediately. Beat: ${enc.beat}`
     );
   }
 

@@ -97,7 +97,7 @@ export function LocationGraphEditor({
   onNpcPlacementsChange,
   npcEncounters = [],
   onNpcEncountersChange,
-  npcNames = [],
+  npcOptions = [],
   objectiveOptions = [],
 }: {
   nodes: LocationNode[];
@@ -106,20 +106,26 @@ export function LocationGraphEditor({
   onNpcPlacementsChange?: (v: NpcPlacement[]) => void;
   npcEncounters?: NpcEncounter[];
   onNpcEncountersChange?: (v: NpcEncounter[]) => void;
-  npcNames?: string[];
+  /** NPC roster; `id` is the stable reference stored in placements/encounters. */
+  npcOptions?: { id: string; name: string }[];
   objectiveOptions?: Option[];
 }) {
+  // Valid NPC references = ids AND names (names tolerate legacy data).
+  const npcRefs = useMemo(
+    () => new Set(npcOptions.flatMap((n) => [n.id, n.name].filter(Boolean))),
+    [npcOptions]
+  );
   const warnings = useMemo(() => {
     if (nodes.length === 0) return [];
     const graph = coerceLocationGraph({ nodes, npc_placements: npcPlacements, npc_encounters: npcEncounters });
     return graph
       ? validateLocationGraph(
           graph,
-          npcNames.length ? new Set(npcNames) : undefined,
+          npcRefs.size ? npcRefs : undefined,
           objectiveOptions.length ? new Set(objectiveOptions.map((o) => o.id)) : undefined
         )
       : [];
-  }, [nodes, npcPlacements, npcEncounters, npcNames, objectiveOptions]);
+  }, [nodes, npcPlacements, npcEncounters, npcRefs, objectiveOptions]);
 
   // Options for the ConditionBuilder dropdowns, derived from the graph itself.
   const nodeOptions = useMemo(
@@ -151,6 +157,24 @@ export function LocationGraphEditor({
 
   function updateEncounter(ei: number, patch: Partial<NpcEncounter>) {
     onNpcEncountersChange?.(npcEncounters.map((e, j) => (j === ei ? { ...e, ...patch } : e)));
+  }
+
+  // NPC picker — stores the stable id; falls back to a free-text input when no
+  // roster exists, and keeps any unrecognised legacy ref visible/selectable.
+  function NpcSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+    if (npcOptions.length === 0) {
+      return (
+        <input className={`${baseCls} w-full`} placeholder="NPC 名稱" value={value} onChange={(e) => onChange(e.target.value)} />
+      );
+    }
+    const known = npcOptions.some((n) => n.id === value);
+    return (
+      <select className={`${baseCls} w-full`} value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">選擇 NPC</option>
+        {npcOptions.map((n) => <option key={n.id} value={n.id}>{n.name || n.id}</option>)}
+        {value && !known && <option value={value}>{value}</option>}
+      </select>
+    );
   }
 
   return (
@@ -408,23 +432,7 @@ export function LocationGraphEditor({
 
           {npcPlacements.map((p, pi) => (
             <div key={pi} className="grid grid-cols-[1fr_1fr_2fr_auto] gap-1.5 items-start">
-              {npcNames.length > 0 ? (
-                <select
-                  className={`${baseCls} w-full`}
-                  value={p.npc}
-                  onChange={(e) => updatePlacement(pi, { npc: e.target.value })}
-                >
-                  <option value="">選擇 NPC</option>
-                  {npcNames.map((n) => <option key={n} value={n}>{n}</option>)}
-                </select>
-              ) : (
-                <input
-                  className={`${baseCls} w-full`}
-                  placeholder="NPC 名稱"
-                  value={p.npc}
-                  onChange={(e) => updatePlacement(pi, { npc: e.target.value })}
-                />
-              )}
+              <NpcSelect value={p.npc} onChange={(v) => updatePlacement(pi, { npc: v })} />
               <input
                 className={`${baseCls} w-full font-mono`}
                 placeholder="地點 ID"
@@ -477,23 +485,7 @@ export function LocationGraphEditor({
           {npcEncounters.map((enc, ei) => (
             <div key={ei} className="bg-slate-900/40 border border-slate-700/60 rounded-lg p-3 space-y-2">
               <div className="grid grid-cols-[1fr_2fr_auto] gap-1.5 items-start">
-                {npcNames.length > 0 ? (
-                  <select
-                    className={`${baseCls} w-full`}
-                    value={enc.npc}
-                    onChange={(e) => updateEncounter(ei, { npc: e.target.value })}
-                  >
-                    <option value="">選擇 NPC</option>
-                    {npcNames.map((n) => <option key={n} value={n}>{n}</option>)}
-                  </select>
-                ) : (
-                  <input
-                    className={`${baseCls} w-full`}
-                    placeholder="NPC 名稱"
-                    value={enc.npc}
-                    onChange={(e) => updateEncounter(ei, { npc: e.target.value })}
-                  />
-                )}
+                <NpcSelect value={enc.npc} onChange={(v) => updateEncounter(ei, { npc: v })} />
                 <div>
                   <FieldLabel label="觸發條件" tip={FIELD_TIPS.npcEncounterWhen} />
                   <ConditionBuilder
