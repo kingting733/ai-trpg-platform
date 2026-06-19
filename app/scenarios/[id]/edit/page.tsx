@@ -456,6 +456,10 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
                 npcEncounters={locNpcEncounters}
                 onNpcEncountersChange={setLocNpcEncounters}
                 npcNames={npcs.map((n) => n.name).filter(Boolean)}
+                objectiveOptions={[
+                  ...winningTargets.trim().split("\n").filter(Boolean),
+                  ...eachPlayerTargets.trim().split("\n").filter(Boolean),
+                ].map((line, i) => ({ id: `obj_${i + 1}`, name: line.trim() }))}
               />
             </div>
 

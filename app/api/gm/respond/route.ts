@@ -336,6 +336,10 @@ export async function POST(request: Request) {
     }
   }
 
+  // Computed early so location unlock conditions can reference objective:<id>.
+  const objProgress: ObjectiveProgress =
+    room.objective_progress && typeof room.objective_progress === "object" ? room.objective_progress : {};
+
   // === LOCATION SYSTEM (server-authoritative) ===
   // Optional per scenario. The server owns travel, evidence, and unlock state;
   // the AI GM is only given the resulting facts plus narration directives.
@@ -446,7 +450,7 @@ export async function POST(request: Request) {
     }
 
     // 3. UNLOCKS — pure-code re-evaluation of every gated node.
-    const changes = evaluateUnlocks(locationGraph, locState, room.current_round);
+    const changes = evaluateUnlocks(locationGraph, locState, room.current_round, objProgress);
     for (const n of changes.unlocked) {
       locationProgress = true;
       await supabase.from("story_logs").insert({
@@ -464,7 +468,7 @@ export async function POST(request: Request) {
     }
 
     // 4. NPC ENCOUNTERS — one-shot triggers that fire when conditions are met.
-    locationFiredEncounters = evaluateEncounters(locationGraph, locState, room.current_round);
+    locationFiredEncounters = evaluateEncounters(locationGraph, locState, room.current_round, objProgress);
     for (const enc of locationFiredEncounters) {
       locationProgress = true;
       await supabase.from("story_logs").insert({
@@ -676,8 +680,6 @@ export async function POST(request: Request) {
   // already found). This is GM-internal — players never see a checklist (we hide
   // 任務目標 from the UI). Lives in the per-turn message since progress changes.
   const objList: Objective[] = Array.isArray(room.objectives) ? room.objectives : [];
-  const objProgress: ObjectiveProgress =
-    room.objective_progress && typeof room.objective_progress === "object" ? room.objective_progress : {};
   let objectiveDirective: string | null = null;
   if (objList.length > 0) {
     const livingNames = sortedByDex.filter((c: any) => c.hp > 0 && c.san > 0).map((c: any) => c.name);
@@ -707,6 +709,7 @@ export async function POST(request: Request) {
             : null,
           room.current_round,
           locationFiredEncounters,
+          objProgress,
         )
       : null;
 

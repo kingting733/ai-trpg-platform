@@ -16,8 +16,13 @@ export type LocationStatus = "hidden" | "discovered" | "unlocked";
  *  - "count:<tag>:<n>"       party holds >= n evidence pieces carrying <tag>
  *  - "round:<n>"             current round >= n
  *  - "after:<nodeId>:<n>"    >= n rounds have passed since first entering node
+ *  - "objective:<id>"        objectiveProgress[<id>].done is true
  */
 export type UnlockTerm = string;
+
+/** Minimal shape needed to evaluate objective:<id> terms — kept structural so
+ *  this module doesn't depend on lib/ai/objectives.ts. */
+export type ObjectiveProgressLike = Record<string, { done?: boolean } | undefined>;
 
 export interface EvidenceDef {
   id: string;
@@ -192,8 +197,13 @@ export function coerceLocationGraph(raw: any): LocationGraph | null {
 }
 
 /** Authoring-time validation — returns human-readable warnings (zh-TW).
- *  Pass `npcNames` (from the scenario's NPC roster) to also validate NPC references. */
-export function validateLocationGraph(graph: LocationGraph, npcNames?: Set<string>): string[] {
+ *  Pass `npcNames` (from the scenario's NPC roster) to also validate NPC references.
+ *  Pass `objectiveIds` (from the scenario's objective list) to also validate objective:<id> references. */
+export function validateLocationGraph(
+  graph: LocationGraph,
+  npcNames?: Set<string>,
+  objectiveIds?: Set<string>
+): string[] {
   const warnings: string[] = [];
   const ids = new Set(graph.nodes.map((n) => n.id));
   const evidenceIds = new Set(graph.nodes.flatMap((n) => n.evidence.map((e) => e.id)));
@@ -213,8 +223,10 @@ export function validateLocationGraph(graph: LocationGraph, npcNames?: Set<strin
           if (!Number.isFinite(Number(parts[2]))) warnings.push(`${context} 的 count 條件缺少數量：${term}`);
         } else if (kind === "round") {
           if (!Number.isFinite(Number(parts[1]))) warnings.push(`${context} 的 round 條件缺少回合數：${term}`);
+        } else if (kind === "objective") {
+          if (objectiveIds && !objectiveIds.has(parts[1] ?? "")) warnings.push(`${context} 引用了不存在的任務目標：${term}`);
         } else {
-          warnings.push(`${context} 含無法識別的解鎖條件：${term}（支援 visit:/item:/count:/round:/after:）`);
+          warnings.push(`${context} 含無法識別的解鎖條件：${term}（支援 visit:/item:/count:/round:/after:/objective:）`);
         }
       }
     }
@@ -291,7 +303,13 @@ export function coerceLocationState(raw: any, graph: LocationGraph): LocationSta
 
 // ── Condition evaluation (pure code — no AI) ──────────────────────────────────
 
-function evalTerm(term: UnlockTerm, state: LocationState, graph: LocationGraph, currentRound: number): boolean {
+function evalTerm(
+  term: UnlockTerm,
+  state: LocationState,
+  graph: LocationGraph,
+  currentRound: number,
+  objectiveProgress: ObjectiveProgressLike
+): boolean {
   const parts = term.split(":");
   switch (parts[0]) {
     case "visit":
@@ -313,19 +331,33 @@ function evalTerm(term: UnlockTerm, state: LocationState, graph: LocationGraph, 
       const entered = state.entered_round[parts[1] ?? ""];
       return entered !== undefined && currentRound - entered >= Number(parts[2]);
     }
+    case "objective":
+      return objectiveProgress[parts[1] ?? ""]?.done === true;
     default:
       return false;
   }
 }
 
-function condSatisfied(when: UnlockTerm[][], state: LocationState, graph: LocationGraph, currentRound: number): boolean {
+function condSatisfied(
+  when: UnlockTerm[][],
+  state: LocationState,
+  graph: LocationGraph,
+  currentRound: number,
+  objectiveProgress: ObjectiveProgressLike
+): boolean {
   if (when.length === 0) return true;
-  return when.some((group) => group.every((t) => evalTerm(t, state, graph, currentRound)));
+  return when.some((group) => group.every((t) => evalTerm(t, state, graph, currentRound, objectiveProgress)));
 }
 
-function unlockSatisfied(node: LocationNode, state: LocationState, graph: LocationGraph, currentRound: number): boolean {
+function unlockSatisfied(
+  node: LocationNode,
+  state: LocationState,
+  graph: LocationGraph,
+  currentRound: number,
+  objectiveProgress: ObjectiveProgressLike
+): boolean {
   if (node.unlock.length === 0) return false; // no conditions → only discovers[]/initial can open it
-  return node.unlock.some((group) => group.every((t) => evalTerm(t, state, graph, currentRound)));
+  return node.unlock.some((group) => group.every((t) => evalTerm(t, state, graph, currentRound, objectiveProgress)));
 }
 
 export interface UnlockChanges {
@@ -336,11 +368,16 @@ export interface UnlockChanges {
 /** Re-evaluate every non-unlocked node. Mutates state.status; returns changes.
  *  A node whose conditions are met goes straight to "unlocked" (even from
  *  hidden — finding the way IS the discovery). */
-export function evaluateUnlocks(graph: LocationGraph, state: LocationState, currentRound: number): UnlockChanges {
+export function evaluateUnlocks(
+  graph: LocationGraph,
+  state: LocationState,
+  currentRound: number,
+  objectiveProgress: ObjectiveProgressLike = {}
+): UnlockChanges {
   const changes: UnlockChanges = { unlocked: [], discovered: [] };
   for (const node of graph.nodes) {
     if (state.status[node.id] === "unlocked") continue;
-    if (unlockSatisfied(node, state, graph, currentRound)) {
+    if (unlockSatisfied(node, state, graph, currentRound, objectiveProgress)) {
       state.status[node.id] = "unlocked";
       changes.unlocked.push(node);
     }
@@ -373,7 +410,8 @@ export function applyDiscovers(graph: LocationGraph, state: LocationState, enter
 export function evaluateNpcPlacements(
   graph: LocationGraph,
   state: LocationState,
-  currentRound: number
+  currentRound: number,
+  objectiveProgress: ObjectiveProgressLike = {}
 ): string[] {
   if (!state.current || graph.npc_placements.length === 0) return [];
 
@@ -388,7 +426,7 @@ export function evaluateNpcPlacements(
   byNpc.forEach((placements, npc) => {
     let lastSatisfied: NpcPlacement | null = null;
     for (const p of placements) {
-      if (condSatisfied(p.when, state, graph, currentRound)) lastSatisfied = p;
+      if (condSatisfied(p.when, state, graph, currentRound, objectiveProgress)) lastSatisfied = p;
     }
     if (lastSatisfied && lastSatisfied.at === state.current) present.push(npc);
   });
@@ -403,7 +441,8 @@ export function evaluateNpcPlacements(
 export function evaluateEncounters(
   graph: LocationGraph,
   state: LocationState,
-  currentRound: number
+  currentRound: number,
+  objectiveProgress: ObjectiveProgressLike = {}
 ): NpcEncounter[] {
   if (graph.npc_encounters.length === 0) return [];
   const fired: NpcEncounter[] = [];
@@ -414,7 +453,7 @@ export function evaluateEncounters(
     // encounters need an explicit when (they can't fire "always" — that would
     // be every turn)
     if (enc.when.length === 0) continue;
-    if (condSatisfied(enc.when, state, graph, currentRound)) {
+    if (condSatisfied(enc.when, state, graph, currentRound, objectiveProgress)) {
       state.encounters_fired.push(key);
       fired.push(enc);
     }
@@ -521,6 +560,7 @@ export function buildLocationBlock(
   stuckHint: string | null,
   currentRound: number,
   firedEncounters: NpcEncounter[] = [],
+  objectiveProgress: ObjectiveProgressLike = {},
 ): string {
   const current = graph.nodes.find((n) => n.id === state.current);
   const lines: string[] = ["LOCATION SYSTEM (server-authoritative — you MUST follow this; you cannot move the party or reveal places yourself):"];
@@ -538,7 +578,7 @@ export function buildLocationBlock(
   }
 
   // NPC presence — server-computed, GM must not add or remove NPCs from the scene.
-  const npcsHere = evaluateNpcPlacements(graph, state, currentRound);
+  const npcsHere = evaluateNpcPlacements(graph, state, currentRound, objectiveProgress);
   if (graph.npc_placements.length > 0) {
     if (npcsHere.length > 0) {
       lines.push(`NPCS PRESENT HERE: ${npcsHere.join("、")}`);
