@@ -2,10 +2,10 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import type { LocationEntry, NpcEntry } from "@/lib/ai/gm";
+import type { NpcEntry } from "@/lib/ai/gm";
 import { CoverImageUpload } from "@/components/CoverImageUpload";
 import { LocationGraphEditor } from "@/components/LocationGraphEditor";
-import { coerceLocationGraph, type LocationNode, type NpcPlacement, type NpcEncounter } from "@/lib/game/locations";
+import { coerceLocationGraph, nodesFromLegacyLocations, type LocationNode, type NpcPlacement, type NpcEncounter } from "@/lib/game/locations";
 import { EndingsEditor } from "@/components/EndingsEditor";
 import { coerceEndings, type ScenarioEnding } from "@/lib/game/endings";
 import { newNpcId, ensureNpcIds, migrateNpcRefList, migrateNpcRefsInConditions } from "@/lib/game/npc";
@@ -38,7 +38,6 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 const inputCls = "w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-zinc-500";
 const taCls = `${inputCls} resize-none`;
 
-function emptyLocation(): LocationEntry { return { name: "", clues: "", items: "" }; }
 function emptyNpc(): NpcEntry {
   return { id: newNpcId(), name: "", hp: 10, mp: 5, str: 50, con: 50, siz: 50, dex: 50, app: 50, int: 50, pow: 50, edu: 50, luck: 50, personality: "", goal: "" };
 }
@@ -65,7 +64,6 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
   const [endingConditions, setEndingConditions] = useState("");
   const [gmNotes, setGmNotes] = useState("");
   const [coverImageUrl, setCoverImageUrl] = useState("");
-  const [locations, setLocations] = useState<LocationEntry[]>([]);
   const [npcs, setNpcs] = useState<NpcEntry[]>([]);
   const [locNodes, setLocNodes] = useState<LocationNode[]>([]);
   const [locNpcPlacements, setLocNpcPlacements] = useState<NpcPlacement[]>([]);
@@ -103,11 +101,6 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
       setTags(Array.isArray(data.tags) ? data.tags.join(", ") : "");
       setOpeningScene(data.opening_scene ?? "");
       setSourceDocument(data.source_document ?? "");
-      setLocations(
-        Array.isArray(data.locations)
-          ? (data.locations as any[]).filter((l) => l && typeof l === "object" && typeof l.name === "string") as LocationEntry[]
-          : []
-      );
       // Backfill stable ids for legacy rosters, then migrate every name-based
       // reference (placements, encounters, ending conditions) to those ids so
       // renaming an NPC can no longer break them. A subsequent save persists it.
@@ -126,7 +119,15 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
       setEndingConditions(data.ending_conditions ?? "");
       setGmNotes(data.gm_notes ?? "");
       const loadedGraph = coerceLocationGraph(data.location_graph);
-      setLocNodes((loadedGraph?.nodes as LocationNode[]) ?? []);
+      // Retire the legacy free-text `locations`: when this scenario has none of
+      // the new graph nodes but does have legacy locations, fold them into
+      // always-unlocked nodes (clues/items → desc; reveal media → searchable
+      // evidence) so nothing is lost. A subsequent save persists the graph.
+      const loadedNodes = (loadedGraph?.nodes as LocationNode[]) ?? [];
+      const legacyLocs = Array.isArray(data.locations)
+        ? (data.locations as any[]).filter((l) => l && typeof l === "object" && typeof l.name === "string")
+        : [];
+      setLocNodes(loadedNodes.length ? loadedNodes : nodesFromLegacyLocations(legacyLocs));
       setLocNpcPlacements(migrateNpcRefList((loadedGraph?.npc_placements as NpcPlacement[]) ?? [], loadedNpcs));
       setLocNpcEncounters(migrateNpcRefList((loadedGraph?.npc_encounters as NpcEncounter[]) ?? [], loadedNpcs));
       setEndings(
@@ -178,7 +179,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
         estimated_play_time: ept || null,
         tags: tagList,
         opening_scene: openingScene.trim() || null,
-        locations,
+        locations: [],
         npcs,
         objectives: cleanObjectives,
         winning_targets: partyText,
@@ -356,50 +357,6 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
               <textarea value={gmNotes} onChange={(e) => setGmNotes(e.target.value)} rows={4} className={taCls} />
             </Field>
 
-            {/* Locations */}
-            <div>
-              <label className="block text-sm text-slate-400 mb-2">關鍵地點</label>
-              <div className="flex flex-col gap-3">
-                {locations.map((loc, i) => (
-                  <div key={i} className="relative border border-slate-600 rounded-lg p-4 bg-slate-900/50">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-xs text-slate-400 font-medium">地點 {i + 1}</span>
-                      <button type="button" onClick={() => setLocations(locations.filter((_, j) => j !== i))}
-                        className="text-slate-500 hover:text-red-400 text-sm">×</button>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <input value={loc.name} onChange={(e) => {
-                        const next = [...locations]; next[i] = { ...next[i], name: e.target.value }; setLocations(next);
-                      }} placeholder="地點名稱" className={inputCls} />
-                      <textarea value={loc.clues} onChange={(e) => {
-                        const next = [...locations]; next[i] = { ...next[i], clues: e.target.value }; setLocations(next);
-                      }} rows={2} placeholder="此地點可被發現的線索或資訊" className={taCls} />
-                      <textarea value={loc.items} onChange={(e) => {
-                        const next = [...locations]; next[i] = { ...next[i], items: e.target.value }; setLocations(next);
-                      }} rows={2} placeholder="此地點可找到的物品" className={taCls} />
-
-                      <div className="mt-1 pt-3 border-t border-slate-700/60">
-                        <p className="text-xs text-amber-300/80 mb-2">🔍 搜索成功後揭示給玩家（圖片與／或文字，可留空）</p>
-                        <CoverImageUpload
-                          value={loc.reveal_image ?? ""}
-                          onChange={(url) => {
-                            const next = [...locations]; next[i] = { ...next[i], reveal_image: url }; setLocations(next);
-                          }}
-                        />
-                        <textarea value={loc.reveal_text ?? ""} onChange={(e) => {
-                          const next = [...locations]; next[i] = { ...next[i], reveal_text: e.target.value }; setLocations(next);
-                        }} rows={2} placeholder="搜索成功時直接顯示給玩家的文字（例如信件內容、線索描述）" className={`${taCls} mt-2`} />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                <button type="button" onClick={() => setLocations([...locations, emptyLocation()])}
-                  className="text-sm text-zinc-100 hover:text-white border border-dashed border-slate-600 hover:border-zinc-400 rounded-lg py-2 transition-colors">
-                  + 新增地點
-                </button>
-              </div>
-            </div>
-
             {/* NPCs */}
             <div>
               <label className="block text-sm text-slate-400 mb-2">NPC</label>
@@ -408,7 +365,8 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
 
             {/* Location unlock graph */}
             <div>
-              <label className="block text-sm text-slate-400 mb-2">🗺 地點解鎖系統（選填）</label>
+              <label className="block text-sm text-slate-400 mb-1">🗺 地點系統（選填）</label>
+              <p className="text-xs text-slate-500 mb-2">設定遊戲中的地點、線索證物、解鎖條件與 NPC 出沒。搜索成功時可向玩家揭示圖片／文字。留空則由 AI 主持人依故事自由處理場景。</p>
               <LocationGraphEditor
                 nodes={locNodes}
                 onChange={setLocNodes}

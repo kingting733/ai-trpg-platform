@@ -650,3 +650,56 @@ export function buildLocationBlock(
 export function locationShortName(name: string): string {
   return shortName(name);
 }
+
+// ── Legacy location migration ──────────────────────────────────────────────────
+
+/** Minimal shape of a legacy free-text location entry. */
+export interface LegacyLocationEntry {
+  name: string;
+  clues?: string;
+  items?: string;
+  reveal_image?: string;
+  reveal_text?: string;
+}
+
+/**
+ * Convert the old free-text `locations` array into LocationGraph nodes so the
+ * legacy system can be retired without losing data or the player-facing
+ * search-reveal feature.
+ *
+ * Each entry becomes an ALWAYS-UNLOCKED node (legacy locations had no gating, so
+ * the party can reach them all freely). Clues/items fold into the GM-facing
+ * `desc`; any reveal image/text becomes a searchable evidence piece carrying the
+ * same media, so a successful search still surfaces it to players exactly as
+ * before.
+ */
+export function nodesFromLegacyLocations(locs: LegacyLocationEntry[]): LocationNode[] {
+  return locs
+    .filter((l) => l && typeof l.name === "string" && l.name.trim())
+    .slice(0, 40)
+    .map((l, i): LocationNode => {
+      const descParts: string[] = [];
+      if (l.clues?.trim()) descParts.push(`線索：${l.clues.trim()}`);
+      if (l.items?.trim()) descParts.push(`物品：${l.items.trim()}`);
+      const reveal = (l.reveal_image?.trim() || l.reveal_text?.trim()) ? {
+        id: `loc${i + 1}_find`,
+        name: "搜索發現",
+        tags: [],
+        how: "搜索此地點",
+        reveal_image: l.reveal_image?.trim() || undefined,
+        reveal_text: l.reveal_text?.trim() || undefined,
+      } as EvidenceDef : null;
+      return {
+        id: `loc${i + 1}`,
+        name: l.name.trim(),
+        desc: descParts.join("\n"),
+        initial: "unlocked",
+        unlock: [],
+        evidence: reveal ? [reveal] : [],
+        on_enter: "",
+        locked_narration: "",
+        stuck_hint: "",
+        discovers: [],
+      };
+    });
+}

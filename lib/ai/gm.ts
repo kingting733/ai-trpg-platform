@@ -36,7 +36,6 @@ export interface LedgerEntry {
 
 export interface ScenarioGMContext {
   openingScene: string | null;
-  locations: LocationEntry[];
   npcs: NpcEntry[];
   /** Structured objective tracker — replaces the old winning/each-player free
    *  text. Used for GM victory-condition guidance; game-ending authority is the
@@ -263,16 +262,6 @@ function buildGMContextBlock(ctx: ScenarioGMContext): string {
   if (ctx.gmNotes) parts.push(`GM PACING NOTES — read before every turn to keep the story on track:\n${ctx.gmNotes}`);
 
   if (ctx.openingScene) parts.push(`Opening Scene (for atmosphere reference):\n${ctx.openingScene}`);
-
-  if (ctx.locations.length) {
-    const locLines = ctx.locations.map((l) => {
-      let s = `  - ${l.name}`;
-      if (l.clues) s += `\n    Clues: ${l.clues}`;
-      if (l.items) s += `\n    Items: ${l.items}`;
-      return s;
-    }).join("\n");
-    parts.push(`Key Locations (clues and items are locked behind checks — do not volunteer them):\n${locLines}`);
-  }
 
   if (ctx.npcs.length) {
     const npcLines = ctx.npcs.map((n) => {

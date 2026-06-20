@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { buildPartyRoster, buildLanguageInstruction, ROSTER_CONSTRAINT, ScenarioGMContext, LocationEntry, NpcEntry } from "@/lib/ai/gm";
+import { buildPartyRoster, buildLanguageInstruction, ROSTER_CONSTRAINT, ScenarioGMContext, NpcEntry } from "@/lib/ai/gm";
 import { resolveScenarioObjectives } from "@/lib/game/objectives-def";
 
 export interface OpeningScene {
@@ -18,15 +18,6 @@ type PartyMember = {
 function buildGMContextBlock(ctx: ScenarioGMContext): string {
   const parts: string[] = [];
   if (ctx.openingScene) parts.push(`Opening Scene to narrate:\n${ctx.openingScene}`);
-  if (ctx.locations.length) {
-    const locLines = ctx.locations.map((l) => {
-      let s = `  - ${l.name}`;
-      if (l.clues) s += `\n    Clues: ${l.clues}`;
-      if (l.items) s += `\n    Items: ${l.items}`;
-      return s;
-    }).join("\n");
-    parts.push(`Key Locations:\n${locLines}`);
-  }
   if (ctx.npcs.length) {
     const npcLines = ctx.npcs.map((n) => {
       return `  - ${n.name} | HP ${n.hp} MP ${n.mp} | STR ${n.str} CON ${n.con} SIZ ${n.siz} DEX ${n.dex} APP ${n.app} INT ${n.int} POW ${n.pow} EDU ${n.edu} LUCK ${n.luck}\n    Personality: ${n.personality}\n    Goal: ${n.goal}`;
@@ -172,7 +163,7 @@ export async function POST(request: Request) {
 
   const { data: room } = await supabase
     .from("rooms")
-    .select("*, scenarios(title, objective, rules, opening_scene, locations, npcs, objectives, winning_targets, each_player_targets, failure_conditions, failure_turn_limit, ending_conditions, gm_notes, source_document, language)")
+    .select("*, scenarios(title, objective, rules, opening_scene, npcs, objectives, winning_targets, each_player_targets, failure_conditions, failure_turn_limit, ending_conditions, gm_notes, source_document, language)")
     .eq("id", roomId)
     .single();
   if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -202,15 +193,11 @@ export async function POST(request: Request) {
   }));
 
   const scenario = (room as any).scenarios;
-  const structuredLocations: LocationEntry[] = Array.isArray(scenario?.locations)
-    ? scenario.locations.filter((l: any) => l && typeof l === "object" && typeof l.name === "string") as LocationEntry[]
-    : [];
   const structuredNpcs: NpcEntry[] = Array.isArray(scenario?.npcs)
     ? scenario.npcs.filter((n: any) => n && typeof n === "object" && typeof n.name === "string" && typeof n.hp === "number") as NpcEntry[]
     : [];
   const gmContext: ScenarioGMContext | null = scenario ? {
     openingScene: scenario.opening_scene ?? null,
-    locations: structuredLocations,
     npcs: structuredNpcs,
     objectives: resolveScenarioObjectives(scenario.objectives, scenario.winning_targets, scenario.each_player_targets),
     failureConditions: scenario.failure_conditions ?? null,

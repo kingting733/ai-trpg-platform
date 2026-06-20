@@ -84,7 +84,6 @@ export async function runDailyGeneration(opts: { force?: boolean } = {}): Promis
       estimated_play_time: scenario.estimated_play_time,
       tags: scenario.tags,
       opening_scene: scenario.opening_scene,
-      locations: scenario.locations,
       npcs: scenario.npcs,
       winning_targets: scenario.winning_targets,
       each_player_targets: scenario.each_player_targets,

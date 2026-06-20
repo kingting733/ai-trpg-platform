@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateGMResponse, GMAIInput, ScenarioGMContext, LedgerEntry, LocationEntry, NpcEntry } from "@/lib/ai/gm";
+import { generateGMResponse, GMAIInput, ScenarioGMContext, LedgerEntry, NpcEntry } from "@/lib/ai/gm";
 import { createClient } from "@/lib/supabase/server";
 import {
   resolveAction, rollInjuryDamage, rollFirstAidHeal, InjurySeverity,
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
   // Verify caller is a room participant and it's actually their turn
   const { data: room } = await supabase
     .from("rooms")
-    .select("*, scenarios(title, background, objective, rules, opening_scene, locations, npcs, objectives, winning_targets, each_player_targets, failure_conditions, failure_turn_limit, ending_conditions, gm_notes, source_document, language, location_graph, endings)")
+    .select("*, scenarios(title, background, objective, rules, opening_scene, npcs, objectives, winning_targets, each_player_targets, failure_conditions, failure_turn_limit, ending_conditions, gm_notes, source_document, language, location_graph, endings)")
     .eq("id", roomId)
     .single();
   if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -261,85 +261,10 @@ export async function POST(request: Request) {
     });
   }
 
-  // === KEY LOCATION MEDIA REVEAL ===
-  // When a player SUCCEEDS a search check at a key location that the creator
-  // attached an image and/or hidden text to, push that reveal into the log —
-  // once per location per room (subsequent searches don't re-trigger it).
-  {
-    const searchSucceeded =
-      !!roll?.requires_check &&
-      (roll.outcome === "success" || roll.outcome === "critical_success");
-    const SEARCH_RE = /搜|調查|檢查|查看|探索|翻找|偵查|察看|search|investigate|examin|inspect|look|explor/i;
-    const looksLikeSearch = SEARCH_RE.test(actionText);
-
-    if (searchSucceeded && looksLikeSearch) {
-      const locs: LocationEntry[] = Array.isArray((room as any).scenarios?.locations)
-        ? (room as any).scenarios.locations.filter(
-            (l: any) => l && typeof l === "object" && typeof l.name === "string"
-          )
-        : [];
-      const alreadyRevealed: string[] = Array.isArray((room as any).revealed_locations)
-        ? (room as any).revealed_locations
-        : [];
-
-      // Location "name" fields are often full scene DESCRIPTIONS (the scenario
-      // format encourages vivid multi-sentence names), so requiring the action
-      // text to contain the whole name almost never matched. Instead, score each
-      // location by the longest contiguous overlap between the action text and
-      // the location's short name (text before the first punctuation), and accept
-      // the best location whose overlap is long enough to be meaningful.
-      const shortName = (name: string) =>
-        name.trim().split(/[：:，,。．\.\n——–\-（(【\[]/)[0].trim().slice(0, 30);
-      // Break a place name into noun segments: 「百年大宅深處的書房」 →
-      // ["百年大宅深處","書房"]. The action mentions the place if it contains
-      // ANY segment (CJK segments ≥2 chars; latin words ≥4 letters).
-      const nameSegments = (sn: string): string[] =>
-        sn
-          .split(/[的之\s、與和及]+/)
-          .map((t) => t.trim())
-          .filter((t) => (/^[\x00-\x7F]+$/.test(t) ? t.length >= 4 : t.length >= 2));
-
-      const actionLower = actionText.toLowerCase();
-      let hit: LocationEntry | null = null;
-      let hitScore = 0;
-      for (const l of locs) {
-        const hasMedia = (l.reveal_image && l.reveal_image.trim()) || (l.reveal_text && l.reveal_text.trim());
-        if (!hasMedia || alreadyRevealed.includes(l.name.trim())) continue;
-        const sn = shortName(l.name);
-        if (!sn) continue;
-        // Exact short-name hit scores highest; otherwise the longest matched
-        // segment wins. Best-scoring location across all candidates is revealed.
-        let score = 0;
-        if (actionLower.includes(sn.toLowerCase())) score = sn.length + 100;
-        else {
-          for (const seg of nameSegments(sn)) {
-            if (actionLower.includes(seg.toLowerCase()) && seg.length > score) score = seg.length;
-          }
-        }
-        if (score > 0 && score > hitScore) {
-          hit = l;
-          hitScore = score;
-        }
-      }
-
-      if (hit) {
-        const name = hit.name.trim();
-        const displayName = shortName(hit.name);
-        const body = hit.reveal_text?.trim();
-        await supabase.from("story_logs").insert({
-          room_id: roomId,
-          round_number: room.current_round,
-          entry_type: "location_media",
-          content: body && body.length > 0 ? body : `🔍 你在「${displayName}」搜索到了一些東西。`,
-          media_url: hit.reveal_image?.trim() || null,
-        });
-        await supabase
-          .from("rooms")
-          .update({ revealed_locations: [...alreadyRevealed, name] })
-          .eq("id", roomId);
-      }
-    }
-  }
+  // NOTE: the legacy free-text "key location" search-reveal mechanic was retired
+  // with the old `locations` array. Reveal images/text now live on location-graph
+  // nodes (node_image/node_text) and evidence (reveal_image/reveal_text); the
+  // graph's evidence/entry handling below surfaces them to players on a search.
 
   // Computed early so location unlock conditions can reference objective:<id>.
   const objProgress: ObjectiveProgress =
@@ -611,9 +536,6 @@ export async function POST(request: Request) {
   }));
 
   const scenario = (room as any).scenarios;
-  const structuredLocations: LocationEntry[] = Array.isArray(scenario?.locations)
-    ? scenario.locations.filter((l: any) => l && typeof l === "object" && typeof l.name === "string") as LocationEntry[]
-    : [];
   const structuredNpcs: NpcEntry[] = Array.isArray(scenario?.npcs)
     ? scenario.npcs.filter((n: any) => n && typeof n === "object" && typeof n.name === "string" && typeof n.hp === "number") as NpcEntry[]
     : [];
@@ -642,7 +564,6 @@ export async function POST(request: Request) {
 
   const gmContext: ScenarioGMContext | null = scenario ? {
     openingScene: scenario.opening_scene ?? null,
-    locations: structuredLocations,
     npcs: structuredNpcs,
     objectives: resolveScenarioObjectives(scenario.objectives, scenario.winning_targets, scenario.each_player_targets),
     failureConditions: scenario.failure_conditions ?? null,
