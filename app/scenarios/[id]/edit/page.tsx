@@ -9,6 +9,8 @@ import { coerceLocationGraph, type LocationNode, type NpcPlacement, type NpcEnco
 import { EndingsEditor } from "@/components/EndingsEditor";
 import { coerceEndings, type ScenarioEnding } from "@/lib/game/endings";
 import { newNpcId, ensureNpcIds, migrateNpcRefList, migrateNpcRefsInConditions } from "@/lib/game/npc";
+import { NpcRosterEditor } from "@/components/NpcRosterEditor";
+import { ScenarioFormGuide } from "@/components/ScenarioFormGuide";
 
 const GENRES = ["Fantasy", "Cyberpunk", "Horror", "Sci-Fi", "Mystery", "Historical", "Other"];
 const DIFFICULTIES = ["Story", "Normal", "Hard", "Nightmare"] as const;
@@ -234,6 +236,8 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
         </button>
       </div>
 
+      <ScenarioFormGuide />
+
       <div className="flex gap-1 mb-6 bg-slate-900 rounded-lg p-1">
         {tabs.map((tab) => (
           <button
@@ -403,56 +407,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
             {/* NPCs */}
             <div>
               <label className="block text-sm text-slate-400 mb-2">NPC</label>
-              <div className="flex flex-col gap-3">
-                {npcs.map((npc, i) => (
-                  <div key={i} className="relative border border-slate-600 rounded-lg p-4 bg-slate-900/50">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-xs text-slate-400 font-medium">NPC {i + 1}</span>
-                      <button type="button" onClick={() => setNpcs(npcs.filter((_, j) => j !== i))}
-                        className="text-slate-500 hover:text-red-400 text-sm">×</button>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <input value={npc.name} onChange={(e) => {
-                        const next = [...npcs]; next[i] = { ...next[i], name: e.target.value }; setNpcs(next);
-                      }} placeholder="姓名" className={inputCls} />
-                      <div className="grid grid-cols-3 gap-2">
-                        {(["hp","mp","str","con","siz","dex","app","int","pow","edu","luck"] as (keyof NpcEntry)[]).map((stat) => (
-                          <div key={stat} className="flex flex-col gap-1">
-                            <label className="text-xs text-slate-500 uppercase">{stat}</label>
-                            <input type="number" value={npc[stat] as number}
-                              onChange={(e) => {
-                                const next = [...npcs]; next[i] = { ...next[i], [stat]: Number(e.target.value) }; setNpcs(next);
-                              }}
-                              min={stat === "mp" ? 0 : 1} max={99}
-                              className={inputCls} />
-                          </div>
-                        ))}
-                      </div>
-                      <textarea value={npc.personality} onChange={(e) => {
-                        const next = [...npcs]; next[i] = { ...next[i], personality: e.target.value }; setNpcs(next);
-                      }} rows={2} placeholder="個性、說話方式、行為習慣" className={taCls} />
-                      <textarea value={npc.goal} onChange={(e) => {
-                        const next = [...npcs]; next[i] = { ...next[i], goal: e.target.value }; setNpcs(next);
-                      }} rows={2} placeholder="他們想要什麼？在意什麼？隱藏著什麼秘密？" className={taCls} />
-                      <label className="flex items-center gap-2 cursor-pointer select-none mt-1">
-                        <input
-                          type="checkbox"
-                          checked={!!npc.social_immune}
-                          onChange={(e) => {
-                            const next = [...npcs]; next[i] = { ...next[i], social_immune: e.target.checked }; setNpcs(next);
-                          }}
-                          className="accent-amber-500 w-4 h-4"
-                        />
-                        <span className="text-xs text-amber-300/80">🛡 對社交技能免疫（怪物、無意識存在、終極敵人）</span>
-                      </label>
-                    </div>
-                  </div>
-                ))}
-                <button type="button" onClick={() => setNpcs([...npcs, emptyNpc()])}
-                  className="text-sm text-zinc-100 hover:text-white border border-dashed border-slate-600 hover:border-zinc-400 rounded-lg py-2 transition-colors">
-                  + 新增 NPC
-                </button>
-              </div>
+              <NpcRosterEditor npcs={npcs} onChange={setNpcs} makeEmpty={emptyNpc} />
             </div>
 
             {/* Location unlock graph */}
