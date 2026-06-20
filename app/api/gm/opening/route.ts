@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { buildPartyRoster, buildLanguageInstruction, ROSTER_CONSTRAINT, ScenarioGMContext, LocationEntry, NpcEntry } from "@/lib/ai/gm";
+import { resolveScenarioObjectives } from "@/lib/game/objectives-def";
 
 export interface OpeningScene {
   scene: string;
@@ -32,8 +33,10 @@ function buildGMContextBlock(ctx: ScenarioGMContext): string {
     }).join("\n");
     parts.push(`NPCs:\n${npcLines}`);
   }
-  if (ctx.winningTargets) parts.push(`Winning Targets — any ONE player completing each satisfies it:\n${ctx.winningTargets}`);
-  if (ctx.eachPlayerTargets) parts.push(`Per-Player Targets — EVERY surviving player must personally complete each:\n${ctx.eachPlayerTargets}`);
+  const partyObjectives = ctx.objectives.filter((o) => o.scope === "party");
+  const eachObjectives = ctx.objectives.filter((o) => o.scope === "each_player");
+  if (partyObjectives.length) parts.push(`Winning Targets — any ONE player completing each satisfies it:\n${partyObjectives.map((o) => `  - ${o.text}`).join("\n")}`);
+  if (eachObjectives.length) parts.push(`Per-Player Targets — EVERY surviving player must personally complete each:\n${eachObjectives.map((o) => `  - ${o.text}`).join("\n")}`);
   if (ctx.failureConditions) parts.push(`Failure Conditions — if any occurs, the adventure ends in defeat:\n${ctx.failureConditions}`);
   if (ctx.failureTurnLimit != null) parts.push(`Failure Turn Limit: Game ends in defeat if round reaches ${ctx.failureTurnLimit}`);
   if (ctx.endingConditions) parts.push(`Additional Ending Notes:\n${ctx.endingConditions}`);
@@ -169,7 +172,7 @@ export async function POST(request: Request) {
 
   const { data: room } = await supabase
     .from("rooms")
-    .select("*, scenarios(title, objective, rules, opening_scene, locations, npcs, winning_targets, each_player_targets, failure_conditions, failure_turn_limit, ending_conditions, gm_notes, source_document, language)")
+    .select("*, scenarios(title, objective, rules, opening_scene, locations, npcs, objectives, winning_targets, each_player_targets, failure_conditions, failure_turn_limit, ending_conditions, gm_notes, source_document, language)")
     .eq("id", roomId)
     .single();
   if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -209,8 +212,7 @@ export async function POST(request: Request) {
     openingScene: scenario.opening_scene ?? null,
     locations: structuredLocations,
     npcs: structuredNpcs,
-    winningTargets: scenario.winning_targets ?? null,
-    eachPlayerTargets: scenario.each_player_targets ?? null,
+    objectives: resolveScenarioObjectives(scenario.objectives, scenario.winning_targets, scenario.each_player_targets),
     failureConditions: scenario.failure_conditions ?? null,
     failureTurnLimit: scenario.failure_turn_limit ?? null,
     endingConditions: scenario.ending_conditions ?? null,

@@ -11,6 +11,13 @@ import { coerceEndings, type ScenarioEnding } from "@/lib/game/endings";
 import { newNpcId, ensureNpcIds, migrateNpcRefList, migrateNpcRefsInConditions } from "@/lib/game/npc";
 import { NpcRosterEditor } from "@/components/NpcRosterEditor";
 import { ScenarioFormGuide } from "@/components/ScenarioFormGuide";
+import { ScenarioObjectivesEditor } from "@/components/ScenarioObjectivesEditor";
+import {
+  type ScenarioObjective,
+  coerceScenarioObjectives,
+  objectivesFromLegacyText,
+  objectiveOptions,
+} from "@/lib/game/objectives-def";
 
 const GENRES = ["Fantasy", "Cyberpunk", "Horror", "Sci-Fi", "Mystery", "Historical", "Other"];
 const DIFFICULTIES = ["Story", "Normal", "Hard", "Nightmare"] as const;
@@ -52,8 +59,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
   const [tags, setTags] = useState("");
   const [openingScene, setOpeningScene] = useState("");
   const [sourceDocument, setSourceDocument] = useState("");
-  const [winningTargets, setWinningTargets] = useState("");
-  const [eachPlayerTargets, setEachPlayerTargets] = useState("");
+  const [objectives, setObjectives] = useState<ScenarioObjective[]>([]);
   const [failureConditions, setFailureConditions] = useState("");
   const [failureTurnLimit, setFailureTurnLimit] = useState("");
   const [endingConditions, setEndingConditions] = useState("");
@@ -111,8 +117,10 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
           : []
       );
       setNpcs(loadedNpcs);
-      setWinningTargets(data.winning_targets ?? "");
-      setEachPlayerTargets(data.each_player_targets ?? "");
+      // Prefer structured objectives; migrate legacy free-text boxes (preserving
+      // obj_N positional ids) so existing objective:<id> references stay valid.
+      const loadedObjectives = coerceScenarioObjectives(data.objectives);
+      setObjectives(loadedObjectives.length ? loadedObjectives : objectivesFromLegacyText(data.winning_targets, data.each_player_targets));
       setFailureConditions(data.failure_conditions ?? "");
       setFailureTurnLimit(data.failure_turn_limit != null ? String(data.failure_turn_limit) : "");
       setEndingConditions(data.ending_conditions ?? "");
@@ -154,6 +162,10 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
     const tagList = tags.split(",").map((t) => t.trim()).filter(Boolean);
     const ept = estimatedPlayTime ? parseInt(estimatedPlayTime) : null;
 
+    const cleanObjectives = objectives.filter((o) => o.text.trim());
+    const partyText = cleanObjectives.filter((o) => o.scope === "party").map((o) => o.text.trim()).join("\n") || null;
+    const eachText = cleanObjectives.filter((o) => o.scope === "each_player").map((o) => o.text.trim()).join("\n") || null;
+
     const { error: updateError } = await supabase
       .from("scenarios")
       .update({
@@ -168,8 +180,9 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
         opening_scene: openingScene.trim() || null,
         locations,
         npcs,
-        winning_targets: winningTargets.trim() || null,
-        each_player_targets: eachPlayerTargets.trim() || null,
+        objectives: cleanObjectives,
+        winning_targets: partyText,
+        each_player_targets: eachText,
         failure_conditions: failureConditions.trim() || null,
         failure_turn_limit: failureTurnLimit ? parseInt(failureTurnLimit) : null,
         ending_conditions: endingConditions.trim() || null,
@@ -319,33 +332,16 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
                 <p className="text-xs text-slate-500 mt-1">目前長度：{sourceDocument.length.toLocaleString()} 字元</p>
               )}
             </Field>
-            <Field label="通關條件（任一名玩家完成即可）" hint="達成遊戲勝利的目標——每行一項。只要隊伍中任何一人完成即算達成。這是系統判定獲勝的主要依據。">
-              <textarea value={winningTargets} onChange={(e) => setWinningTargets(e.target.value)} rows={4}
-                placeholder={"取回聖石並帶出神廟\n消滅守門者"}
-                className={taCls} />
-              {winningTargets.trim() && (
-                <p className="text-[11px] text-slate-500 mt-1">
-                  各行 ID（可用於多重結局 <span className="font-mono text-slate-400">objective:</span> 條件）：{winningTargets.trim().split("\n").filter(Boolean).map((_, i) => `obj_${i + 1}`).join("、")}
-                </p>
-              )}
-            </Field>
-            <Field label="每名存活玩家必須完成" hint="每一位存活玩家都必須各自完成的目標——每行一項。需要所有人個別達成，一人完成不算其他人完成。">
-              <textarea value={eachPlayerTargets} onChange={(e) => setEachPlayerTargets(e.target.value)} rows={3}
-                placeholder={"懺悔自己的罪行\n找到屬於自己的逃生符咒"}
-                className={taCls} />
-              {eachPlayerTargets.trim() && (
-                <p className="text-[11px] text-slate-500 mt-1">
-                  各行 ID：{eachPlayerTargets.trim().split("\n").filter(Boolean).map((_, i) => `obj_${winningTargets.trim().split("\n").filter(Boolean).length + i + 1}`).join("、")}
-                </p>
-              )}
+            <Field label="目標（Objective Tracker）" hint="劇情中可判定「完成 / 未完成」的具體目標。系統會逐一追蹤完成狀態，並供「多重結局」與「地點解鎖」以此作為條件。故事的結束由結局系統決定——若未自訂任何結局，系統會在所有必要目標達成時自動以勝利結束。">
+              <ScenarioObjectivesEditor objectives={objectives} onChange={setObjectives} />
             </Field>
             <div className="flex flex-col gap-3">
-              <Field label="失敗條件（文字）" hint="一旦發生即判定遊戲失敗的事件——每行一項。系統每回合檢查，若觸發則以失敗結局結束遊戲。">
+              <Field label="失敗提示（敘事用）" hint="提醒 AI 主持人哪些發展屬於不利／失敗走向——每行一項。僅作為敘事引導，不會自動結束遊戲；若要在特定情況自動以失敗結束，請改用下方「多重結局」設定失敗結局。">
                 <textarea value={failureConditions} onChange={(e) => setFailureConditions(e.target.value)} rows={3}
                   placeholder={"聖石被敵人奪走\n神廟在隊伍逃出前坍塌"}
                   className={taCls} />
               </Field>
-              <Field label="回合上限" hint="達到此回合數時自動判定失敗。與文字條件同時生效。">
+              <Field label="回合上限" hint="達到此回合數時自動以失敗結束遊戲（確定性判定，無需 AI）。留空表示無上限。">
                 <input type="number" value={failureTurnLimit} onChange={(e) => setFailureTurnLimit(e.target.value)}
                   placeholder="例：20" min={1} className={inputCls} />
               </Field>
@@ -421,10 +417,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
                 npcEncounters={locNpcEncounters}
                 onNpcEncountersChange={setLocNpcEncounters}
                 npcOptions={npcs.filter((n) => n.name).map((n) => ({ id: n.id, name: n.name }))}
-                objectiveOptions={[
-                  ...winningTargets.trim().split("\n").filter(Boolean),
-                  ...eachPlayerTargets.trim().split("\n").filter(Boolean),
-                ].map((line, i) => ({ id: `obj_${i + 1}`, name: line.trim() }))}
+                objectiveOptions={objectiveOptions(objectives)}
               />
             </div>
 
@@ -438,10 +431,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
                 nodeOptions={locNodes.filter((n) => n.id).map((n) => ({ id: n.id, name: n.name }))}
                 itemOptions={locNodes.flatMap((n) => n.evidence ?? []).filter((e) => e.id).map((e) => ({ id: e.id, name: e.name }))}
                 tagOptions={Array.from(new Set(locNodes.flatMap((n) => n.evidence ?? []).flatMap((e) => e.tags ?? []))).filter(Boolean)}
-                objectiveOptions={[
-                  ...winningTargets.trim().split("\n").filter(Boolean),
-                  ...eachPlayerTargets.trim().split("\n").filter(Boolean),
-                ].map((line, i) => ({ id: `obj_${i + 1}`, name: line.trim() }))}
+                objectiveOptions={objectiveOptions(objectives)}
               />
             </div>
           </div>

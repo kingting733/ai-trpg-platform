@@ -12,19 +12,20 @@
 // The "done" decision for each objective is then persisted as a permanent flag
 // by the caller. Whether the GAME ends is pure code (see allRequiredDone).
 
+// The objective definition (id/text/scope/required) now lives in a pure,
+// client-safe module so the scenario editor can share it without bundling this
+// server-only file. Re-exported here for existing callers.
+//
 // scope:
 //   "party"       — one character completing it satisfies the whole objective.
 //   "each_player" — EVERY player character must complete it individually
 //                   (e.g. "each player confesses their own sin"). One player
 //                   doing it does NOT complete it for the others.
-export type ObjectiveScope = "party" | "each_player";
+import type { ScenarioObjective, ObjectiveScope } from "@/lib/game/objectives-def";
+export type { ObjectiveScope } from "@/lib/game/objectives-def";
 
-export interface Objective {
-  id: string;
-  text: string;
-  required: boolean;
-  scope: ObjectiveScope;
-}
+/** A trackable objective. Same shape as the creator-defined ScenarioObjective. */
+export type Objective = ScenarioObjective;
 
 export interface ObjectiveProgressEntry {
   done: boolean;

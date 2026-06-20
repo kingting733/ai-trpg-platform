@@ -1,3 +1,5 @@
+import type { ScenarioObjective } from "@/lib/game/objectives-def";
+
 export interface LocationEntry {
   name: string;
   clues: string;   // free-text (GM-facing)
@@ -36,8 +38,10 @@ export interface ScenarioGMContext {
   openingScene: string | null;
   locations: LocationEntry[];
   npcs: NpcEntry[];
-  winningTargets: string | null;
-  eachPlayerTargets: string | null;
+  /** Structured objective tracker — replaces the old winning/each-player free
+   *  text. Used for GM victory-condition guidance; game-ending authority is the
+   *  ending system, not these. */
+  objectives: ScenarioObjective[];
   failureConditions: string | null;
   failureTurnLimit: number | null;
   endingConditions: string | null;
@@ -278,8 +282,11 @@ function buildGMContextBlock(ctx: ScenarioGMContext): string {
     parts.push(`NPCs — play each consistently per their goal and secret; they lie, deflect, and act to protect their own interests:\n${npcLines}`);
   }
 
-  if (ctx.winningTargets) parts.push(`Victory Conditions (any ONE player completing each satisfies the whole party):\n${ctx.winningTargets}`);
-  if (ctx.eachPlayerTargets) parts.push(`Per-Player Victory Conditions (EVERY surviving player must personally complete each):\n${ctx.eachPlayerTargets}`);
+  const partyObjectives = ctx.objectives.filter((o) => o.scope === "party");
+  const eachObjectives = ctx.objectives.filter((o) => o.scope === "each_player");
+  const objLine = (o: ScenarioObjective) => `  - ${o.text}${o.required ? "" : " (optional / bonus)"}`;
+  if (partyObjectives.length) parts.push(`Victory Conditions (any ONE player completing each satisfies the whole party):\n${partyObjectives.map(objLine).join("\n")}`);
+  if (eachObjectives.length) parts.push(`Per-Player Victory Conditions (EVERY surviving player must personally complete each):\n${eachObjectives.map(objLine).join("\n")}`);
   if (ctx.failureConditions) parts.push(`Failure Conditions — steer outcomes honestly; do not contrive to avoid these:\n${ctx.failureConditions}`);
   if (ctx.failureTurnLimit != null) parts.push(`Failure Turn Limit: game ends in defeat if round reaches ${ctx.failureTurnLimit}`);
   if (ctx.endingConditions) parts.push(`Additional Ending Branches:\n${ctx.endingConditions}`);

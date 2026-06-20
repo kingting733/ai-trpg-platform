@@ -6,22 +6,17 @@ import {
   detectAttackType, resolveAttack, dodgeValueOf, NPC_DEFAULT_DODGE, AttackResult,
 } from "@/lib/game/resolution";
 import { refreshStorySummary } from "@/lib/ai/summarize";
-import { detectEnding } from "@/lib/ai/detect-ending";
-import { coerceEndings, evaluateEndings } from "@/lib/game/endings";
+import { coerceEndings, evaluateEndings, type ScenarioEnding } from "@/lib/game/endings";
 import { generateEndingNarration } from "@/lib/ai/ending-narration";
 import {
   decomposeObjectives,
-  decomposeStructuredObjectives,
   checkObjectiveProgress,
-  checkFailureTriggered,
-  generateFailureNarration,
   incompleteForActor,
   applyCompletions,
-  allRequiredDone,
-  generateVictoryNarration,
   Objective,
   ObjectiveProgress,
 } from "@/lib/ai/objectives";
+import { resolveScenarioObjectives } from "@/lib/game/objectives-def";
 import {
   coerceLocationGraph,
   coerceLocationState,
@@ -55,7 +50,7 @@ export async function POST(request: Request) {
   // Verify caller is a room participant and it's actually their turn
   const { data: room } = await supabase
     .from("rooms")
-    .select("*, scenarios(title, background, objective, rules, opening_scene, locations, npcs, winning_targets, each_player_targets, failure_conditions, failure_turn_limit, ending_conditions, gm_notes, source_document, language, location_graph, endings)")
+    .select("*, scenarios(title, background, objective, rules, opening_scene, locations, npcs, objectives, winning_targets, each_player_targets, failure_conditions, failure_turn_limit, ending_conditions, gm_notes, source_document, language, location_graph, endings)")
     .eq("id", roomId)
     .single();
   if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -649,8 +644,7 @@ export async function POST(request: Request) {
     openingScene: scenario.opening_scene ?? null,
     locations: structuredLocations,
     npcs: structuredNpcs,
-    winningTargets: scenario.winning_targets ?? null,
-    eachPlayerTargets: scenario.each_player_targets ?? null,
+    objectives: resolveScenarioObjectives(scenario.objectives, scenario.winning_targets, scenario.each_player_targets),
     failureConditions: scenario.failure_conditions ?? null,
     failureTurnLimit: scenario.failure_turn_limit ?? null,
     endingConditions: scenario.ending_conditions ?? null,
@@ -951,33 +945,37 @@ export async function POST(request: Request) {
     let ending: EndingShape = { triggered: false, type: null, title: null, summary: null };
     const actingName = resolvedActor?.name ?? "Unknown";
 
-    // Determine which ending mode is active for this scenario.
     const scenarioEndings = coerceEndings(scenario?.endings);
-    const advancedMode = scenarioEndings.length > 0;
 
     if (allDead) {
       ending = { triggered: true, type: "failure", title: tpdTitle, summary: tpdSummary };
     }
 
-    // === SHARED OBJECTIVE TRACKER (runs in BOTH Advanced and Simple mode) ===
-    // Decomposes winning_targets/each_player_targets into a checklist (once per
-    // room) and tracks which objectives were completed this turn. In Advanced Mode
-    // the resulting progress is used by evaluateEndings via objective:<id> terms.
-    // In Simple Mode it drives the allRequiredDone victory check.
+    // === OBJECTIVE TRACKER ===
+    // Objectives are a TRACKER, not a game-ender. We track which ones the party
+    // has completed (by their STABLE id), and the ending system below is what
+    // actually decides when/how the story ends — via objective:<id> conditions.
+    //
+    // Creator-defined structured objectives are used directly (deterministic,
+    // stable ids). Only a legacy scenario with no structured/free-text
+    // objectives but free-text ending_conditions falls back to AI decomposition.
     let sharedObjectives: Objective[] = Array.isArray(room.objectives) ? room.objectives : [];
     let sharedProgress: ObjectiveProgress =
       room.objective_progress && typeof room.objective_progress === "object"
         ? { ...(room.objective_progress as ObjectiveProgress) }
         : {};
 
-    if (!allDead && (scenario?.winning_targets || scenario?.each_player_targets || scenario?.ending_conditions)) {
-      const partyText = scenario.winning_targets?.trim() ?? "";
-      const eachPlayerText = scenario.each_player_targets?.trim() ?? "";
+    const resolvedObjectiveDefs = resolveScenarioObjectives(
+      scenario?.objectives,
+      scenario?.winning_targets,
+      scenario?.each_player_targets
+    );
 
+    if (!allDead && (resolvedObjectiveDefs.length > 0 || scenario?.ending_conditions)) {
       if (sharedObjectives.length === 0) {
         sharedObjectives =
-          partyText || eachPlayerText
-            ? await decomposeStructuredObjectives(partyText, eachPlayerText, scenario?.language ?? null)
+          resolvedObjectiveDefs.length > 0
+            ? resolvedObjectiveDefs
             : await decomposeObjectives(scenario.ending_conditions, scenario?.language ?? null);
         if (sharedObjectives.length > 0) {
           await supabase.from("rooms").update({ objectives: sharedObjectives }).eq("id", roomId);
@@ -1030,69 +1028,50 @@ export async function POST(request: Request) {
       }
     }
 
-    // === ADVANCED MODE: structured named endings (pure-code condition evaluation) ===
-    if (!ending.triggered && !allDead && advancedMode) {
-      const firedEnding = evaluateEndings(
-        scenarioEndings,
-        locState,
-        locationGraph,
-        npcStateNow as Record<string, { alive: boolean }>,
-        sharedProgress as Record<string, { done?: boolean }>,
-        room.current_round,
-        npcRoster,
-      );
-      if (firedEnding) {
-        const narration = await generateEndingNarration(
-          firedEnding,
-          scenario?.title ?? "the adventure",
-          finalLedger,
-          storyLogSoFar,
-          scenario?.language ?? null,
-        );
-        ending = { triggered: true, type: firedEnding.type, title: narration.title, summary: narration.summary };
-      }
-    }
+    // === ENDING SYSTEM — the SOLE authority over how the story ends ===
+    // Every scenario is evaluated through the structured ending system. When a
+    // creator defines no victory ending, we synthesise a default one from the
+    // required objectives ("all key objectives done → victory") so the story can
+    // still reach a satisfying close. Creator endings always win over it.
+    if (!ending.triggered && !allDead) {
+      const requiredObjIds = sharedObjectives.filter((o) => o.required).map((o) => o.id);
+      const defaultVictory: ScenarioEnding | null =
+        requiredObjIds.length > 0
+          ? {
+              id: "_default_victory",
+              name: isZh ? "任務完成" : "Mission Complete",
+              type: "victory",
+              condition: [requiredObjIds.map((id) => `objective:${id}`)],
+              description: isZh
+                ? "隊伍達成了所有關鍵目標，冒險圓滿落幕。請依實際劇情描述每位角色的結局與這趟旅程的意義。"
+                : "The party accomplished every key objective and the adventure reaches a satisfying close. Describe each character's fate based on what actually happened.",
+              priority: -100,
+            }
+          : null;
 
-    // === SIMPLE MODE: allRequiredDone victory + AI failure check ===
-    // Only runs when NO named endings are defined (advancedMode === false).
-    if (!ending.triggered && !allDead && !advancedMode) {
-      if (sharedObjectives.length > 0) {
-        if (allRequiredDone(sharedObjectives, sharedProgress)) {
-          const victory = await generateVictoryNarration(
-            scenario?.title ?? "the adventure",
-            sharedObjectives,
-            storyLogSoFar,
-            scenario?.language ?? null
-          );
-          ending = { triggered: true, type: victory.type, title: victory.title, summary: victory.summary };
-        }
-      } else if (scenario?.ending_conditions) {
-        ending = await detectEnding(
-          scenario.ending_conditions,
-          storyLogSoFar,
-          actionText,
-          gmResponse.narration,
-          scenario?.language ?? null
-        );
-      }
+      const effectiveEndings = defaultVictory
+        ? [...scenarioEndings, defaultVictory].sort((a, b) => b.priority - a.priority)
+        : scenarioEndings;
 
-      // Failure conditions (Simple Mode only).
-      if (!ending.triggered && scenario?.failure_conditions) {
-        const failed = await checkFailureTriggered(
-          scenario.failure_conditions,
-          storyLogSoFar,
-          actionText,
-          actingName,
-          gmResponse.narration
+      if (effectiveEndings.length > 0) {
+        const firedEnding = evaluateEndings(
+          effectiveEndings,
+          locState,
+          locationGraph,
+          npcStateNow as Record<string, { alive: boolean }>,
+          sharedProgress as Record<string, { done?: boolean }>,
+          room.current_round,
+          npcRoster,
         );
-        if (failed) {
-          const fail = await generateFailureNarration(
+        if (firedEnding) {
+          const narration = await generateEndingNarration(
+            firedEnding,
             scenario?.title ?? "the adventure",
-            failed,
+            finalLedger,
             storyLogSoFar,
-            scenario?.language ?? null
+            scenario?.language ?? null,
           );
-          ending = { triggered: true, type: fail.type, title: fail.title, summary: fail.summary };
+          ending = { triggered: true, type: firedEnding.type, title: narration.title, summary: narration.summary };
         }
       }
     }

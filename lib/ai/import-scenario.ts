@@ -5,6 +5,7 @@ import type { LocationEntry, NpcEntry } from "@/lib/ai/gm";
 import { newNpcId } from "@/lib/game/npc";
 import { coerceLocationGraph, type LocationGraph } from "@/lib/game/locations";
 import { coerceEndings, type ScenarioEnding } from "@/lib/game/endings";
+import { coerceScenarioObjectives, type ScenarioObjective } from "@/lib/game/objectives-def";
 
 export const IMPORT_GENRES = ["Fantasy", "Cyberpunk", "Horror", "Sci-Fi", "Mystery", "Historical", "Other"];
 export const IMPORT_DIFFICULTIES = ["Story", "Normal", "Hard", "Nightmare"];
@@ -22,6 +23,8 @@ export interface ImportedScenario {
   opening_scene: string | null;
   locations: LocationEntry[];
   npcs: NpcEntry[];
+  /** Structured objectives (present when importing this platform's own JSON). */
+  objectives: ScenarioObjective[];
   /** Explicit victory conditions any ONE player can complete — numbered list. */
   winning_targets: string | null;
   /** Goals EVERY surviving player must complete individually — numbered list. */
@@ -166,6 +169,7 @@ export function normalizeImported(raw: any): ImportedScenario {
     opening_scene: asNullableString(raw?.opening_scene),
     locations: normalizeLocations(raw?.locations),
     npcs: normalizeNpcs(raw?.npcs),
+    objectives: coerceScenarioObjectives(raw?.objectives),
     winning_targets: asNullableString(raw?.winning_targets),
     each_player_targets: asNullableString(raw?.each_player_targets),
     failure_conditions: asNullableString(raw?.failure_conditions),
