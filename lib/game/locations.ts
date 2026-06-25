@@ -476,7 +476,11 @@ function nameSegments(sn: string): string[] {
   return sn
     .split(/[的之\s、與和及\/]+/)
     .map((t) => t.trim())
-    .filter((t) => (/^[\x00-\x7F]+$/.test(t) ? t.length >= 4 : t.length >= 2));
+    // Require longer segments than the generic media-reveal matcher: a 2-char
+    // CJK overlap is common enough in ordinary sentences to false-positive as
+    // "the party wants to travel here" (e.g. an action mentioning an item or
+    // verb that coincidentally shares 2 characters with a location's name).
+    .filter((t) => (/^[\x00-\x7F]+$/.test(t) ? t.length >= 4 : t.length >= 3));
 }
 
 function mentionScore(actionLower: string, name: string): number {
@@ -512,8 +516,11 @@ export function detectTravelTarget(
 }
 
 /** Does the action look like the party is trying to GO somewhere (vs just
- *  mentioning a place)? */
-const TRAVEL_RE = /前往|出發|移動|趕往|去|回到|返回|進入|走向|走到|搭|坐車|乘|go to|head|travel|enter|return to|move to|visit/i;
+ *  mentioning a place)? Deliberately excludes bare single-character/common
+ *  words like "去", "enter", "visit", "head" — those appear constantly in
+ *  ordinary actions ("搜查桌子", "examine the entrance") with no travel intent
+ *  at all, and previously caused the party to "teleport" on unrelated input. */
+const TRAVEL_RE = /前往|出發|移動|趕往|回到|返回|走向|走到|搭車|坐車|乘車|go to|travel to|head to|return to|move to|head back|travel back/i;
 export function looksLikeTravel(actionText: string): boolean {
   return TRAVEL_RE.test(actionText);
 }
