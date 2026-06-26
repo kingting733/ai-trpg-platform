@@ -333,22 +333,21 @@ export async function checkObjectiveProgress(
     .map((o) => `- ${o.id}: ${o.text}${o.scope === "each_player" ? " [must be done by THIS character personally]" : ""}`)
     .join("\n");
 
-  const system = `You are a STRICT objective-completion judge for a multiplayer RPG. Your default answer is that nothing was completed. Only confirm a completion when the evidence is unambiguous.
+  const system = `You are an objective-completion judge for a multiplayer RPG. You are given the CURRENTLY-INCOMPLETE objectives, plus ${actingCharacter}'s most recent action and the GM's narration of its outcome. Decide which objectives — if any — were JUST and ACTUALLY completed by ${actingCharacter} on THIS turn.
 
-You are given the CURRENTLY-INCOMPLETE objectives, plus ${actingCharacter}'s most recent action and the GM's narration of its outcome. Decide which objectives — if any — were JUST and ACTUALLY completed by ${actingCharacter} on THIS turn.
-
-MARK COMPLETE ONLY IF ALL of these hold:
-1. ${actingCharacter} PHYSICALLY PERFORMED the accomplishment this turn — not merely planned, suggested, proposed, agreed, intended, promised, or discussed it.
-2. The GM NARRATION explicitly confirms the accomplishment actually happened and SUCCEEDED. If a dice check failed or the outcome is uncertain/partial, it is NOT complete.
+Mark an objective COMPLETE when ALL of these hold:
+1. ${actingCharacter} actually CARRIED OUT the accomplishment in the fiction this turn — not merely planned, suggested, proposed, agreed, intended, promised, or said they would do it later.
+2. The GM NARRATION describes events in which the attempt SUCCEEDS. IMPORTANT: the GM is forbidden from naming or announcing objectives, so do NOT wait for the GM to say a goal is "complete" or to restate the objective's wording. Judge from the concrete events the narration describes: if those events amount to the objective being achieved, it counts. It does NOT count only when a dice check explicitly FAILED, or the narration shows the attempt blocked, interrupted, refused, undone, or left unresolved.
 3. The accomplishment matches the objective's concrete meaning — not a vaguely related or symbolic gesture.
 
 DO NOT mark complete for any of these (common false positives):
-- Talking about, planning, or deciding to do the objective.
+- Only talking about, planning, or deciding to do the objective (with no narrated success this turn).
 - Another character doing it (for [must be done by THIS character personally] objectives, only ${actingCharacter}'s OWN completion counts).
-- The GM merely mentioning, foreshadowing, or describing the objective's existence.
-- Being near, on the way to, or partway through it.
+- The GM merely mentioning, foreshadowing, or describing the objective's existence without it actually happening.
+- Being near, on the way to, or only partway through it.
+- A dice check for the action FAILED, or the narration says the attempt did not work.
 
-It is normal and expected to complete ZERO objectives on a turn. When unsure, return none.
+Be fair, not paranoid: when ${actingCharacter}'s action plainly does the thing and the narration shows it working out, CREDIT it — do not withhold completion just because the GM phrased the success indirectly. But never invent a success the narration does not support. Completing ZERO objectives on a turn is normal and fine.
 Never invent objective ids. Only use ids from the list.
 
 Return ONLY valid JSON, no markdown:
