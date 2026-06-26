@@ -12,6 +12,19 @@ import { type NpcRef, npcStateEntry } from "@/lib/game/npc";
 
 export type EndingType = "victory" | "failure" | "neutral";
 
+/**
+ * Whether an ending allows post-game character growth. Growth is blocked ONLY
+ * on failure endings ("失敗結局不開放角色成長"); every non-failure ending opens
+ * it. Accepts the stored `ending_type` string (which may be null, a canonical
+ * type, or a legacy value such as "good"/"normal"/"best"/"bad") and is the
+ * single source of truth for both the UI gate and the growth API.
+ */
+export function endingAllowsGrowth(endingType: string | null | undefined): boolean {
+  if (!endingType) return false;
+  const FAILURE_TYPES = new Set(["failure", "bad", "critical_failure"]);
+  return !FAILURE_TYPES.has(endingType);
+}
+
 export interface ScenarioEnding {
   /** Short unique id within the scenario, e.g. "true_end". */
   id: string;

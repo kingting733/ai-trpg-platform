@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback, useRef, type CSSProperties, type Reac
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { currentSkillValue, SKILL_KEY_BY_ZH } from "@/lib/game/skills";
+import { endingAllowsGrowth } from "@/lib/game/endings";
 import { ChatDrawer } from "@/components/ChatDrawer";
 
 interface Character {
@@ -885,10 +886,14 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
 // ─── Ending Screen ────────────────────────────────────────────────────────────
 
 const ENDING_META: Record<string, { icon: string; badge: string; accent: string; glow: string }> = {
+  // Canonical ending types (lib/game/endings.ts).
+  victory: { icon: "✦", badge: "勝利結局", accent: "#c9a96e", glow: "rgba(201,169,110,0.45)" },
+  neutral: { icon: "↗", badge: "中立結局", accent: "#fdba74", glow: "rgba(253,186,116,0.40)" },
+  failure: { icon: "✕", badge: "失敗",     accent: "#fca5a5", glow: "rgba(252,165,165,0.40)" },
+  // Legacy values kept for rooms completed before the type rename.
   best:    { icon: "✦", badge: "最佳結局", accent: "#c9a96e", glow: "rgba(201,169,110,0.45)" },
   normal:  { icon: "✔", badge: "勝利",     accent: "#6ee7b7", glow: "rgba(110,231,183,0.40)" },
   bad:     { icon: "↗", badge: "苦甜結局", accent: "#fdba74", glow: "rgba(253,186,116,0.40)" },
-  failure: { icon: "✕", badge: "失敗",     accent: "#fca5a5", glow: "rgba(252,165,165,0.40)" },
 };
 
 function EndingScreen({
@@ -903,7 +908,7 @@ function EndingScreen({
 }) {
   const hasEnding = !!room.ending_title;
   const meta = ENDING_META[room.ending_type ?? ""] ?? ENDING_META.normal;
-  const canGrow = room.ending_type === "good" || room.ending_type === "normal";
+  const canGrow = endingAllowsGrowth(room.ending_type);
   const accent = hasEnding ? meta.accent : "#c9a96e";
   const glow = hasEnding ? meta.glow : "rgba(201,169,110,0.40)";
 

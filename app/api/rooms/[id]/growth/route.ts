@@ -6,6 +6,7 @@ import {
   SKILL_CAP,
   currentSkillValue,
 } from "@/lib/game/skills";
+import { endingAllowsGrowth } from "@/lib/game/endings";
 
 const d = (sides: number) => Math.floor(Math.random() * sides) + 1;
 
@@ -26,8 +27,7 @@ async function computeEligible(
     .eq("id", roomId)
     .single();
   if (!room || room.status !== "completed") return { error: "本場冒險尚未結束。", status: 400 as const };
-  const isGoodEnding = room.ending_type === "good" || room.ending_type === "normal";
-  if (!isGoodEnding) return { error: "只有在成功結局（勝利）中，角色才能成長。失敗結局不開放成長檢定。", status: 403 as const };
+  if (!endingAllowsGrowth(room.ending_type)) return { error: "只有在成功結局（勝利）中，角色才能成長。失敗結局不開放成長檢定。", status: 403 as const };
   const scenarioId: string | null = room.scenario_id ?? null;
 
   // The user's in-room character → its source card.
