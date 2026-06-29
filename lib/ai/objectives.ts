@@ -114,13 +114,17 @@ function langLabel(language?: string | null): string | null {
   return LANGUAGE_LABELS[language] ?? language;
 }
 
-async function callAI(system: string, user: string, maxTokens: number): Promise<string> {
+async function callAI(system: string, user: string, maxTokens: number, label = "objectives"): Promise<string> {
   const provider = process.env.AI_PROVIDER ?? "deepseek";
   // Use AI_CLASSIFY_MODEL (fast non-thinking model) — objective checking is
   // a simple classification task; a reasoning model wastes time and budget here.
   const model = process.env.AI_CLASSIFY_MODEL ?? process.env.AI_MODEL ?? "deepseek-v4-flash";
   const apiKey = process.env.AI_API_KEY;
-  if (!apiKey) return "";
+  if (!apiKey) {
+    // Distinguishes "AI disabled / misconfigured" from a genuine empty verdict.
+    console.warn(`[${label}] callAI skipped: AI_API_KEY is not set — returning empty result.`);
+    return "";
+  }
 
   try {
     if (provider === "anthropic") {
@@ -138,7 +142,10 @@ async function callAI(system: string, user: string, maxTokens: number): Promise<
           max_tokens: maxTokens,
         }),
       });
-      if (!res.ok) return "";
+      if (!res.ok) {
+        console.error(`[${label}] callAI HTTP ${res.status} ${res.statusText} (model=${model}) — returning empty result.`);
+        return "";
+      }
       const data = await res.json();
       return data.content?.[0]?.text?.trim() ?? "";
     }
@@ -156,10 +163,14 @@ async function callAI(system: string, user: string, maxTokens: number): Promise<
         temperature: 0.1,
       }),
     });
-    if (!res.ok) return "";
+    if (!res.ok) {
+      console.error(`[${label}] callAI HTTP ${res.status} ${res.statusText} (model=${model}) — returning empty result.`);
+      return "";
+    }
     const data = await res.json();
     return data.choices?.[0]?.message?.content?.trim() ?? "";
-  } catch {
+  } catch (err) {
+    console.error(`[${label}] callAI threw (model=${model}):`, err instanceof Error ? err.message : err);
     return "";
   }
 }
@@ -365,14 +376,31 @@ GM NARRATION OF OUTCOME: ${gmNarration}
 
 Which objectives did ${actingCharacter} ACTUALLY complete THIS turn? Be strict.`;
 
-  const raw = await callAI(system, user, 200);
-  if (!raw) return [];
+  // Observability: every no-completion turn should explain WHY (model error vs.
+  // bad JSON vs. ids filtered out vs. a genuine "nothing done"), so a creator
+  // reporting "objectives never fire" can be diagnosed from logs instead of
+  // guessing. Keyed by acting character + the objective ids it was asked about.
+  const askedIds = incompleteObjectives.map((o) => o.id).join(",");
+  const tag = `objectives:check room-actor=${actingCharacter} asked=[${askedIds}]`;
+
+  const raw = await callAI(system, user, 200, "objectives:check");
+  if (!raw) {
+    console.warn(`[${tag}] no verdict — callAI returned empty (model error or AI disabled). Treating as none completed.`);
+    return [];
+  }
   try {
     const parsed = JSON.parse(extractJSON(raw));
     const ids = Array.isArray(parsed?.completed) ? parsed.completed : [];
     const validIds = new Set(incompleteObjectives.map((o) => o.id));
-    return ids.filter((id: any): id is string => typeof id === "string" && validIds.has(id));
-  } catch {
+    const accepted = ids.filter((id: any): id is string => typeof id === "string" && validIds.has(id));
+    const rejected = ids.filter((id: any) => !(typeof id === "string" && validIds.has(id)));
+    if (rejected.length > 0) {
+      console.warn(`[${tag}] judge returned ids not on the incomplete list (ignored): ${JSON.stringify(rejected)}`);
+    }
+    console.info(`[${tag}] verdict completed=${JSON.stringify(accepted)}${accepted.length === 0 ? " (genuine none)" : ""}`);
+    return accepted;
+  } catch (err) {
+    console.error(`[${tag}] could not parse judge JSON — treating as none completed. error=${err instanceof Error ? err.message : err} raw=${JSON.stringify(raw.slice(0, 300))}`);
     return [];
   }
 }
