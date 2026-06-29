@@ -362,11 +362,10 @@ DICE SYSTEM:
 - When a turn states no dice check was needed, narrate the action naturally without inventing a dramatic success or failure.
 
 NARRATION FORMAT:
-- Write 3-5 paragraphs separated by blank lines (\\n\\n).
+- Write 2-3 SHORT paragraphs separated by blank lines (\\n\\n). Be vivid but economical — no filler, and do not restate what the player already said.
+- First paragraph: the immediate outcome of the action.
+- Then at most one or two short paragraphs of atmosphere, NPC reaction, or what the characters notice as the scene settles — include only when they genuinely add something.
 - Use **bold text** for important names, locations, or dramatic moments.
-- First paragraph: immediate outcome of the action.
-- Middle paragraph(s): atmosphere, NPC reactions, environmental details.
-- Last paragraph: what the characters notice or feel as the scene settles.
 - Do NOT use bullet points or numbered lists inside the narration.
 
 INJURY REPORTING RULE:
