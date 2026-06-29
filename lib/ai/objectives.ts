@@ -147,7 +147,11 @@ async function callAI(system: string, user: string, maxTokens: number, label = "
         return "";
       }
       const data = await res.json();
-      return data.content?.[0]?.text?.trim() ?? "";
+      const text = data.content?.[0]?.text?.trim() ?? "";
+      if (!text) {
+        console.error(`[${label}] callAI got HTTP 200 but EMPTY content (model=${model}, provider=anthropic). stop_reason=${data.stop_reason} usage=${JSON.stringify(data.usage)}. If this model "thinks", maxTokens=${maxTokens} may be too small.`);
+      }
+      return text;
     }
 
     const baseOverride = process.env.AI_BASE_URL?.trim().replace(/\/+$/, "");
@@ -168,7 +172,12 @@ async function callAI(system: string, user: string, maxTokens: number, label = "
       return "";
     }
     const data = await res.json();
-    return data.choices?.[0]?.message?.content?.trim() ?? "";
+    const content = data.choices?.[0]?.message?.content?.trim() ?? "";
+    if (!content) {
+      const choice = data.choices?.[0];
+      console.error(`[${label}] callAI got HTTP 200 but EMPTY content (model=${model}, provider=${provider}). finish_reason=${choice?.finish_reason} usage=${JSON.stringify(data.usage)} apiError=${JSON.stringify(data.error ?? null)}. If finish_reason="length" or this model "thinks", maxTokens=${maxTokens} is too small; if the model name is wrong the provider may return an error/empty body.`);
+    }
+    return content;
   } catch (err) {
     console.error(`[${label}] callAI threw (model=${model}):`, err instanceof Error ? err.message : err);
     return "";
@@ -383,7 +392,10 @@ Which objectives did ${actingCharacter} ACTUALLY complete THIS turn? Be strict.`
   const askedIds = incompleteObjectives.map((o) => o.id).join(",");
   const tag = `objectives:check room-actor=${actingCharacter} asked=[${askedIds}]`;
 
-  const raw = await callAI(system, user, 200, "objectives:check");
+  // 800 (not ~50 the JSON needs): if AI_CLASSIFY_MODEL is a reasoning model,
+  // hidden thinking tokens are drawn from this budget BEFORE any visible JSON is
+  // emitted, so too small a cap yields an empty 200 response. Tunable via env.
+  const raw = await callAI(system, user, Number(process.env.AI_CLASSIFY_MAX_TOKENS) || 800, "objectives:check");
   if (!raw) {
     console.warn(`[${tag}] no verdict — callAI returned empty (model error or AI disabled). Treating as none completed.`);
     return [];
