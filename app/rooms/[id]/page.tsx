@@ -763,11 +763,9 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                   key={`${it.name}-${i}`}
                   title={it.note || undefined}
                   className="text-xs px-2 py-1 rounded"
-                  style={it.evidence_id
-                    ? { background: "rgba(201,169,110,0.12)", color: "#c9a96e", border: "1px solid rgba(201,169,110,0.35)" }
-                    : { background: "rgba(14,12,8,0.8)", color: "#d4d4d8", border: "1px solid #2e2416" }}
+                  style={{ background: "rgba(14,12,8,0.8)", color: "#d4d4d8", border: "1px solid #2e2416" }}
                 >
-                  {it.evidence_id ? "🔎 " : "📦 "}{it.name}
+                  📦 {it.name}
                 </span>
               ))}
             </div>
