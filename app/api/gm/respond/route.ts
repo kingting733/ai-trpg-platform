@@ -147,6 +147,28 @@ export async function POST(request: Request) {
         (name) => actionText.includes(name) && (npcStateEntry(name, npcRoster, npcStateNow)?.alive !== false)
       ) ?? null;
     }
+
+    // Unnamed-target fallback ("attack her", "kill it", or a bare "attack"):
+    // no character/NPC name was found in the text. Resolve it to the SOLE
+    // unambiguous living NPC, if there is exactly one. Conservative on purpose —
+    // we never guess between multiple candidates, so it can't start a fight
+    // against the wrong target. Prefer NPCs already engaged in the scene
+    // (tracked in state); only if none are engaged do we fall back to the
+    // scenario roster, and even then only when it names a single living NPC.
+    if (!targetChar && !targetNpcName) {
+      const livingTracked = Object.keys(npcStateNow)
+        .filter((k) => npcStateNow[k]?.alive !== false)
+        .map((k) => npcDisplayName(k, npcRoster));
+      let candidates = Array.from(new Set(livingTracked));
+      if (candidates.length === 0) {
+        candidates = Array.from(new Set(
+          scenarioNpcs
+            .map((n) => n.name)
+            .filter((name) => npcStateEntry(name, npcRoster, npcStateNow)?.alive !== false)
+        ));
+      }
+      if (candidates.length === 1) targetNpcName = candidates[0];
+    }
   }
 
   if (attackType && resolvedActor && (targetChar || targetNpcName)) {
