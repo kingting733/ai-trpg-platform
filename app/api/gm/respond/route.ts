@@ -153,7 +153,18 @@ export async function POST(request: Request) {
     // ── Contested attack path ──
     const isNpc = !targetChar;
     const targetName: string = isNpc ? (targetNpcName as string) : targetChar.name;
-    const dodgeVal = isNpc ? NPC_DEFAULT_DODGE : dodgeValueOf(targetChar);
+    // Defender 閃避: players use DEX/2 (or stored skill). For an NPC, use the
+    // declared sheet's DEX/2 when it has one, so a nimble NPC actually evades
+    // better than a sluggish one; fall back to the flat default for stat-less,
+    // GM-invented NPCs.
+    let dodgeVal: number;
+    if (!isNpc) {
+      dodgeVal = dodgeValueOf(targetChar);
+    } else {
+      const declaredNpc = resolveNpc(targetName, scenarioNpcs as any);
+      const npcDex = declaredNpc && typeof (declaredNpc as any).dex === "number" ? (declaredNpc as any).dex : null;
+      dodgeVal = npcDex != null && npcDex > 0 ? Math.floor(npcDex / 2) : NPC_DEFAULT_DODGE;
+    }
     attack = resolveAttack(resolvedActor, dodgeVal, attackType, targetName, isNpc);
 
     if (attack.damage > 0) {

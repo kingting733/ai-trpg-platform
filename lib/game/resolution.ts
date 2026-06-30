@@ -270,12 +270,17 @@ export type AttackType = "str" | "fighting";
 /** Default 閃避 value for NPCs/monsters that have no character sheet. */
 export const NPC_DEFAULT_DODGE = 25;
 
-// Trained-fighting verbs → roll 搏鬥 (higher damage).
+// Trained-fighting verbs → roll 搏鬥 (higher damage). Includes the generic
+// "attack" verbs and weapon/ranged attacks (modelled as deliberate combat).
+// NOTE: bare "打" is intentionally EXCLUDED — it false-positives on 打開/打掃/
+// 打字/打電話/打聽 — so only unambiguous compounds (攻打/痛打/打死/打傷) are listed.
 const FIGHTING_ATTACK_KEYWORDS = [
+  "attack", "kill", "shoot", "shot at", "gun down", "fire at", "open fire",
   "punch", "brawl", "fight", "grapple", "wrestle", "strike", "melee",
-  "knife", "stab", "swing at", "tackle", "beat up", "slash",
+  "knife", "stab", "swing at", "tackle", "beat up", "slash", "kick",
   "搏鬥", "打鬥", "肉搏", "毆打", "揮拳", "出拳", "扭打", "近身", "刺", "捅", "打架",
-  "攻擊", "襲擊", "撲向", "砍",
+  "攻擊", "攻打", "襲擊", "撲向", "砍", "斬", "劈", "踢", "揍", "咬", "痛打",
+  "打死", "打傷", "殺", "射擊", "開槍", "射殺", "轟", "扣下扳機",
 ];
 
 // Raw brute-force verbs → roll STR (lower damage).
