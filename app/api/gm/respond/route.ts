@@ -32,6 +32,13 @@ import {
   type NpcEncounter,
 } from "@/lib/game/locations";
 import { type NpcRef, resolveNpc, npcStateKey, npcStateEntry, npcDisplayName } from "@/lib/game/npc";
+import {
+  coerceInventory,
+  applyItemEvents,
+  addEvidenceItem,
+  buildInventoryBlock,
+  type InventoryItem,
+} from "@/lib/game/inventory";
 
 export async function POST(request: Request) {
   const supabase = createClient();
@@ -280,6 +287,11 @@ export async function POST(request: Request) {
   const locationLedgerEntries: LedgerEntry[] = [];
   let locationFiredEncounters: NpcEncounter[] = [];
 
+  // Party-wide soft inventory (context for the GM; never gates progression).
+  // 證物 awarded THIS turn are bridged into the bag after narration.
+  let inventory: InventoryItem[] = coerceInventory((room as any).inventory);
+  const evidenceAwardedThisTurn: { name: string; id: string }[] = [];
+
   if (locationGraph && locState) {
     // 1. TRAVEL — only when the action reads like movement, so merely
     //    mentioning another place (e.g. comparing notes) doesn't teleport.
@@ -350,6 +362,7 @@ export async function POST(request: Request) {
       if (ev) {
         locState.evidence_found.push(ev.id);
         locationProgress = true;
+        evidenceAwardedThisTurn.push({ name: ev.name, id: ev.id });
         await supabase.from("story_logs").insert({
           room_id: roomId,
           round_number: room.current_round,
@@ -662,6 +675,7 @@ export async function POST(request: Request) {
     npcStates: npcStatesForPrompt,
     objectiveDirective,
     locationDirective,
+    inventoryDirective: buildInventoryBlock(inventory),
     currentRound: room.current_round,
     actingCharacterName: resolvedActor?.name ?? "Unknown",
     nextCharacterName: nextActor?.name ?? "Unknown",
@@ -798,6 +812,44 @@ export async function POST(request: Request) {
       .map((fact) => ({ turn: turnLabel, type: "event", character: actorName, fact: fact.trim() }));
 
     const finalLedger = [...updatedLedger, ...injuryLedgerEntries, ...aiMemoryEntries];
+
+    // === INVENTORY UPDATE (party-wide soft layer) ===
+    // 1) Bridge any 證物 awarded this turn into the bag (carries evidence_id).
+    // 2) Apply the GM's narrated acquire/consume events. Context-only — this
+    //    never gates progression, so a stray item is harmless.
+    for (const ev of evidenceAwardedThisTurn) {
+      inventory = addEvidenceItem(inventory, ev.name, ev.id, room.current_round);
+    }
+    const gmItems = gmResponse.items ?? null;
+    const acquired = Array.isArray(gmItems?.acquired)
+      ? gmItems!.acquired.filter((a) => a && typeof a.name === "string" && a.name.trim()).slice(0, 5)
+      : [];
+    const consumed = Array.isArray(gmItems?.consumed)
+      ? gmItems!.consumed.filter((c): c is string => typeof c === "string" && c.trim().length > 0).slice(0, 5)
+      : [];
+    const invResult = applyItemEvents(inventory, acquired, consumed, room.current_round);
+    const inventoryChanged =
+      evidenceAwardedThisTurn.length > 0 || invResult.added.length > 0 || invResult.removed.length > 0;
+    inventory = invResult.next;
+    if (inventoryChanged) {
+      await supabase.from("rooms").update({ inventory }).eq("id", roomId);
+      for (const it of invResult.added) {
+        await supabase.from("story_logs").insert({
+          room_id: roomId,
+          round_number: room.current_round,
+          entry_type: "system",
+          content: `📦 取得物品：${it.name}`,
+        });
+      }
+      for (const name of invResult.removed) {
+        await supabase.from("story_logs").insert({
+          room_id: roomId,
+          round_number: room.current_round,
+          entry_type: "system",
+          content: `📦 用掉物品：${name}`,
+        });
+      }
+    }
 
     // Refresh the rolling summary at every round boundary (cheap call, infrequent).
     // The summary absorbs the FULL ledger into 2-sentence prose, so once it has

@@ -84,6 +84,7 @@ interface Room {
     visited: string[];
     evidence_found: string[];
   } | null;
+  inventory: { name: string; note?: string; evidence_id?: string | null; round?: number }[] | null;
 }
 
 interface LocGraphNode {
@@ -751,6 +752,27 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
             </Panel>
           );
         })()}
+
+        {/* Party Inventory — shared bag, soft-tracked from the GM's narration */}
+        {room.inventory && room.inventory.length > 0 && (
+          <Panel className="p-4 shrink-0">
+            <PanelHeader title="隊伍物品" />
+            <div className="flex flex-wrap gap-1.5">
+              {room.inventory.map((it, i) => (
+                <span
+                  key={`${it.name}-${i}`}
+                  title={it.note || undefined}
+                  className="text-xs px-2 py-1 rounded"
+                  style={it.evidence_id
+                    ? { background: "rgba(201,169,110,0.12)", color: "#c9a96e", border: "1px solid rgba(201,169,110,0.35)" }
+                    : { background: "rgba(14,12,8,0.8)", color: "#d4d4d8", border: "1px solid #2e2416" }}
+                >
+                  {it.evidence_id ? "🔎 " : "📦 "}{it.name}
+                </span>
+              ))}
+            </div>
+          </Panel>
+        )}
 
         {/* Objective Tracker — restricted to a single account */}
         {currentUserEmail === "kingtingtai@gmail.com" && room.objectives && room.objectives.length > 0 && (
