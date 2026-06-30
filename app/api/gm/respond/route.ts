@@ -367,7 +367,10 @@ export async function POST(request: Request) {
           room_id: roomId,
           round_number: room.current_round,
           entry_type: "system",
-          content: `🔎 取得證物：${ev.name}`,
+          // Neutral wording (same as ordinary items) so the log doesn't reveal
+          // which pickups are plot-critical 證物. The evidence system still
+          // tracks it as evidence internally for unlock/ending conditions.
+          content: `📦 取得物品：${ev.name}`,
         });
         // If the creator attached media to this evidence, reveal it to the
         // players immediately (the server's own award is the trigger — no fuzzy
