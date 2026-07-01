@@ -265,22 +265,30 @@ export function rollInjuryDamage(severity: InjurySeverity): { amount: number; la
 //   STR    — hit 1d3,  crit 1d6+1
 //   搏鬥   — hit 1d6,  crit 2d6
 
-export type AttackType = "str" | "fighting";
+export type AttackType = "str" | "fighting" | "ranged";
 
 /** Default 閃避 value for NPCs/monsters that have no character sheet. */
 export const NPC_DEFAULT_DODGE = 25;
 
+// Ranged / firearm verbs → roll 射擊. Checked FIRST (most specific). Guns are
+// modelled separately from melee: they use the firearms skill, gain NO strength
+// damage bonus, and cannot be dodged (a bullet is not evaded, only cover helps).
+// Bare "射" is excluded — it false-positives on 注射/發射/射門.
+const RANGED_ATTACK_KEYWORDS = [
+  "shoot", "shot at", "gun down", "fire at", "open fire",
+  "射擊", "開槍", "射殺", "轟", "扣下扳機",
+];
+
 // Trained-fighting verbs → roll 搏鬥 (higher damage). Includes the generic
-// "attack" verbs and weapon/ranged attacks (modelled as deliberate combat).
-// NOTE: bare "打" is intentionally EXCLUDED — it false-positives on 打開/打掃/
-// 打字/打電話/打聽 — so only unambiguous compounds (攻打/痛打/打死/打傷) are listed.
+// "attack" verbs. NOTE: bare "打" is intentionally EXCLUDED — it false-positives
+// on 打開/打掃/打字/打電話/打聽 — so only unambiguous compounds are listed.
 const FIGHTING_ATTACK_KEYWORDS = [
-  "attack", "kill", "shoot", "shot at", "gun down", "fire at", "open fire",
+  "attack", "kill",
   "punch", "brawl", "fight", "grapple", "wrestle", "strike", "melee",
   "knife", "stab", "swing at", "tackle", "beat up", "slash", "kick",
   "搏鬥", "打鬥", "肉搏", "毆打", "揮拳", "出拳", "扭打", "近身", "刺", "捅", "打架",
   "攻擊", "攻打", "襲擊", "撲向", "砍", "斬", "劈", "踢", "揍", "咬", "痛打",
-  "打死", "打傷", "殺", "射擊", "開槍", "射殺", "轟", "扣下扳機",
+  "打死", "打傷", "殺",
 ];
 
 // Raw brute-force verbs → roll STR (lower damage).
@@ -291,17 +299,22 @@ const STR_ATTACK_KEYWORDS = [
 
 /**
  * Decide whether an action is an attack and, if so, which skill it uses.
- * Returns null when the wording isn't an attack at all. Fighting verbs win over
- * brute-force verbs (a deliberate strike is trained combat).
+ * Returns null when the wording isn't an attack at all. Most specific wins:
+ * ranged (firearms) → fighting (trained melee) → str (raw brute force).
  */
 export function detectAttackType(text: string): AttackType | null {
   const t = text.toLowerCase();
+  if (RANGED_ATTACK_KEYWORDS.some((k) => t.includes(k))) return "ranged";
   if (FIGHTING_ATTACK_KEYWORDS.some((k) => t.includes(k))) return "fighting";
   if (STR_ATTACK_KEYWORDS.some((k) => t.includes(k))) return "str";
   return null;
 }
 
 function attackSkillValue(type: AttackType, char: CheckCharacter): number {
+  if (type === "ranged") {
+    const stored = (char.skills ?? {}).firearms as number | undefined;
+    return Math.min(99, stored != null && stored > 0 ? stored : 20);
+  }
   if (type === "fighting") {
     const stored = (char.skills ?? {}).fighting as number | undefined;
     return Math.min(99, stored != null && stored > 0 ? stored : 25);
@@ -315,9 +328,25 @@ export function dodgeValueOf(char: CheckCharacter): number {
   return Math.min(99, stored != null && stored > 0 ? stored : Math.floor((char.dex ?? 50) / 2));
 }
 
-function rollAttackDamage(type: AttackType, crit: boolean): number {
-  if (type === "fighting") return crit ? rollDiceN(2, 6) : rollDiceN(1, 6);
-  return crit ? rollDiceN(1, 6) + 1 : rollDiceN(1, 3);
+/** Base weapon damage before any damage bonus (DB). */
+function rollBaseAttackDamage(type: AttackType, crit: boolean): number {
+  if (type === "ranged")   return crit ? rollDiceN(1, 10) + 2 : rollDiceN(1, 8);
+  if (type === "fighting") return crit ? rollDiceN(2, 6)      : rollDiceN(1, 6);
+  return crit ? rollDiceN(1, 6) + 1 : rollDiceN(1, 3); // str
+}
+
+/**
+ * CoC 7e damage bonus from STR+SIZ (×5 percentile scale). Applied to melee
+ * attacks (STR / 搏鬥) only — firearms never gain it. May be negative for a
+ * frail attacker; callers floor the final landed-hit damage at 1.
+ */
+export function rollDamageBonus(str: number, siz: number): number {
+  const t = (str || 0) + (siz || 0);
+  if (t <= 64)  return -1;
+  if (t <= 124) return 0;
+  if (t <= 164) return rollDiceN(1, 4);
+  if (t <= 204) return rollDiceN(1, 6);
+  return rollDiceN(2, 6);
 }
 
 export interface AttackResult {
@@ -339,9 +368,11 @@ export interface AttackResult {
 }
 
 /**
- * Resolve a contested attack. Rolls the attacker's STR/搏鬥, then (if it lands and
- * isn't a crit) the defender's 閃避, then damage. The route applies the damage to
- * the target's HP and fills target_hp_after / target_died.
+ * Resolve a contested attack. Rolls the attacker's 射擊/搏鬥/STR to hit. Melee
+ * hits that aren't crits let the defender roll 閃避; a crit can't be dodged, and
+ * firearms can't be dodged at all (a bullet is not evaded). Melee damage adds
+ * the STR+SIZ damage bonus; firearms never do. Any landed hit deals ≥1. The
+ * route applies the damage to the target's HP and fills target_hp_after/died.
  */
 export function resolveAttack(
   attacker: CheckCharacter,
@@ -355,6 +386,7 @@ export function resolveAttack(
   const attack_outcome = decideOutcome(attack_roll, attack_target);
   const hit = attack_outcome === "success" || attack_outcome === "critical_success";
   const crit = attack_outcome === "critical_success";
+  const isRanged = type === "ranged";
 
   let dodge_target: number | null = null;
   let dodge_roll: number | null = null;
@@ -362,20 +394,26 @@ export function resolveAttack(
   let damage = 0;
 
   if (hit) {
-    if (crit) {
-      damage = rollAttackDamage(type, true); // critical hits cannot be dodged
+    if (crit || isRanged) {
+      // Crits and firearms bypass the dodge roll entirely.
+      damage = rollBaseAttackDamage(type, crit);
     } else {
       dodge_target = Math.min(99, defenderDodgeValue);
       dodge_roll = rollD100();
       const dodgeOutcome = decideOutcome(dodge_roll, dodge_target);
       dodged = dodgeOutcome === "success" || dodgeOutcome === "critical_success";
-      if (!dodged) damage = rollAttackDamage(type, false);
+      if (!dodged) damage = rollBaseAttackDamage(type, false);
+    }
+    if (damage > 0) {
+      // Damage bonus is muscle-driven: melee only, never firearms.
+      if (!isRanged) damage += rollDamageBonus(attacker.str, attacker.siz);
+      damage = Math.max(1, damage); // a hit that connects always costs ≥1 HP
     }
   }
 
   return {
     type,
-    skill_label: type === "fighting" ? "搏鬥" : "力量",
+    skill_label: type === "ranged" ? "射擊" : type === "fighting" ? "搏鬥" : "力量",
     target_name: targetName,
     is_npc: isNpc,
     attack_target,
