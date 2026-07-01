@@ -272,7 +272,7 @@ export const NPC_DEFAULT_DODGE = 25;
 
 // Ranged / firearm verbs → roll 射擊. Checked FIRST (most specific). Guns are
 // modelled separately from melee: they use the firearms skill, gain NO strength
-// damage bonus, and cannot be dodged (a bullet is not evaded, only cover helps).
+// damage bonus, and are hard to dodge (the defender's 閃避 is halved vs a gun).
 // Bare "射" is excluded — it false-positives on 注射/發射/射門.
 const RANGED_ATTACK_KEYWORDS = [
   "shoot", "shot at", "gun down", "fire at", "open fire",
@@ -368,11 +368,11 @@ export interface AttackResult {
 }
 
 /**
- * Resolve a contested attack. Rolls the attacker's 射擊/搏鬥/STR to hit. Melee
- * hits that aren't crits let the defender roll 閃避; a crit can't be dodged, and
- * firearms can't be dodged at all (a bullet is not evaded). Melee damage adds
- * the STR+SIZ damage bonus; firearms never do. Any landed hit deals ≥1. The
- * route applies the damage to the target's HP and fills target_hp_after/died.
+ * Resolve a contested attack. Rolls the attacker's 射擊/搏鬥/STR to hit. A hit
+ * that isn't a crit lets the defender roll 閃避 — at HALF value against firearms
+ * (harder to dodge a bullet); a crit can't be dodged. Melee damage adds the
+ * STR+SIZ damage bonus; firearms never do. Any landed hit deals ≥1. The route
+ * applies the damage to the target's HP and fills target_hp_after/died.
  */
 export function resolveAttack(
   attacker: CheckCharacter,
@@ -394,11 +394,12 @@ export function resolveAttack(
   let damage = 0;
 
   if (hit) {
-    if (crit || isRanged) {
-      // Crits and firearms bypass the dodge roll entirely.
-      damage = rollBaseAttackDamage(type, crit);
+    if (crit) {
+      damage = rollBaseAttackDamage(type, true); // critical hits cannot be dodged
     } else {
-      dodge_target = Math.min(99, defenderDodgeValue);
+      // Firearms can still be evaded by diving for cover, but 閃避 is HALVED —
+      // a fired gun is far harder to dodge than a swung fist.
+      dodge_target = Math.min(99, isRanged ? Math.floor(defenderDodgeValue / 2) : defenderDodgeValue);
       dodge_roll = rollD100();
       const dodgeOutcome = decideOutcome(dodge_roll, dodge_target);
       dodged = dodgeOutcome === "success" || dodgeOutcome === "critical_success";
