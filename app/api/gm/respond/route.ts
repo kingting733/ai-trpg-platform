@@ -240,6 +240,27 @@ export async function POST(request: Request) {
             : `被 ${resolvedActor.name} 攻擊（${attack.skill_label}，−${attack.damage} HP）`,
         });
       }
+    } else if (attack.fumble && resolvedActor) {
+      // 大失敗 (critical failure): the attacker botches and hurts THEMSELVES —
+      // stumbles into their own strike, recoil, a slip. 1d2 self-damage.
+      const selfDmg = rollInjuryDamage("minor").amount; // 1d2
+      const attackerRow = sortedByDex.find((c: any) => c.id === resolvedActor.id);
+      const curHp = attackerRow ? attackerRow.hp : null;
+      if (attackerRow && curHp != null && curHp > 0) {
+        const newHp = Math.max(0, curHp - selfDmg);
+        await supabase.from("characters").update({ hp: newHp }).eq("id", attackerRow.id);
+        attackerRow.hp = newHp; // keep roster in sync for turn-advance & all-dead checks
+        if (newHp <= 0) actorDied = true;
+        attackSystemLog = newHp > 0
+          ? `💥 ${resolvedActor.name} 攻擊大失敗，反傷自己（−${selfDmg} HP，剩餘 ${newHp}）。`
+          : `☠ ${resolvedActor.name} 攻擊大失敗，反傷倒下。`;
+        attackLedgerEntries.push({
+          turn: room.current_round, type: newHp <= 0 ? "death" : "event", character: resolvedActor.name,
+          fact: newHp <= 0 ? `攻擊大失敗反傷倒下` : `攻擊大失敗，反傷自己（−${selfDmg} HP）`,
+        });
+      } else {
+        attackSystemLog = `💥 ${resolvedActor.name} 攻擊大失敗。`;
+      }
     } else {
       // Missed or dodged — no damage.
       attackSystemLog = attack.dodged
@@ -333,10 +354,22 @@ export async function POST(request: Request) {
   let inventory: InventoryItem[] = coerceInventory((room as any).inventory);
   const evidenceAwardedThisTurn: { name: string; id: string }[] = [];
 
+  const SEARCH_RE = /搜|調查|檢查|查看|探索|翻找|偵查|察看|閱|讀|search|investigate|examin|inspect|look|explor|read/i;
+
   if (locationGraph && locState) {
-    // 1. TRAVEL — only when the action reads like movement, so merely
-    //    mentioning another place (e.g. comparing notes) doesn't teleport.
-    if (looksLikeTravel(actionText)) {
+    // A search that NAMES another location should relocate the party there
+    // first, then search it — players expect "偵查 B" (while in A) to search B,
+    // not A. Reuses the travel machinery below; if the named place is locked,
+    // the normal soft-wall/unknown directives fire and nobody moves.
+    const searchElsewhere =
+      !looksLikeTravel(actionText) &&
+      SEARCH_RE.test(actionText) &&
+      detectTravelTarget(actionText, locationGraph, locState) != null;
+
+    // 1. TRAVEL — on an explicit movement verb, OR a search that names another
+    //    location. Merely mentioning a place in passing does not teleport,
+    //    because detectTravelTarget only matches a real location name/segment.
+    if (looksLikeTravel(actionText) || searchElsewhere) {
       const target = detectTravelTarget(actionText, locationGraph, locState);
       if (target) {
         if (target.status === "unlocked") {
@@ -397,7 +430,7 @@ export async function POST(request: Request) {
     const searchOk =
       !!roll?.requires_check &&
       (roll.outcome === "success" || roll.outcome === "critical_success") &&
-      /搜|調查|檢查|查看|探索|翻找|偵查|察看|閱|讀|search|investigate|examin|inspect|look|explor|read/i.test(actionText);
+      SEARCH_RE.test(actionText);
     if (searchOk) {
       const ev = matchEvidence(actionText, locationGraph, locState);
       if (ev) {

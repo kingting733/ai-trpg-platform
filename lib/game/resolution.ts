@@ -359,6 +359,7 @@ export interface AttackResult {
   attack_outcome: Outcome;
   hit:           boolean;       // attacker succeeded
   crit:          boolean;       // critical hit (undodgeable, crit damage)
+  fumble:        boolean;       // critical FAILURE — attacker botches and hurts themselves
   dodge_target:  number | null; // defender 閃避 value (null if no dodge attempted)
   dodge_roll:    number | null;
   dodged:        boolean;       // defender avoided the hit
@@ -386,6 +387,7 @@ export function resolveAttack(
   const attack_outcome = decideOutcome(attack_roll, attack_target);
   const hit = attack_outcome === "success" || attack_outcome === "critical_success";
   const crit = attack_outcome === "critical_success";
+  const fumble = attack_outcome === "critical_failure";
   const isRanged = type === "ranged";
 
   let dodge_target: number | null = null;
@@ -422,6 +424,7 @@ export function resolveAttack(
     attack_outcome,
     hit,
     crit,
+    fumble,
     dodge_target,
     dodge_roll,
     dodged,
