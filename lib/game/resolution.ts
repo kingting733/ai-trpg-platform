@@ -391,6 +391,105 @@ export function resolveAttack(
 }
 
 
+// ─── Conservative fuzzy NPC-name matching (attack targeting) ─────────────────
+// Deterministic, no LLM. Only ever ranks a room's KNOWN living NPCs, and the
+// caller gates it behind a confirmed attack verb — so the surface is tiny. Edit
+// distance tolerance is fixed at ≤1 (single-char typos / homophones only). Every
+// accepted match must clear a score floor AND clearly beat the runner-up, so an
+// ambiguous input never silently targets the wrong NPC.
+
+/** True iff Levenshtein(a, b) ≤ 1. Fast two-pointer, no full DP matrix. */
+export function withinEditDistance1(a: string, b: string): boolean {
+  if (a === b) return true;
+  let sa = a, sb = b;
+  if (sa.length > sb.length) { const t = sa; sa = sb; sb = t; } // sa = shorter
+  if (sb.length - sa.length > 1) return false;
+  let i = 0, j = 0;
+  let diffUsed = false;
+  while (i < sa.length && j < sb.length) {
+    if (sa[i] === sb[j]) { i++; j++; continue; }
+    if (diffUsed) return false;
+    diffUsed = true;
+    if (sa.length === sb.length) { i++; j++; } // substitution
+    else { j++; }                              // deletion from the longer string
+  }
+  return true; // at most one unmatched trailing char remains → distance ≤ 1
+}
+
+/** Distinctive Latin word-tokens of a name (length ≥ 4), lower-cased. */
+function latinNameSegments(name: string): string[] {
+  return name.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 4);
+}
+
+/** Score how strongly an action text refers to one NPC name. 0 = no match. */
+function scoreNpcNameMatch(actionLower: string, name: string): number {
+  const n = name.trim().toLowerCase();
+  if (!n) return 0;
+
+  // Tier 1 — full name appears verbatim (case-insensitive).
+  if (n.length >= 2 && actionLower.includes(n)) return 1000 + n.length;
+
+  let best = 0;
+
+  // Tier 2 — a distinctive Latin word-segment appears (e.g. surname alone).
+  for (const seg of latinNameSegments(name)) {
+    if (actionLower.includes(seg)) best = Math.max(best, 100 + seg.length);
+  }
+
+  // Tier 3 — single-char typo / homophone (distance ≤ 1).
+  //   Latin: compare word tokens of comparable length.
+  const latinUnits = [n.replace(/[^a-z0-9]/g, ""), ...latinNameSegments(name)].filter((u) => u.length >= 4);
+  if (latinUnits.length) {
+    const tokens = actionLower.split(/[^a-z0-9]+/).filter(Boolean);
+    for (const unit of latinUnits) {
+      for (const tok of tokens) {
+        if (Math.abs(tok.length - unit.length) <= 1 && withinEditDistance1(tok, unit)) {
+          best = Math.max(best, 50);
+        }
+      }
+    }
+  }
+  //   CJK: slide a window (name length ±1) over Han runs of the action.
+  const cjk = name.replace(/[^㐀-鿿]/g, "");
+  if (cjk.length >= 2) {
+    const runs = actionLower.match(/[㐀-鿿]+/g) ?? [];
+    for (const run of runs) {
+      for (const wl of [cjk.length, cjk.length - 1, cjk.length + 1]) {
+        if (wl < 2) continue;
+        for (let i = 0; i + wl <= run.length; i++) {
+          if (withinEditDistance1(run.slice(i, i + wl), cjk)) { best = Math.max(best, 50); break; }
+        }
+      }
+    }
+  }
+
+  return best;
+}
+
+/**
+ * Resolve which known NPC an attack action refers to, tolerating single-char
+ * typos and distinctive partial/nickname mentions. Returns null when nothing
+ * clears the floor OR when the top two candidates are too close to call (so an
+ * ambiguous input never guesses). Candidates should already be filtered to
+ * LIVING NPCs by the caller.
+ */
+export function resolveFuzzyNpcTarget(actionText: string, candidateNames: string[]): string | null {
+  const action = actionText.trim().toLowerCase();
+  if (!action || candidateNames.length === 0) return null;
+
+  const MIN_SCORE = 50;
+  const scored = candidateNames
+    .map((name) => ({ name, score: scoreNpcNameMatch(action, name) }))
+    .filter((s) => s.score >= MIN_SCORE)
+    .sort((a, b) => b.score - a.score);
+
+  if (scored.length === 0) return null;
+  const [best, second] = scored;
+  // Ambiguity guard: the winner must clearly beat the runner-up.
+  if (second && best.score < second.score * 2) return null;
+  return best.name;
+}
+
 /** First-aid heal amount — tied to the 急救 skill check outcome. */
 export function rollFirstAidHeal(outcome: Outcome): number {
   if (outcome === "critical_success") return rollDiceN(1, 3) + 1;

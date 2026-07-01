@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   resolveAction, rollInjuryDamage, rollFirstAidHeal, InjurySeverity,
   detectAttackType, resolveAttack, dodgeValueOf, NPC_DEFAULT_DODGE, AttackResult,
+  resolveFuzzyNpcTarget,
 } from "@/lib/game/resolution";
 import { refreshStorySummary } from "@/lib/ai/summarize";
 import { coerceEndings, evaluateEndings, type ScenarioEnding } from "@/lib/game/endings";
@@ -143,9 +144,16 @@ export async function POST(request: Request) {
         ...trackedNames,
         ...scenarioNpcs.map((n) => n.name),
       ]));
-      targetNpcName = knownNpcNames.find(
-        (name) => actionText.includes(name) && (npcStateEntry(name, npcRoster, npcStateNow)?.alive !== false)
-      ) ?? null;
+      const livingKnown = knownNpcNames.filter(
+        (name) => npcStateEntry(name, npcRoster, npcStateNow)?.alive !== false
+      );
+      targetNpcName = livingKnown.find((name) => actionText.includes(name)) ?? null;
+      // Conservative fuzzy fallback — tolerate single-char typos / distinctive
+      // partial mentions ("阿哲" for 阿澤, "reys" for Reyes). Never guesses
+      // between close candidates. Runs only when the exact match above missed.
+      if (!targetNpcName) {
+        targetNpcName = resolveFuzzyNpcTarget(actionText, livingKnown);
+      }
     }
 
     // Unnamed-target fallback ("attack her", "kill it", or a bare "attack"):
