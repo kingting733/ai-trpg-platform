@@ -116,6 +116,27 @@ function StatBar({ label, cur, max, pct, color }: {
   );
 }
 
+// Inline markup the GM may emit: **bold** plus curated dramatic effect spans
+// [[dread]] / [[whisper]] / [[chant]]. Any unrecognized [[...]] marker is
+// stripped so raw tags never leak to players.
+const FX_SPAN = /(\*\*[\s\S]+?\*\*|\[\[(?:dread|whisper|chant)\]\][\s\S]+?\[\[\/(?:dread|whisper|chant)\]\])/g;
+
+function renderInline(text: string) {
+  return text.split(FX_SPAN).map((part, j) => {
+    let m: RegExpMatchArray | null;
+    if ((m = part.match(/^\*\*([\s\S]+?)\*\*$/)))
+      return <strong key={j} className="text-white font-semibold">{m[1]}</strong>;
+    if ((m = part.match(/^\[\[dread\]\]([\s\S]+?)\[\[\/dread\]\]$/)))
+      return <span key={j} className="fx-dread">{m[1]}</span>;
+    if ((m = part.match(/^\[\[whisper\]\]([\s\S]+?)\[\[\/whisper\]\]$/)))
+      return <span key={j} className="fx-whisper">{m[1]}</span>;
+    if ((m = part.match(/^\[\[chant\]\]([\s\S]+?)\[\[\/chant\]\]$/)))
+      return <span key={j} className="fx-chant">{m[1]}</span>;
+    // Plain text — strip any stray/typo'd effect markers.
+    return part.replace(/\[\[\/?[a-zA-Z]+\]\]/g, "");
+  });
+}
+
 function GmText({ content }: { content: string }) {
   const paragraphs = content.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
   if (paragraphs.length === 0) return null;
@@ -127,14 +148,9 @@ function GmText({ content }: { content: string }) {
         if (headerMatch) {
           return <p key={i} className="text-gold font-semibold text-sm">{headerMatch[1]}</p>;
         }
-        // Inline **bold** within a line
-        const parts = para.split(/(\*\*.+?\*\*)/g);
         return (
           <p key={i} className="text-zinc-300 text-sm leading-relaxed">
-            {parts.map((part, j) => {
-              const m = part.match(/^\*\*(.+?)\*\*$/);
-              return m ? <strong key={j} className="text-white font-semibold">{m[1]}</strong> : part;
-            })}
+            {renderInline(para)}
           </p>
         );
       })}

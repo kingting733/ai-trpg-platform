@@ -23,3 +23,35 @@ body {
 ::-webkit-scrollbar-track { background: #0c0a07; }
 ::-webkit-scrollbar-thumb { background: #2a2418; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #3a3428; }
+
+/* ─── GM narration text effects (emitted by the GM as [[dread]] / [[whisper]] /
+   [[chant]] spans, rendered by GmText). Curated, on-theme, used sparingly. ─── */
+.fx-dread {
+  color: #ef4444;
+  font-weight: 700;
+  font-size: 1.08em;
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 8px rgba(239, 68, 68, 0.35);
+  animation: fx-dread-flicker 3.4s ease-in-out infinite;
+}
+@keyframes fx-dread-flicker {
+  0%, 100% { opacity: 1;    text-shadow: 0 0 8px rgba(239, 68, 68, 0.35); }
+  47%      { opacity: 0.94; }
+  50%      { opacity: 0.78; text-shadow: 0 0 3px rgba(239, 68, 68, 0.18); }
+  53%      { opacity: 0.96; }
+}
+.fx-whisper {
+  color: #6b7280;
+  font-style: italic;
+  font-size: 0.86em;
+  letter-spacing: 0.01em;
+}
+.fx-chant {
+  color: #c9a96e;
+  font-style: italic;
+  letter-spacing: 0.14em;
+}
+/* Respect users who prefer no motion. */
+@media (prefers-reduced-motion: reduce) {
+  .fx-dread { animation: none; }
+}

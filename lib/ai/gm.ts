@@ -380,6 +380,11 @@ NARRATION FORMAT:
 - First paragraph: the immediate outcome of the action.
 - Then at most one or two short paragraphs of atmosphere, NPC reaction, or what the characters notice as the scene settles — include only when they genuinely add something.
 - Use **bold text** for important names, locations, or dramatic moments.
+- DRAMATIC TEXT EFFECTS — use SPARINGLY, at most ONE span per turn and ONLY at a genuine peak. Wrap just a few words:
+  • [[dread]]…[[/dread]] — a horrifying reveal or moment of pure terror (renders large and blood-red).
+  • [[whisper]]…[[/whisper]] — something ghostly, faint, or barely audible.
+  • [[chant]]…[[/chant]] — occult words, an incantation, or an eldritch utterance.
+  Never decorate ordinary text with these; if in doubt, leave it plain. Most turns should use none.
 - Do NOT use bullet points or numbered lists inside the narration.
 
 INJURY REPORTING RULE:
