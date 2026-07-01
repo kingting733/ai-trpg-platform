@@ -33,5 +33,5 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.redirect(`${origin}/play/hub`);
+  return NextResponse.redirect(`${origin}/`);
 }

@@ -63,7 +63,7 @@ export default function SignupPage() {
 
     if (data.session) {
       // No email confirmation required — profile created by DB trigger, go straight in
-      router.push("/play/hub");
+      router.push("/");
       router.refresh();
       return;
     }
