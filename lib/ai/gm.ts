@@ -380,8 +380,11 @@ NARRATION FORMAT:
 - First paragraph: the immediate outcome of the action.
 - Then at most one or two short paragraphs of atmosphere, NPC reaction, or what the characters notice as the scene settles — include only when they genuinely add something.
 - Use **bold text** for important names, locations, or dramatic moments.
+- Wrap a genuinely crucial piece of information the players must not miss (a vital clue, a number, a name, a warning) in [[key]]…[[/key]] — it renders as a highlighted note. Use at most once per turn; not for ordinary emphasis (that is what **bold** is for).
+- To break a long narration into beats, put a line containing only --- on its own (blank line above and below). It renders as a subtle divider. Use only when the scene genuinely shifts; do not divide every turn.
 - DRAMATIC TEXT EFFECTS — use SPARINGLY, at most ONE span per turn and ONLY at a genuine peak. Wrap just a few words:
   • [[dread]]…[[/dread]] — a horrifying reveal or moment of pure terror (renders large and blood-red).
+  • [[eerie]]…[[/eerie]] — a SMALL creeping unease or wrong little detail (a subtler, quieter horror than dread).
   • [[whisper]]…[[/whisper]] — something ghostly, faint, or barely audible.
   • [[chant]]…[[/chant]] — occult words, an incantation, or an eldritch utterance.
   Never decorate ordinary text with these; if in doubt, leave it plain. Most turns should use none.

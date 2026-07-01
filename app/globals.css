@@ -51,6 +51,26 @@ body {
   font-style: italic;
   letter-spacing: 0.14em;
 }
+/* Important info to make the player take notice — a marked highlight, distinct
+   from plain **bold** emphasis. */
+.fx-key {
+  color: #ecd9ac;
+  font-weight: 600;
+  border-bottom: 1px dotted rgba(201, 169, 110, 0.6);
+}
+/* A smaller, quieter horror than [[dread]] — a creeping unease, an odd detail. */
+.fx-eerie {
+  color: #b45c5c;
+  font-style: italic;
+}
+/* Section break for 分段 — a subtle decorative divider between beats. */
+.fx-divider {
+  border: none;
+  height: 1px;
+  width: 55%;
+  margin: 0.9rem auto;
+  background: linear-gradient(90deg, transparent, rgba(201, 169, 110, 0.4), transparent);
+}
 /* Respect users who prefer no motion. */
 @media (prefers-reduced-motion: reduce) {
   .fx-dread { animation: none; }

@@ -119,19 +119,19 @@ function StatBar({ label, cur, max, pct, color }: {
 // Inline markup the GM may emit: **bold** plus curated dramatic effect spans
 // [[dread]] / [[whisper]] / [[chant]]. Any unrecognized [[...]] marker is
 // stripped so raw tags never leak to players.
-const FX_SPAN = /(\*\*[\s\S]+?\*\*|\[\[(?:dread|whisper|chant)\]\][\s\S]+?\[\[\/(?:dread|whisper|chant)\]\])/g;
+const FX_TAGS = "dread|whisper|chant|key|eerie";
+const FX_SPAN = new RegExp(`(\\*\\*[\\s\\S]+?\\*\\*|\\[\\[(?:${FX_TAGS})\\]\\][\\s\\S]+?\\[\\[\\/(?:${FX_TAGS})\\]\\])`, "g");
+const FX_CLASS: Record<string, string> = {
+  dread: "fx-dread", whisper: "fx-whisper", chant: "fx-chant", key: "fx-key", eerie: "fx-eerie",
+};
 
 function renderInline(text: string) {
   return text.split(FX_SPAN).map((part, j) => {
     let m: RegExpMatchArray | null;
     if ((m = part.match(/^\*\*([\s\S]+?)\*\*$/)))
       return <strong key={j} className="text-white font-semibold">{m[1]}</strong>;
-    if ((m = part.match(/^\[\[dread\]\]([\s\S]+?)\[\[\/dread\]\]$/)))
-      return <span key={j} className="fx-dread">{m[1]}</span>;
-    if ((m = part.match(/^\[\[whisper\]\]([\s\S]+?)\[\[\/whisper\]\]$/)))
-      return <span key={j} className="fx-whisper">{m[1]}</span>;
-    if ((m = part.match(/^\[\[chant\]\]([\s\S]+?)\[\[\/chant\]\]$/)))
-      return <span key={j} className="fx-chant">{m[1]}</span>;
+    if ((m = part.match(new RegExp(`^\\[\\[(${FX_TAGS})\\]\\]([\\s\\S]+?)\\[\\[\\/\\1\\]\\]$`))))
+      return <span key={j} className={FX_CLASS[m[1]]}>{m[2]}</span>;
     // Plain text — strip any stray/typo'd effect markers.
     return part.replace(/\[\[\/?[a-zA-Z]+\]\]/g, "");
   });
@@ -143,6 +143,10 @@ function GmText({ content }: { content: string }) {
   return (
     <div className="space-y-2">
       {paragraphs.map((para, i) => {
+        // Section break (分段): a line of --- / *** / [[break]] → decorative divider.
+        if (/^(-{3,}|\*{3,}|\[\[break\]\])$/.test(para)) {
+          return <hr key={i} className="fx-divider" />;
+        }
         // Bold header: paragraph that is entirely **...**
         const headerMatch = para.match(/^\*\*(.+?)\*\*$/);
         if (headerMatch) {
