@@ -574,35 +574,27 @@ export function looksLikeTravel(actionText: string): boolean {
   return TRAVEL_RE.test(actionText);
 }
 
-/** Match evidence at the current location against a successful search action.
- *  Returns the evidence to award (name/how segment match, or the only
- *  remaining piece on a generic search). */
+/** Evidence to award at the current location on a successful search action.
+ *  If the action names specific piece(s) (by name or 取得方式), award those;
+ *  otherwise a generic successful search reveals ALL remaining clues here. */
 export function matchEvidence(
   actionText: string,
   graph: LocationGraph,
   state: LocationState
-): EvidenceDef | null {
-  if (!state.current) return null;
+): EvidenceDef[] {
+  if (!state.current) return [];
   const node = graph.nodes.find((n) => n.id === state.current);
-  if (!node) return null;
+  if (!node) return [];
   const unfound = node.evidence.filter((e) => !state.evidence_found.includes(e.id));
-  if (unfound.length === 0) return null;
+  if (unfound.length === 0) return [];
   const a = actionText.toLowerCase();
-  let best: EvidenceDef | null = null;
-  let bestScore = 0;
-  for (const e of unfound) {
-    const score = Math.max(mentionScore(a, e.name), e.how ? mentionScore(a, e.how) : 0);
-    if (score > bestScore) {
-      best = e;
-      bestScore = score;
-    }
-  }
-  if (best) return best;
-  // Generic successful search (the action named no specific piece): award the
-  // NEXT unfound clue at this location — one per successful check. A passed 偵查
-  // in a room should reveal one of its clues; the dice gate repeats, and a
-  // targeted phrasing above still prioritises the specific piece it names.
-  return unfound[0] ?? null;
+  // Specific matches: every unfound piece the action names by name or 取得方式.
+  const specific = unfound.filter(
+    (e) => mentionScore(a, e.name) > 0 || (e.how ? mentionScore(a, e.how) > 0 : false)
+  );
+  if (specific.length) return specific;
+  // Generic successful search: award ALL remaining clues at this location.
+  return unfound;
 }
 
 // ── GM directive block ────────────────────────────────────────────────────────

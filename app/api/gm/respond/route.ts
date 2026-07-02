@@ -452,8 +452,10 @@ export async function POST(request: Request) {
       (roll.outcome === "success" || roll.outcome === "critical_success") &&
       SEARCH_RE.test(actionText);
     if (searchOk) {
-      const ev = matchEvidence(actionText, locationGraph, locState);
-      if (ev) {
+      // A successful search awards every clue the action covers (all remaining
+      // clues here on a generic search; the named ones on a targeted search).
+      const found = matchEvidence(actionText, locationGraph, locState);
+      for (const ev of found) {
         locState.evidence_found.push(ev.id);
         locationProgress = true;
         evidenceAwardedThisTurn.push({ name: ev.name, id: ev.id });
