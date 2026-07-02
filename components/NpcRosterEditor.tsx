@@ -156,6 +156,31 @@ export function NpcRosterEditor({
               </div>
             </details>
 
+            {/* Combat stance — drives the server-authoritative NPC attacks. */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-1">
+              <label className="flex items-center gap-2" title="hostile：一登場就攻擊隊伍；neutral：被攻擊後才反擊；friendly：從不主動攻擊">
+                <span className="text-xs text-slate-400">⚔ 戰鬥立場</span>
+                <select
+                  value={npc.disposition ?? "neutral"}
+                  onChange={(e) => update(i, { disposition: e.target.value as NpcEntry["disposition"] })}
+                  className="bg-slate-900 border border-slate-600 rounded-lg px-2 py-1 text-white text-xs focus:outline-none focus:border-zinc-500"
+                >
+                  <option value="neutral">中立（被攻擊才反擊）</option>
+                  <option value="hostile">敵對（登場即攻擊）</option>
+                  <option value="friendly">友善（從不攻擊）</option>
+                </select>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer select-none" title="持有槍械等遠程武器：攻擊改用射擊，較難閃避">
+                <input
+                  type="checkbox"
+                  checked={!!npc.armed}
+                  onChange={(e) => update(i, { armed: e.target.checked })}
+                  className="accent-amber-500 w-4 h-4"
+                />
+                <span className="text-xs text-slate-300">🔫 持有遠程武器（射擊）</span>
+              </label>
+            </div>
+
             <label className="flex items-center gap-2 cursor-pointer select-none mt-1">
               <input
                 type="checkbox"

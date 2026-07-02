@@ -27,12 +27,14 @@ import {
   applyDiscovers,
   evaluateUnlocks,
   evaluateEncounters,
+  evaluateNpcPlacements,
   buildLocationBlock,
   locationShortName,
   type TravelDirective,
   type NpcEncounter,
 } from "@/lib/game/locations";
 import { type NpcRef, resolveNpc, npcStateKey, npcStateEntry, npcDisplayName } from "@/lib/game/npc";
+import { npcAsAttacker, npcAttackType, coerceDisposition } from "@/lib/game/npc-combat";
 import {
   coerceInventory,
   applyItemEvents,
@@ -114,7 +116,7 @@ export async function POST(request: Request) {
     ? (room as any).scenarios.npcs.filter((n: any) => n && typeof n === "object" && typeof n.name === "string")
     : [];
   const npcRoster: NpcRef[] = scenarioNpcs.map((n) => ({ id: n.id, name: n.name }));
-  let npcStateNow: Record<string, { hp: number; max_hp: number; alive: boolean }> =
+  let npcStateNow: Record<string, { hp: number; max_hp: number; alive: boolean; hostile?: boolean; last_attack_round?: number }> =
     (room.npc_states && typeof room.npc_states === "object") ? room.npc_states : {};
 
   let roll = null as ReturnType<typeof resolveAction> | null;
@@ -266,6 +268,23 @@ export async function POST(request: Request) {
       attackSystemLog = attack.dodged
         ? `🌀 ${attack.target_name} 閃避了 ${resolvedActor.name} 的攻擊。`
         : `✖ ${resolvedActor.name} 的攻擊落空。`;
+    }
+
+    // RETALIATION — attacking an NPC (hit or miss) turns it hostile, so it
+    // fights back via the NPC-aggression pass below.
+    if (isNpc) {
+      const states = { ...npcStateNow };
+      const key = npcStateKey(targetName, npcRoster);
+      const existing: any = states[key] ?? npcStateEntry(targetName, npcRoster, states);
+      if (existing) {
+        states[key] = { ...existing, hostile: true };
+      } else {
+        const declared = resolveNpc(targetName, scenarioNpcs);
+        const maxHp = declared && typeof declared.hp === "number" ? declared.hp : 10;
+        states[key] = { hp: maxHp, max_hp: maxHp, alive: true, hostile: true };
+      }
+      npcStateNow = states;
+      await supabase.from("rooms").update({ npc_states: npcStateNow }).eq("id", roomId);
     }
 
     // Build a RollResult so the existing dice UI shows the attacker's to-hit roll,
@@ -550,6 +569,94 @@ export async function POST(request: Request) {
     }
   }
 
+  // === NPC AGGRESSION (server-authoritative) ===
+  // Hostile NPCs present in the scene attack a player ONCE per round, using the
+  // same resolveAttack machinery players use (to-hit vs 閃避, damage + STR/SIZ
+  // bonus, crit, fumble). The GM only narrates the outcomes computed here.
+  const npcActionLines: string[] = [];
+  if (resolvedActor) {
+    const placedNames = locationGraph && locState
+      ? evaluateNpcPlacements(locationGraph, locState, room.current_round, objProgress)
+      : [];
+    const sceneRefs = Array.from(new Set([...placedNames, ...Object.keys(npcStateNow)]));
+
+    const states: Record<string, any> = { ...npcStateNow };
+    let statesChanged = false;
+    const MAX_NPC_ATTACKS = 3; // bound a big mob scene in a single turn
+    let attacksDone = 0;
+
+    for (const ref of sceneRefs) {
+      if (attacksDone >= MAX_NPC_ATTACKS) break;
+      const key = npcStateKey(ref, npcRoster);
+      const st: any = states[key] ?? npcStateEntry(ref, npcRoster, states);
+      const declared: any = resolveNpc(ref, scenarioNpcs);
+      const disposition = coerceDisposition(declared?.disposition);
+      const alive = st?.alive !== false;
+      const hostile = st?.hostile === true || disposition === "hostile";
+      const lastRound = st?.last_attack_round ?? -1;
+      if (!alive || disposition === "friendly" || !hostile || lastRound >= room.current_round) continue;
+
+      // Target: the acting player if alive, else a random living player.
+      const living = sortedByDex.filter((c: any) => c.hp > 0 && c.san > 0);
+      if (living.length === 0) break;
+      const target =
+        living.find((c: any) => c.id === resolvedActor.id) ??
+        living[Math.floor(Math.random() * living.length)];
+
+      const maxHp = st?.max_hp ?? (typeof declared?.hp === "number" ? declared.hp : 10);
+      const curNpc = st ?? { hp: maxHp, max_hp: maxHp, alive: true };
+      const npcName = npcDisplayName(ref, npcRoster);
+      const profile = {
+        str: declared?.str, siz: declared?.siz, dex: declared?.dex,
+        skills: declared?.skills ?? null, armed: declared?.armed === true,
+      };
+      const result = resolveAttack(
+        npcAsAttacker(profile), dodgeValueOf(target), npcAttackType(profile), target.name, false,
+      );
+
+      let logLine: string;
+      if (result.damage > 0) {
+        const newHp = Math.max(0, target.hp - result.damage);
+        await supabase.from("characters").update({ hp: newHp }).eq("id", target.id);
+        target.hp = newHp; // keep roster in sync for turn-advance & all-dead checks
+        logLine = newHp > 0
+          ? `💢 ${target.name} 被 ${npcName} 的${result.skill_label}攻擊命中（−${result.damage} HP，剩餘 ${newHp}）`
+          : `☠ ${target.name} 被 ${npcName} 擊倒。`;
+        npcActionLines.push(`${npcName} attacked ${target.name} and HIT for ${result.damage} damage${newHp <= 0 ? ` — ${target.name} is DOWN` : ""}.`);
+        attackLedgerEntries.push({
+          turn: room.current_round, type: newHp <= 0 ? "death" : "event", character: target.name,
+          fact: newHp <= 0 ? `被 ${npcName} 擊倒` : `被 ${npcName} 攻擊（−${result.damage} HP）`,
+        });
+        states[key] = { ...curNpc, hostile: true, last_attack_round: room.current_round };
+      } else if (result.fumble) {
+        const selfDmg = rollInjuryDamage("minor").amount; // 1d2
+        const nHp = Math.max(0, curNpc.hp - selfDmg);
+        states[key] = { ...curNpc, hp: nHp, alive: nHp > 0, hostile: true, last_attack_round: room.current_round };
+        logLine = `💥 ${npcName} 攻擊大失敗，反傷自己（−${selfDmg} HP）。`;
+        npcActionLines.push(`${npcName} fumbled its attack and hurt itself.`);
+      } else {
+        logLine = result.dodged
+          ? `🌀 ${target.name} 閃避了 ${npcName} 的攻擊。`
+          : `✖ ${npcName} 的攻擊落空。`;
+        npcActionLines.push(result.dodged
+          ? `${npcName} attacked ${target.name}, who DODGED.`
+          : `${npcName} attacked ${target.name} but MISSED.`);
+        states[key] = { ...curNpc, hostile: true, last_attack_round: room.current_round };
+      }
+
+      statesChanged = true;
+      attacksDone++;
+      await supabase.from("story_logs").insert({
+        room_id: roomId, round_number: room.current_round, entry_type: "system", content: logLine,
+      });
+    }
+
+    if (statesChanged) {
+      npcStateNow = states;
+      await supabase.from("rooms").update({ npc_states: npcStateNow }).eq("id", roomId);
+    }
+  }
+
   // Advance turn — skip characters who are dead (HP<=0 or SAN<=0). nextActor = now-active character.
   const isDown = (c: any) => c.hp <= 0 || c.san <= 0;
   let nextRound = room.current_round;
@@ -753,6 +860,9 @@ export async function POST(request: Request) {
     objectiveDirective,
     locationDirective,
     inventoryDirective: buildInventoryBlock(inventory),
+    npcActionDirective: npcActionLines.length
+      ? `NPC ACTIONS THIS TURN (the system already resolved these hostile-NPC attacks — narrate them AS THEY HAPPENED; do NOT invent different outcomes, extra attacks, or attacks that were not listed):\n${npcActionLines.map((l) => `- ${l}`).join("\n")}`
+      : null,
     currentRound: room.current_round,
     actingCharacterName: resolvedActor?.name ?? "Unknown",
     nextCharacterName: nextActor?.name ?? "Unknown",
