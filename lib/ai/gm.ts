@@ -75,7 +75,7 @@ export interface GMAIInput {
   /** Last 3 raw turns for immediate continuity. */
   storyLogSoFar: string[];
   /** NPCs that have taken damage — so the GM narrates their condition consistently. */
-  npcStates?: Record<string, { hp: number; max_hp: number; alive: boolean; name?: string }> | null;
+  npcStates?: Record<string, { hp: number; max_hp: number; alive: boolean; name?: string; hostile?: boolean }> | null;
   /** GM-only objective progress block — so the GM never re-narrates a done goal. */
   objectiveDirective?: string | null;
   /** Server-authoritative location system block (current place, exits, travel
@@ -475,10 +475,11 @@ export function buildTurnMessage(input: GMAIInput): string {
   // desperate/fleeing, etc. Server owns these HP values; do not invent others.
   const trackedNpcs = Object.entries(input.npcStates ?? {});
   const npcBlock = trackedNpcs.length
-    ? `NPC STATUS (server-tracked — obey these; a dead NPC cannot act, a wounded one shows it):\n${trackedNpcs
+    ? `NPC STATUS (server-tracked — obey these; a dead NPC cannot act, a wounded one shows it, a hostile one is actively attacking the party — narrate it as such):\n${trackedNpcs
         .map(([key, s]) => {
           const name = s.name ?? key;
-          return s.alive ? `- ${name}: HP ${s.hp}/${s.max_hp}（負傷）` : `- ${name}: 已死亡 ☠`;
+          if (!s.alive) return `- ${name}: 已死亡 ☠`;
+          return `- ${name}: HP ${s.hp}/${s.max_hp}（負傷）${s.hostile ? " ⚔ 敵對，正在攻擊隊伍" : ""}`;
         })
         .join("\n")}\n`
     : "";

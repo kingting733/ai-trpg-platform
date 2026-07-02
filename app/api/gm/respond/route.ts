@@ -878,7 +878,16 @@ export async function POST(request: Request) {
   // keyed by stable id rather than name.
   const npcStatesForPrompt = Object.keys(npcStateNow).length
     ? Object.fromEntries(
-        Object.entries(npcStateNow).map(([key, v]) => [key, { ...v, name: npcDisplayName(key, npcRoster) }])
+        Object.entries(npcStateNow).map(([key, v]) => [
+          key,
+          {
+            ...v,
+            name: npcDisplayName(key, npcRoster),
+            // Effective hostility (stance ?? legacy ?? disposition) so the GM
+            // narrates a hostile NPC as hostile even on turns it doesn't swing.
+            hostile: isNpcHostile(v, coerceDisposition((resolveNpc(key, scenarioNpcs) as any)?.disposition)),
+          },
+        ])
       )
     : null;
 
