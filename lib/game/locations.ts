@@ -598,9 +598,11 @@ export function matchEvidence(
     }
   }
   if (best) return best;
-  // Generic successful search: if exactly ONE piece remains here, award it.
-  if (unfound.length === 1) return unfound[0];
-  return null;
+  // Generic successful search (the action named no specific piece): award the
+  // NEXT unfound clue at this location — one per successful check. A passed 偵查
+  // in a room should reveal one of its clues; the dice gate repeats, and a
+  // targeted phrasing above still prioritises the specific piece it names.
+  return unfound[0] ?? null;
 }
 
 // ── GM directive block ────────────────────────────────────────────────────────
