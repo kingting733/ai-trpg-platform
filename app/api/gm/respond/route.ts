@@ -445,16 +445,14 @@ export async function POST(request: Request) {
       }
     }
 
-    // 2. EVIDENCE — a successful search at the current location can award a
-    //    defined evidence piece (named in the action, or the only one left).
-    const searchOk =
+    // 2. EVIDENCE — a passed check can award clues at the current location. A
+    //    generic search reveals search-obtainable clues; a specific action
+    //    (e.g. 破壞電腦) reveals the clue whose 取得方式 it matches.
+    const passedCheck =
       !!roll?.requires_check &&
-      (roll.outcome === "success" || roll.outcome === "critical_success") &&
-      SEARCH_RE.test(actionText);
-    if (searchOk) {
-      // A successful search awards every clue the action covers (all remaining
-      // clues here on a generic search; the named ones on a targeted search).
-      const found = matchEvidence(actionText, locationGraph, locState);
+      (roll.outcome === "success" || roll.outcome === "critical_success");
+    if (passedCheck) {
+      const found = matchEvidence(actionText, locationGraph, locState, SEARCH_RE.test(actionText));
       for (const ev of found) {
         locState.evidence_found.push(ev.id);
         locationProgress = true;

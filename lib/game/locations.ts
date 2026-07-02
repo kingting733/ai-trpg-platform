@@ -574,13 +574,28 @@ export function looksLikeTravel(actionText: string): boolean {
   return TRAVEL_RE.test(actionText);
 }
 
-/** Evidence to award at the current location on a successful search action.
- *  If the action names specific piece(s) (by name or 取得方式), award those;
- *  otherwise a generic successful search reveals ALL remaining clues here. */
+// Does a clue's 取得方式 (how) describe a plain SEARCH (so a generic search of
+// the room reveals it), vs a specific action like breaking/prying something? An
+// empty how means "just search here".
+const HOW_SEARCH_RE = /搜|查|翻|找|閱|讀|看|探|search|investigat|examin|inspect|look|explor|read/i;
+function howIsGenericSearch(how?: string): boolean {
+  const h = (how ?? "").trim();
+  return h === "" || HOW_SEARCH_RE.test(h);
+}
+
+/**
+ * Evidence to award at the current location for a successful action. A clue is
+ * awarded when the action MATCHES it — either it names the clue / performs its
+ * 取得方式 (so "破壞電腦" yields the break-the-computer clue), or, when the action
+ * is a generic search, the clue is search-obtainable (its 取得方式 is a search or
+ * is unspecified). Action-specific clues are therefore NOT handed out by plain
+ * searching. `isSearch` = the action reads like a search.
+ */
 export function matchEvidence(
   actionText: string,
   graph: LocationGraph,
-  state: LocationState
+  state: LocationState,
+  isSearch: boolean
 ): EvidenceDef[] {
   if (!state.current) return [];
   const node = graph.nodes.find((n) => n.id === state.current);
@@ -588,13 +603,23 @@ export function matchEvidence(
   const unfound = node.evidence.filter((e) => !state.evidence_found.includes(e.id));
   if (unfound.length === 0) return [];
   const a = actionText.toLowerCase();
-  // Specific matches: every unfound piece the action names by name or 取得方式.
-  const specific = unfound.filter(
-    (e) => mentionScore(a, e.name) > 0 || (e.how ? mentionScore(a, e.how) > 0 : false)
-  );
-  if (specific.length) return specific;
-  // Generic successful search: award ALL remaining clues at this location.
-  return unfound;
+
+  const out: EvidenceDef[] = [];
+  const taken = new Set<string>();
+  // 1. The action names the clue, or performs its 取得方式 (method match).
+  for (const e of unfound) {
+    if (mentionScore(a, e.name) > 0 || (e.how ? mentionScore(a, e.how) > 0 : false)) {
+      out.push(e);
+      taken.add(e.id);
+    }
+  }
+  // 2. A generic search additionally reveals every search-obtainable clue here.
+  if (isSearch) {
+    for (const e of unfound) {
+      if (!taken.has(e.id) && howIsGenericSearch(e.how)) out.push(e);
+    }
+  }
+  return out;
 }
 
 // ── GM directive block ────────────────────────────────────────────────────────
