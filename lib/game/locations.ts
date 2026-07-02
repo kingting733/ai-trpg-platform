@@ -494,25 +494,41 @@ function mentionScore(actionLower: string, name: string): number {
   return best;
 }
 
-/** Find the location the action most plausibly refers to (any status). */
+/** Find the location the action most plausibly refers to (any status).
+ *
+ *  Scoring, strongest first: full short-name match, then a whole distinctive
+ *  segment, then a PARTIAL match — a CJK chunk (≥2 chars) the player typed that
+ *  is a substring of the name (so "神位" reaches "1404神位", whose number is glued
+ *  to the name and forms one segment). Partial matches are weak and gated by an
+ *  ambiguity guard: if two locations match a partial equally, we decline rather
+ *  than guess. */
 export function detectTravelTarget(
   actionText: string,
   graph: LocationGraph,
   state: LocationState
 ): { node: LocationNode; status: LocationStatus } | null {
   const a = actionText.toLowerCase();
-  let best: LocationNode | null = null;
-  let bestScore = 0;
+  const cjkRuns = (a.match(/[㐀-鿿]+/g) ?? []).filter((r) => r.length >= 2);
+  const scored: { node: LocationNode; score: number }[] = [];
   for (const node of graph.nodes) {
     if (node.id === state.current) continue;
-    const score = mentionScore(a, node.name);
-    if (score > bestScore) {
-      best = node;
-      bestScore = score;
+    let score = mentionScore(a, node.name); // exact / whole-segment (≥100)
+    if (score === 0) {
+      // Partial: a CJK chunk the player typed appears inside the name.
+      const nameLower = node.name.toLowerCase();
+      for (const run of cjkRuns) {
+        if (nameLower.includes(run) && run.length > score) score = run.length;
+      }
     }
+    if (score > 0) scored.push({ node, score });
   }
-  if (!best) return null;
-  return { node: best, status: state.status[best.id] ?? "hidden" };
+  if (scored.length === 0) return null;
+  scored.sort((x, y) => y.score - x.score);
+  const [best, second] = scored;
+  // Weak (partial, <100) matches must clearly beat the runner-up, else it's
+  // ambiguous ("神位" shared by two rooms) and we don't guess.
+  if (best.score < 100 && second && best.score < second.score * 2) return null;
+  return { node: best.node, status: state.status[best.node.id] ?? "hidden" };
 }
 
 /** Does the action look like the party is trying to GO somewhere (vs just
