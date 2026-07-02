@@ -531,6 +531,39 @@ export function detectTravelTarget(
   return { node: best.node, status: state.status[best.node.id] ?? "hidden" };
 }
 
+/**
+ * Validate a GM-declared move_to against the authoritative state. Accepts ONLY
+ * unlocked, non-current nodes — the GM can express the player's intent, but it
+ * can never move the party somewhere the server hasn't opened. Name matching is
+ * tolerant (exact > substring > segment/partial) since the GM may echo a short
+ * form of the node name.
+ */
+export function resolveMoveTarget(
+  name: string,
+  graph: LocationGraph,
+  state: LocationState
+): LocationNode | null {
+  const q = name.trim().toLowerCase();
+  if (!q) return null;
+  let best: LocationNode | null = null;
+  let bestScore = 0;
+  for (const node of graph.nodes) {
+    if (node.id === state.current) continue;
+    if (state.status[node.id] !== "unlocked") continue; // locked/hidden: never
+    const full = node.name.trim().toLowerCase();
+    const sn = shortName(node.name).toLowerCase();
+    let score = 0;
+    if (q === full || q === sn) score = 1000;
+    else if (full.includes(q) || q.includes(sn)) score = 100 + Math.min(q.length, full.length);
+    else score = mentionScore(q, node.name);
+    if (score > bestScore) {
+      best = node;
+      bestScore = score;
+    }
+  }
+  return bestScore > 0 ? best : null;
+}
+
 /** Does the action look like the party is trying to GO somewhere (vs just
  *  mentioning a place)? Includes the common verbs 去 / go — a false trigger
  *  here is harmless because travel only actually happens when the text ALSO
@@ -592,7 +625,7 @@ export function buildLocationBlock(
   npcRoster: NpcRef[] = [],
 ): string {
   const current = graph.nodes.find((n) => n.id === state.current);
-  const lines: string[] = ["LOCATION SYSTEM (server-authoritative — you MUST follow this; you cannot move the party or reveal places yourself):"];
+  const lines: string[] = ["LOCATION SYSTEM (server-authoritative — you MUST follow this; you cannot reveal hidden places yourself, and the party's position only changes via the move_to field below or a TRAVEL notice from the system):"];
 
   if (current) {
     lines.push(`CURRENT LOCATION: ${current.name}${current.desc ? ` — ${current.desc}` : ""}`);
@@ -625,6 +658,9 @@ export function buildLocationBlock(
   if (discoveredLocked.length) exitsParts.push(`已知但尚未能進入：${discoveredLocked.map((n) => shortName(n.name)).join("、")}`);
   if (exitsParts.length) lines.push(`KNOWN LOCATIONS — ${exitsParts.join(" | ")}`);
   lines.push("Locations not listed above are UNKNOWN to the players — never name, confirm, or hint at their existence until the system announces them.");
+  lines.push(
+    `MOVING: if the acting player's action means going to one of the 可前往 locations (however they phrase it — partial name, "回去那裡", a typo), narrate the party moving there and set "move_to" in your JSON to that location's EXACT name from the list. If they try somewhere locked or unknown, the party STAYS at CURRENT LOCATION — narrate why entry fails and set move_to to null. If the system already announced "TRAVEL THIS TURN" below, the move is done: set move_to to null. Never narrate the party being anywhere except CURRENT LOCATION or a move_to/TRAVEL destination.`
+  );
 
   if (travel) {
     if (travel.kind === "arrived") {

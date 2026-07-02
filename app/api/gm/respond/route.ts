@@ -30,6 +30,7 @@ import {
   evaluateNpcPlacements,
   buildLocationBlock,
   locationShortName,
+  resolveMoveTarget,
   type TravelDirective,
   type NpcEncounter,
 } from "@/lib/game/locations";
@@ -928,6 +929,57 @@ export async function POST(request: Request) {
       current_choices: gmResponse.choices,
       current_choices_for_player_id: nextPlayerId,
     }).eq("id", roomId);
+
+    // === GM-DRIVEN MOVE (fallback) ===
+    // The deterministic travel matcher handles clear phrasings before the GM
+    // call; for everything else ("回去那裡", partials, typos) the GM — which
+    // actually understands the sentence — declares move_to and the SERVER
+    // validates it: only unlocked, non-current nodes are ever accepted, so the
+    // GM can express intent but can never open a locked/hidden place.
+    if (
+      locationGraph && locState &&
+      travelDirective?.kind !== "arrived" &&
+      typeof gmResponse.move_to === "string" && gmResponse.move_to.trim()
+    ) {
+      const dest = resolveMoveTarget(gmResponse.move_to, locationGraph, locState);
+      if (dest) {
+        const firstVisit = !locState.visited.includes(dest.id);
+        locState.current = dest.id;
+        if (firstVisit) {
+          locState.visited.push(dest.id);
+          locState.entered_round[dest.id] = room.current_round;
+          const discovered = applyDiscovers(locationGraph, locState, dest.id);
+          for (const d of discovered) {
+            await supabase.from("story_logs").insert({
+              room_id: roomId,
+              round_number: room.current_round,
+              entry_type: "system",
+              content: `🧭 得知新地點：${locationShortName(d.name)}`,
+            });
+          }
+          const nodeImage = dest.node_image?.trim();
+          const nodeText = dest.node_text?.trim();
+          if (nodeImage || nodeText) {
+            await supabase.from("story_logs").insert({
+              room_id: roomId,
+              round_number: room.current_round,
+              entry_type: "location_media",
+              content: nodeText && nodeText.length > 0
+                ? nodeText
+                : `📍 你抵達了「${locationShortName(dest.name)}」。`,
+              media_url: nodeImage || null,
+            });
+          }
+        }
+        await supabase.from("story_logs").insert({
+          room_id: roomId,
+          round_number: room.current_round,
+          entry_type: "system",
+          content: `📍 隊伍前往：${locationShortName(dest.name)}`,
+        });
+        await supabase.from("rooms").update({ location_state: locState }).eq("id", roomId);
+      }
+    }
 
     // === GM-FLAGGED INJURY — server rolls & applies the actual damage ===
     // The GM only classifies WHO got hurt and HOW BADLY; the dice math and HP
