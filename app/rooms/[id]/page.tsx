@@ -738,7 +738,6 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           const short = (n: string) => n.split(/[：:，,。．\.\n——–\-（(【\[]/)[0].trim().slice(0, 30);
           const visible = locGraphNodes.filter((n) => ls.status[n.id] === "unlocked" || ls.status[n.id] === "discovered");
           if (visible.length === 0) return null;
-          const evidenceCount = ls.evidence_found.length;
           return (
             <Panel className="p-4 shrink-0">
               <PanelHeader title="地點" />
@@ -764,11 +763,6 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                   );
                 })}
               </div>
-              {evidenceCount > 0 && (
-                <p className="mt-2.5 pt-2 text-[10px] text-zinc-600" style={{ borderTop: "1px solid rgba(201,169,110,0.12)" }}>
-                  🔎 已取得證物 <span className="text-gold">{evidenceCount}</span> 件
-                </p>
-              )}
             </Panel>
           );
         })()}
