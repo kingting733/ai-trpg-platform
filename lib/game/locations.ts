@@ -516,11 +516,11 @@ export function detectTravelTarget(
 }
 
 /** Does the action look like the party is trying to GO somewhere (vs just
- *  mentioning a place)? Deliberately excludes bare single-character/common
- *  words like "去", "enter", "visit", "head" — those appear constantly in
- *  ordinary actions ("搜查桌子", "examine the entrance") with no travel intent
- *  at all, and previously caused the party to "teleport" on unrelated input. */
-const TRAVEL_RE = /前往|出發|移動|趕往|回到|返回|走向|走到|搭車|坐車|乘車|go to|travel to|head to|return to|move to|head back|travel back/i;
+ *  mentioning a place)? Includes the common verbs 去 / go — a false trigger
+ *  here is harmless because travel only actually happens when the text ALSO
+ *  names a real, unlocked location (detectTravelTarget + the status gate). "go"
+ *  uses a word boundary so it does not match good/gold/going; 去 needs none. */
+const TRAVEL_RE = /前往|出發|移動|趕往|回到|返回|走向|走到|搭車|坐車|乘車|去|go to|travel to|head to|return to|move to|head back|travel back|\bgo\b/i;
 export function looksLikeTravel(actionText: string): boolean {
   return TRAVEL_RE.test(actionText);
 }
