@@ -35,7 +35,7 @@ import {
   type NpcEncounter,
 } from "@/lib/game/locations";
 import { type NpcRef, resolveNpc, npcStateKey, npcStateEntry, npcDisplayName } from "@/lib/game/npc";
-import { npcAsAttacker, npcAttackType, coerceDisposition } from "@/lib/game/npc-combat";
+import { npcAsAttacker, npcAttackType, coerceDisposition, isNpcHostile } from "@/lib/game/npc-combat";
 import {
   coerceInventory,
   applyItemEvents,
@@ -117,7 +117,7 @@ export async function POST(request: Request) {
     ? (room as any).scenarios.npcs.filter((n: any) => n && typeof n === "object" && typeof n.name === "string")
     : [];
   const npcRoster: NpcRef[] = scenarioNpcs.map((n) => ({ id: n.id, name: n.name }));
-  let npcStateNow: Record<string, { hp: number; max_hp: number; alive: boolean; hostile?: boolean; last_attack_round?: number }> =
+  let npcStateNow: Record<string, { hp: number; max_hp: number; alive: boolean; stance?: "hostile" | "neutral" | "friendly"; hostile?: boolean; last_attack_round?: number }> =
     (room.npc_states && typeof room.npc_states === "object") ? room.npc_states : {};
 
   let roll = null as ReturnType<typeof resolveAction> | null;
@@ -278,11 +278,11 @@ export async function POST(request: Request) {
       const key = npcStateKey(targetName, npcRoster);
       const existing: any = states[key] ?? npcStateEntry(targetName, npcRoster, states);
       if (existing) {
-        states[key] = { ...existing, hostile: true };
+        states[key] = { ...existing, stance: "hostile" };
       } else {
         const declared = resolveNpc(targetName, scenarioNpcs);
         const maxHp = declared && typeof declared.hp === "number" ? declared.hp : 10;
-        states[key] = { hp: maxHp, max_hp: maxHp, alive: true, hostile: true };
+        states[key] = { hp: maxHp, max_hp: maxHp, alive: true, stance: "hostile" };
       }
       npcStateNow = states;
       await supabase.from("rooms").update({ npc_states: npcStateNow }).eq("id", roomId);
@@ -570,6 +570,42 @@ export async function POST(request: Request) {
     }
   }
 
+  // === SOCIAL DE-ESCALATION (pacify) ===
+  // A passed 說服 / 魅惑 / 心理學 against a currently-hostile, non-immune NPC calms
+  // it (stance → neutral) so it stops attacking. Resolved BEFORE the aggression
+  // pass so a talked-down NPC does not also swing this same turn.
+  const PACIFY_SKILLS = ["說服", "魅惑", "心理學"];
+  if (
+    resolvedActor &&
+    roll?.requires_check &&
+    (roll.outcome === "success" || roll.outcome === "critical_success") &&
+    PACIFY_SKILLS.includes(roll.stat_used ?? "")
+  ) {
+    const hostileRefs = Object.keys(npcStateNow).filter((k) => {
+      const decl: any = resolveNpc(k, scenarioNpcs);
+      if (decl?.social_immune) return false; // mindless/immune: cannot be talked down
+      return isNpcHostile(npcStateNow[k], coerceDisposition(decl?.disposition)) && npcStateNow[k]?.alive !== false;
+    });
+    // Calm a hostile NPC named in the action (exact/fuzzy), else the sole one.
+    let calmRef: string | null =
+      hostileRefs.find((k) => actionText.includes(npcDisplayName(k, npcRoster))) ?? null;
+    if (!calmRef) {
+      const fuzzy = resolveFuzzyNpcTarget(actionText, hostileRefs.map((k) => npcDisplayName(k, npcRoster)));
+      if (fuzzy) calmRef = hostileRefs.find((k) => npcDisplayName(k, npcRoster) === fuzzy) ?? null;
+    }
+    if (!calmRef && hostileRefs.length === 1) calmRef = hostileRefs[0];
+    if (calmRef) {
+      const key = npcStateKey(calmRef, npcRoster);
+      const cur: any = npcStateNow[key] ?? npcStateEntry(calmRef, npcRoster, npcStateNow) ?? { hp: 10, max_hp: 10, alive: true };
+      npcStateNow = { ...npcStateNow, [key]: { ...cur, stance: "neutral" } };
+      await supabase.from("rooms").update({ npc_states: npcStateNow }).eq("id", roomId);
+      await supabase.from("story_logs").insert({
+        room_id: roomId, round_number: room.current_round, entry_type: "system",
+        content: `🕊 ${npcDisplayName(calmRef, npcRoster)} 被安撫下來，不再敵對。`,
+      });
+    }
+  }
+
   // === NPC AGGRESSION (server-authoritative) ===
   // Hostile NPCs present in the scene attack a player ONCE per round, using the
   // same resolveAttack machinery players use (to-hit vs 閃避, damage + STR/SIZ
@@ -593,9 +629,9 @@ export async function POST(request: Request) {
       const declared: any = resolveNpc(ref, scenarioNpcs);
       const disposition = coerceDisposition(declared?.disposition);
       const alive = st?.alive !== false;
-      const hostile = st?.hostile === true || disposition === "hostile";
+      const hostile = isNpcHostile(st, disposition); // stance override → legacy → disposition
       const lastRound = st?.last_attack_round ?? -1;
-      if (!alive || disposition === "friendly" || !hostile || lastRound >= room.current_round) continue;
+      if (!alive || !hostile || lastRound >= room.current_round) continue;
 
       // Target: the acting player if alive, else a random living player.
       const living = sortedByDex.filter((c: any) => c.hp > 0 && c.san > 0);
@@ -628,11 +664,11 @@ export async function POST(request: Request) {
           turn: room.current_round, type: newHp <= 0 ? "death" : "event", character: target.name,
           fact: newHp <= 0 ? `被 ${npcName} 擊倒` : `被 ${npcName} 攻擊（−${result.damage} HP）`,
         });
-        states[key] = { ...curNpc, hostile: true, last_attack_round: room.current_round };
+        states[key] = { ...curNpc, stance: "hostile", last_attack_round: room.current_round };
       } else if (result.fumble) {
         const selfDmg = rollInjuryDamage("minor").amount; // 1d2
         const nHp = Math.max(0, curNpc.hp - selfDmg);
-        states[key] = { ...curNpc, hp: nHp, alive: nHp > 0, hostile: true, last_attack_round: room.current_round };
+        states[key] = { ...curNpc, hp: nHp, alive: nHp > 0, stance: "hostile", last_attack_round: room.current_round };
         logLine = `💥 ${npcName} 攻擊大失敗，反傷自己（−${selfDmg} HP）。`;
         npcActionLines.push(`${npcName} fumbled its attack and hurt itself.`);
       } else {
@@ -642,7 +678,7 @@ export async function POST(request: Request) {
         npcActionLines.push(result.dodged
           ? `${npcName} attacked ${target.name}, who DODGED.`
           : `${npcName} attacked ${target.name} but MISSED.`);
-        states[key] = { ...curNpc, hostile: true, last_attack_round: room.current_round };
+        states[key] = { ...curNpc, stance: "hostile", last_attack_round: room.current_round };
       }
 
       statesChanged = true;
@@ -978,6 +1014,40 @@ export async function POST(request: Request) {
           content: `📍 隊伍前往：${locationShortName(dest.name)}`,
         });
         await supabase.from("rooms").update({ location_state: locState }).eq("id", roomId);
+      }
+    }
+
+    // === GM-DRIVEN PACIFY ===
+    // When the GM's narration genuinely reconciled with a hostile NPC, it names
+    // that NPC in npc_calmed; the server clears its hostility (stance → neutral)
+    // so it stops attacking from next round. Validated: only known, currently-
+    // hostile NPCs are calmed — the GM cannot flip a peaceful NPC or invent one.
+    const calmedRaw = gmResponse.npc_calmed;
+    const calmedNames = Array.isArray(calmedRaw) ? calmedRaw : (typeof calmedRaw === "string" ? [calmedRaw] : []);
+    if (calmedNames.length) {
+      let calmStates = { ...npcStateNow };
+      let calmChanged = false;
+      for (const raw of calmedNames) {
+        const name = typeof raw === "string" ? raw.trim() : "";
+        if (!name) continue;
+        const ref = npcRoster.find((n) => name.includes(n.name) || n.name.includes(name))?.name
+          ?? Object.keys(calmStates).find((k) => name.includes(npcDisplayName(k, npcRoster)));
+        if (!ref) continue;
+        const key = npcStateKey(ref, npcRoster);
+        const cur: any = calmStates[key] ?? npcStateEntry(ref, npcRoster, calmStates);
+        const decl: any = resolveNpc(ref, scenarioNpcs);
+        if (cur && isNpcHostile(cur, coerceDisposition(decl?.disposition))) {
+          calmStates[key] = { ...cur, stance: "neutral" };
+          calmChanged = true;
+          await supabase.from("story_logs").insert({
+            room_id: roomId, round_number: room.current_round, entry_type: "system",
+            content: `🕊 ${npcDisplayName(ref, npcRoster)} 與隊伍化解了敵意，不再攻擊。`,
+          });
+        }
+      }
+      if (calmChanged) {
+        npcStateNow = calmStates;
+        await supabase.from("rooms").update({ npc_states: npcStateNow }).eq("id", roomId);
       }
     }
 

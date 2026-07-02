@@ -15,10 +15,31 @@ export interface NpcRuntimeState {
   hp: number;
   max_hp: number;
   alive: boolean;
-  /** Currently attacking the party (set by disposition or retaliation). */
+  /** Runtime combat stance — OVERRIDES the scenario disposition. Set to
+   *  "hostile" on retaliation, "neutral" when pacified. */
+  stance?: NpcDisposition;
+  /** Legacy one-way hostility flag (pre-stance rooms). Read for back-compat. */
   hostile?: boolean;
   /** Round of this NPC's most recent attack — throttles to one per round. */
   last_attack_round?: number;
+}
+
+/** Effective stance = runtime override, else the legacy hostile flag, else the
+ *  scenario disposition. Lets pacify work even on disposition:"hostile" NPCs. */
+export function effectiveStance(
+  state: NpcRuntimeState | undefined | null,
+  disposition: NpcDisposition,
+): NpcDisposition {
+  if (state?.stance) return state.stance;
+  if (state?.hostile) return "hostile";
+  return disposition;
+}
+
+export function isNpcHostile(
+  state: NpcRuntimeState | undefined | null,
+  disposition: NpcDisposition,
+): boolean {
+  return effectiveStance(state, disposition) === "hostile";
 }
 
 /** Stats needed to make an NPC attack; sourced from the scenario NpcEntry. */
