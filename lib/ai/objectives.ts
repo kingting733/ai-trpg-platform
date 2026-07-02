@@ -390,7 +390,7 @@ Which objectives did ${actingCharacter} ACTUALLY complete THIS turn? Be strict.`
   // reporting "objectives never fire" can be diagnosed from logs instead of
   // guessing. Keyed by acting character + the objective ids it was asked about.
   const askedIds = incompleteObjectives.map((o) => o.id).join(",");
-  const tag = `objectives:check room-actor=${actingCharacter} asked=[${askedIds}] action=${JSON.stringify(playerAction.slice(0, 120))}`;
+  const tag = `objectives:check room-actor=${actingCharacter} asked=[${askedIds}] action=${JSON.stringify(playerAction.slice(0, 120))} narration=${JSON.stringify(gmNarration.slice(0, 400))}`;
 
   // 800 (not ~50 the JSON needs): if AI_CLASSIFY_MODEL is a reasoning model,
   // hidden thinking tokens are drawn from this budget BEFORE any visible JSON is
