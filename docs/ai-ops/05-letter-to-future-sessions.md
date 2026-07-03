@@ -10,7 +10,7 @@ You are operating a live multiplayer game with one non-technical-leaning owner w
 
 ## How this operating system will decay, and the countermeasures
 
-- **Docs drift from code.** A matcher gets rewritten, the doc still describes the old one → future sessions trust the doc and misdiagnose. Countermeasure: fix any doc the moment it misleads you (04 §staleness) and prefer `file:line`-free descriptions of *principles* over restating code details.
+- **Docs drift from code.** A matcher gets rewritten, the doc still describes the old one → future sessions trust the doc and misdiagnose. Countermeasure: fix any doc the moment it misleads you (04 §staleness); and when writing THESE ops docs, describe principles rather than code line numbers (which rot) — this does NOT apply to reports/answers, where `path:line` citations remain mandatory per 01 §4.
 - **CLAUDE.md bloat.** Each session is tempted to add "one more rule". Countermeasure: 04's one-in-one-out and the 80-line cap; new knowledge goes to 06-lessons.
 - **Lessons log becomes write-only noise.** Countermeasure: the compression schedule in 04; promote recurring rules upward, keep the log short enough to actually read.
 - **The player-info-leak rule erodes** — every new UI surface re-leaks 證物/progress. It happened three times in one session. Countermeasure: it's in CLAUDE.md non-negotiables; reviewers must check it explicitly (03 template 5, check #4).

@@ -35,6 +35,7 @@
 ### 2026-07-03 — Renamed enum values left stale comparisons elsewhere
 - Context: winning gave "失敗結局不開放角色成長".
 - Symptom: growth gate checked `ending_type === "good"|"normal"` while the ending system now writes `"victory"`; UI masked it by falling back to a default badge.
+- Root cause: the ending-type enum was renamed without grepping for consumers of the old literal values.
 - Fix: shared `endingAllowsGrowth()` helper as single source of truth.
 - Rule: when renaming stored enum values, grep the whole repo for every literal of the OLD values before shipping.
 - File updated: lessons only.
@@ -58,6 +59,7 @@
 ### 2026-07-03 — Player-visible surfaces leaked GM-internal info in three places
 - Context: 證物 highlighted gold in bag, `🔎 取得證物` log line, `已取得證物 N 件` count in the location panel.
 - Symptom: players could identify plot-critical items and clue counts.
+- Root cause: each new UI surface rendered raw internal state; no shared "player-safe rendering" rule existed, so the same leak was re-created independently three times.
 - Fix: uniform 📦 物品 wording everywhere; count removed.
 - Rule: any new player-facing render of game state must be checked against "does this reveal importance/progress the GM hides?" — the same leak reappears on every new surface.
 - File updated: CLAUDE.md non-negotiables.

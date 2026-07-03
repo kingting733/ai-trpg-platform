@@ -38,3 +38,6 @@ Append to `docs/ai-ops/06-lessons.md` in exactly this format:
 
 ## Staleness check (cheap, do it when a doc misleads you)
 If any ai-ops doc gave you wrong information: fix the doc in the same session as the discovery, and log a lesson. A misleading ops doc is worse than none.
+
+## Persistence check (session end)
+These docs only persist if committed and pushed. Before ending any session that touched them: `git ls-files docs/ai-ops CLAUDE.md` must list every file you changed; if not, commit and push.

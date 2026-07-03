@@ -44,6 +44,7 @@ REPORT: direct answer in ≤5 lines; then claims-with-sources; then "what I coul
 GOAL: Adversarially review [diff / files] for defects. Try to REFUTE it, do not summarize it.
 INPUT: run `git diff [range]`. Acceptance criteria of the original change: [paste].
 CHECK: (1) broken callers of changed signatures; (2) violations of server-authority law (narration/keywords becoming authority); (3) silent failure paths added (catch{} or ??"" without logging); (4) player-visible leaks (證物 wording, clue counts, GM-internal info); (5) zh-TW wording in player-facing strings; (6) missing migration for new columns.
+ACCEPTANCE: all 6 CHECK items executed, each explicitly marked finding/clean/not-checked.
 REPORT: findings ranked by severity, each: path:line, defect, concrete failure scenario, suggested fix. End with "checked / not checked" lists. Zero findings is an acceptable answer — do not invent nitpicks.
 ```
 

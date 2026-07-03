@@ -47,7 +47,7 @@ Templates: `docs/ai-ops/03-delegation-prompts.md`.
 - Small model fails once on a **judgment** task → don't retry small; upgrade immediately (haiku→sonnet→opus).
 - Mid model fails the **same subtask twice** → escalate one tier and include the full failure trace (what was tried, what happened) in the new prompt.
 - Pattern solved by a strong model → apply it in batch with a cheaper model (give the solved example as the spec).
-- **Max two retry rounds** of the same approach at any tier. Third attempt must change approach (different decomposition, more context, ask user) — see 02-judgment-rubric §4.
+- **Max two retry rounds** of the same approach at any tier — EXCEPT judgment tasks on a small model, where the first bullet wins: zero retries, upgrade immediately. A third attempt anywhere must change approach (different decomposition, more context, ask user) — see 02-judgment-rubric §4.
 
 ## Rule 6 — Verification must not self-verify
 The author of a change is the worst judge of it. In this environment:

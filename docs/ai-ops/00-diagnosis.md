@@ -75,5 +75,5 @@ For any pure function in `lib/game/*` or `lib/ai/*`, write a small inline-mirror
 
 **How to avoid it**
 - Every logic change to matching/combat/objectives/endings gets a scratchpad verification run before commit.
-- Every commit: `npx tsc --noEmit` clean, then commit with a message following the existing style (`fix:`/`feat:`/`tweak:`/`observability:` + body explaining root cause), then `git push -u origin <designated branch>`.
+- Every commit: `npx tsc --noEmit` clean, then commit (prefix taxonomy and branch rule: see CLAUDE.md non-negotiables), then push.
 - Tell the user exactly what to playtest ("attack an NPC, then pass a 說服 check — expect the 🕊 log").

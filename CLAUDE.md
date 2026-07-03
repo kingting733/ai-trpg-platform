@@ -12,7 +12,7 @@ Multiplayer AI-GM TRPG (Call of Cthulhu-style, zh-TW UI). Next.js 14 app router 
 
 ## Non-negotiables (every change)
 - `npx tsc --noEmit` clean before every commit.
-- Commit style: `fix:`/`feat:`/`tweak:`/`ui:`/`observability:` + body explaining the root cause. Push with `git push -u origin <designated branch>` (never a different branch).
+- Commit style: `fix:`/`feat:`/`tweak:`/`ui:`/`style:`/`observability:`/`docs:` prefix (this list is authoritative) + body explaining the root cause. Push with `git push -u origin <branch>` where branch = the one the session started on (`git branch --show-current`). Never push to `main` or switch branches without explicit user instruction.
 - Player-facing text is zh-TW. Never leak GM-internal info to players: 證物 render as neutral `📦 物品`, no clue counts, no objective checklists in player UI.
 - Fuzzy matching must be conservative: prefer declining over guessing; use ambiguity guards (see `resolveFuzzyNpcTarget`, `detectTravelTarget`).
 - Any `catch {}` / empty-string fallback in an AI call path must log its cause (copy `callAI` in `lib/ai/objectives.ts`).
