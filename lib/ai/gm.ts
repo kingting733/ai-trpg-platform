@@ -195,7 +195,12 @@ export async function generateGMResponse(input: GMAIInput): Promise<GMResponseWi
     if (provider === "anthropic") {
       raw = await callAnthropic(apiKey, model, systemPrompt, userMessage);
     } else {
-      const baseOverride = process.env.AI_BASE_URL?.trim().replace(/\/+$/, "");
+      // Normalize the override: strip trailing slashes AND a trailing "/v1",
+      // because callOpenAICompatible appends "/v1/chat/completions" itself.
+      // This makes both "https://host" and "https://host/v1" work (NVIDIA NIM,
+      // Together, etc. document their base WITH /v1) instead of producing a
+      // double "/v1/v1" 404.
+      const baseOverride = process.env.AI_BASE_URL?.trim().replace(/\/+$/, "").replace(/\/v1$/i, "");
       const defaultBase = provider === "deepseek" ? "https://api.deepseek.com" : "https://api.openai.com";
       const baseUrl = baseOverride ?? defaultBase;
       raw = await callOpenAICompatible(apiKey, model, systemPrompt, userMessage, baseUrl);

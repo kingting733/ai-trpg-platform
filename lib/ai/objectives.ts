@@ -154,7 +154,7 @@ async function callAI(system: string, user: string, maxTokens: number, label = "
       return text;
     }
 
-    const baseOverride = process.env.AI_BASE_URL?.trim().replace(/\/+$/, "");
+    const baseOverride = process.env.AI_BASE_URL?.trim().replace(/\/+$/, "").replace(/\/v1$/i, "");
     const defaultBase = provider === "deepseek" ? "https://api.deepseek.com" : "https://api.openai.com";
     const baseUrl = baseOverride ?? defaultBase;
     const res = await fetch(`${baseUrl}/v1/chat/completions`, {

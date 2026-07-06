@@ -56,7 +56,7 @@ ${logText}
 Respond with ONLY the 4 lines above, no extra text.`;
 
   try {
-    const baseOverride = process.env.AI_BASE_URL?.trim().replace(/\/+$/, "");
+    const baseOverride = process.env.AI_BASE_URL?.trim().replace(/\/+$/, "").replace(/\/v1$/i, "");
     const defaultBase = provider === "deepseek" ? "https://api.deepseek.com" : "https://api.openai.com";
     const baseUrl = baseOverride ?? defaultBase;
     // Use AI_CLASSIFY_MODEL (fast non-thinking model) for this cheap summarisation

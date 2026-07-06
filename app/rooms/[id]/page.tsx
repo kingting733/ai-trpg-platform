@@ -540,8 +540,8 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                     <img
                       src={entry.media_url}
                       alt="發現"
-                      className="rounded-lg w-full object-cover mb-2 border"
-                      style={{ borderColor: "rgba(201,169,110,0.25)", maxHeight: "22rem" }}
+                      className="rounded-lg w-full object-contain mb-2 border"
+                      style={{ borderColor: "rgba(201,169,110,0.25)", maxHeight: "22rem", background: "rgba(0,0,0,0.25)" }}
                       onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                     />
                   )}
