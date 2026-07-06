@@ -1,5 +1,17 @@
 "use client";
-import type { NpcEntry } from "@/lib/ai/gm";
+import type { NpcEntry, NpcKnowledge } from "@/lib/ai/gm";
+import { ConditionBuilder, type CondKind, type Option } from "@/components/ConditionBuilder";
+
+// Gate condition kinds offered for NPC knowledge. Excludes npc_dead/npc_alive
+// because the server's location-condition evaluator doesn't support them (those
+// belong to the ending system) — offering them would silently never unlock.
+const KNOWLEDGE_COND_KINDS: CondKind[] = ["item", "objective", "visit", "round", "after", "count"];
+
+let knowledgeIdSeq = 0;
+function newKnowledgeId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return `nk_${crypto.randomUUID().slice(0, 8)}`;
+  return `nk_${Date.now().toString(36)}_${knowledgeIdSeq++}`;
+}
 
 // Humanized NPC roster editor shared by the create & edit scenario pages.
 //
@@ -51,15 +63,41 @@ export function NpcRosterEditor({
   npcs,
   onChange,
   makeEmpty,
+  itemOptions = [],
+  objectiveOptions = [],
+  nodeOptions = [],
+  tagOptions = [],
 }: {
   npcs: NpcEntry[];
   onChange: (next: NpcEntry[]) => void;
   makeEmpty: () => NpcEntry;
+  /** For the knowledge-gate condition picker (證物 / 目標 / 地點 / 標籤). */
+  itemOptions?: Option[];
+  objectiveOptions?: Option[];
+  nodeOptions?: Option[];
+  tagOptions?: string[];
 }) {
   function update(i: number, patch: Partial<NpcEntry>) {
     const next = [...npcs];
     next[i] = { ...next[i], ...patch };
     onChange(next);
+  }
+
+  // Knowledge-entry helpers (per NPC).
+  function setKnowledge(i: number, entries: NpcKnowledge[]) {
+    update(i, { knowledge: entries });
+  }
+  function addKnowledge(i: number) {
+    const cur = npcs[i].knowledge ?? [];
+    setKnowledge(i, [...cur, { id: newKnowledgeId(), topic: "", info: "", when: [] }]);
+  }
+  function updateKnowledge(i: number, k: number, patch: Partial<NpcKnowledge>) {
+    const cur = [...(npcs[i].knowledge ?? [])];
+    cur[k] = { ...cur[k], ...patch };
+    setKnowledge(i, cur);
+  }
+  function removeKnowledge(i: number, k: number) {
+    setKnowledge(i, (npcs[i].knowledge ?? []).filter((_, j) => j !== k));
   }
 
   return (
@@ -190,6 +228,58 @@ export function NpcRosterEditor({
               />
               <span className="text-xs text-amber-300/80">🛡 對社交技能免疫（怪物、無意識存在、終極敵人）</span>
             </label>
+
+            {/* NPC knowledge — gated info the NPC reveals when asked about a topic. */}
+            <details className="group mt-1 border border-slate-700/60 rounded-lg bg-slate-900/40">
+              <summary className="cursor-pointer select-none list-none px-3 py-2 text-xs text-slate-400 hover:text-slate-200 flex items-center justify-between">
+                <span>💬 情報 / 知識（選填）— 當玩家問對問題時，此 NPC 透露的資訊{(npc.knowledge?.length ?? 0) > 0 ? `（${npc.knowledge!.length}）` : ""}</span>
+                <span className="opacity-60 group-open:rotate-90 transition-transform">▸</span>
+              </summary>
+              <div className="px-3 pb-3 pt-1 space-y-3">
+                <p className="text-[11px] text-slate-500">每則情報有「話題」與「內容」。玩家向此 NPC 問到該話題時，AI 主持人會以 NPC 的口吻透露內容。可加上「解鎖條件」，條件未達成前不會透露。</p>
+                {(npc.knowledge ?? []).map((k, ki) => (
+                  <div key={k.id || ki} className="border border-slate-700 rounded-lg p-2.5 bg-slate-900/50 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-slate-500">情報 {ki + 1}</span>
+                      <button type="button" onClick={() => removeKnowledge(i, ki)} className="text-slate-500 hover:text-red-400 text-sm">×</button>
+                    </div>
+                    <input
+                      value={k.topic}
+                      onChange={(e) => updateKnowledge(i, ki, { topic: e.target.value })}
+                      placeholder="話題（玩家會問什麼？例如：失蹤的女孩 / 那晚發生的事）"
+                      className={inputCls}
+                    />
+                    <textarea
+                      value={k.info}
+                      onChange={(e) => updateKnowledge(i, ki, { info: e.target.value })}
+                      rows={2}
+                      placeholder="透露的內容（NPC 會說出的資訊）"
+                      className={taCls}
+                    />
+                    <div>
+                      <p className="text-[11px] text-slate-500 mb-1">🔒 解鎖條件（選填 — 留空則玩家一問就會透露）</p>
+                      <ConditionBuilder
+                        value={k.when ?? []}
+                        onChange={(v) => updateKnowledge(i, ki, { when: v })}
+                        kinds={KNOWLEDGE_COND_KINDS}
+                        items={itemOptions}
+                        objectives={objectiveOptions}
+                        nodes={nodeOptions}
+                        tags={tagOptions}
+                        emptyHint="無條件 — 玩家問到即透露"
+                      />
+                    </div>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => addKnowledge(i)}
+                  className="w-full text-[11px] text-emerald-400/80 hover:text-emerald-300 border border-dashed border-slate-600 hover:border-emerald-700 rounded-lg py-1.5 transition-colors"
+                >
+                  ＋ 新增情報
+                </button>
+              </div>
+            </details>
           </div>
         </div>
       ))}

@@ -28,6 +28,7 @@ import {
   evaluateUnlocks,
   evaluateEncounters,
   evaluateNpcPlacements,
+  evalUnlockConditions,
   buildLocationBlock,
   locationShortName,
   resolveMoveTarget,
@@ -891,6 +892,30 @@ export async function POST(request: Request) {
       )
     : null;
 
+  // === NPC KNOWLEDGE (gated info reveals) ===
+  // For each scenario NPC, include only knowledge entries whose 解鎖條件 gate is
+  // currently satisfied (same grammar as location unlocks). Locked entries are
+  // omitted entirely, so the GM literally cannot reveal them yet.
+  const npcKnowledgeLines: string[] = [];
+  for (const n of scenarioNpcs as Array<any>) {
+    const entries: any[] = Array.isArray(n?.knowledge) ? n.knowledge : [];
+    const available = entries.filter((k) => {
+      const topic = typeof k?.topic === "string" ? k.topic.trim() : "";
+      const info = typeof k?.info === "string" ? k.info.trim() : "";
+      if (!topic || !info) return false;
+      const when: string[][] = Array.isArray(k?.when) ? k.when : [];
+      return evalUnlockConditions(when, locState, locationGraph, room.current_round, objProgress);
+    });
+    if (available.length === 0) continue;
+    const lines = available
+      .map((k) => `  · 當玩家向他/她問及「${k.topic.trim()}」→ 透露：${k.info.trim()}`)
+      .join("\n");
+    npcKnowledgeLines.push(`- ${n.name}：\n${lines}`);
+  }
+  const npcKnowledgeDirective = npcKnowledgeLines.length
+    ? `NPC KNOWLEDGE (authoritative — the ONLY information each NPC may give, and ONLY when a player actually talks to THAT NPC and asks/brings up the matching topic in some form; match the player's meaning, not exact words). Reveal it naturally in the NPC's own voice when the topic genuinely comes up. Do NOT volunteer it unprompted, do NOT reveal an entry whose topic the player did not raise, and do NOT invent NPC knowledge beyond this list — anything not listed is either unknown to the NPC or not yet unlocked:\n${npcKnowledgeLines.join("\n")}`
+    : null;
+
   const input: GMAIInput = {
     scenarioTitle: scenario?.title ?? "Unknown Scenario",
     scenarioBackground: scenario?.background ?? null,
@@ -909,6 +934,7 @@ export async function POST(request: Request) {
     npcActionDirective: npcActionLines.length
       ? `NPC ACTIONS THIS TURN (the system already resolved these hostile-NPC attacks — narrate them AS THEY HAPPENED; do NOT invent different outcomes, extra attacks, or attacks that were not listed):\n${npcActionLines.map((l) => `- ${l}`).join("\n")}`
       : null,
+    npcKnowledgeDirective,
     currentRound: room.current_round,
     actingCharacterName: resolvedActor?.name ?? "Unknown",
     nextCharacterName: nextActor?.name ?? "Unknown",

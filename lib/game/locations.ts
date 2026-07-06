@@ -354,6 +354,40 @@ function condSatisfied(
   return when.some((group) => group.every((t) => evalTerm(t, state, graph, currentRound, objectiveProgress)));
 }
 
+// Empty fallbacks so callers WITHOUT a location system (no graph/state) can still
+// evaluate the location-free terms (round:/objective:). item:/visit:/count:/after:
+// simply return false against these empties, which is the safe "still locked"
+// default for a scenario that gates on evidence it has no location system for.
+const EMPTY_LOCATION_STATE: LocationState = {
+  current: null, status: {}, visited: [], entered_round: {}, evidence_found: [],
+  stuck_counter: 0, encounters_fired: [],
+};
+const EMPTY_LOCATION_GRAPH: LocationGraph = {
+  nodes: [], npc_placements: [], npc_encounters: [],
+};
+
+/**
+ * Public, null-tolerant evaluator for the shared `string[][]` unlock-condition
+ * grammar (used by the NPC-knowledge gate as well as location unlocks). An empty
+ * `when` means "always satisfied". Pass whatever location state/graph exist;
+ * null is fine for scenarios with no location system.
+ */
+export function evalUnlockConditions(
+  when: UnlockTerm[][],
+  state: LocationState | null,
+  graph: LocationGraph | null,
+  currentRound: number,
+  objectiveProgress: ObjectiveProgressLike = {}
+): boolean {
+  return condSatisfied(
+    when,
+    state ?? EMPTY_LOCATION_STATE,
+    graph ?? EMPTY_LOCATION_GRAPH,
+    currentRound,
+    objectiveProgress
+  );
+}
+
 function unlockSatisfied(
   node: LocationNode,
   state: LocationState,

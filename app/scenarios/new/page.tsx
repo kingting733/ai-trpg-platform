@@ -403,7 +403,15 @@ export default function NewScenarioPage() {
             {/* NPCs */}
             <div>
               <label className="block text-sm text-slate-400 mb-2">NPC</label>
-              <NpcRosterEditor npcs={npcs} onChange={setNpcs} makeEmpty={emptyNpc} />
+              <NpcRosterEditor
+                npcs={npcs}
+                onChange={setNpcs}
+                makeEmpty={emptyNpc}
+                itemOptions={locNodes.flatMap((n) => n.evidence ?? []).filter((e) => e.id).map((e) => ({ id: e.id, name: e.name }))}
+                objectiveOptions={objectiveOptions(objectives)}
+                nodeOptions={locNodes.filter((n) => n.id).map((n) => ({ id: n.id, name: n.name }))}
+                tagOptions={Array.from(new Set(locNodes.flatMap((n) => n.evidence ?? []).flatMap((e) => e.tags ?? []))).filter(Boolean)}
+              />
             </div>
 
             {/* Location unlock graph */}
