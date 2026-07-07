@@ -376,6 +376,19 @@ export async function POST(request: Request) {
   const evidenceAwardedThisTurn: { name: string; id: string }[] = [];
 
   const SEARCH_RE = /搜|調查|檢查|查看|探索|翻找|偵查|察看|閱|讀|search|investigate|examin|inspect|look|explor|read/i;
+  // Search-type skills. When the player picks one of these from the skill box,
+  // the action counts as a generic search for evidence purposes even if the
+  // typed text is just a bare location name (no search keyword) — otherwise the
+  // check passes but no 證物 is awarded (see 取得方式=搜查 clues).
+  const SEARCH_SKILLS = new Set([
+    "偵查", "聆聽", "圖書館使用", "追蹤", "導航", "自然學",
+    "spot_hidden", "listen", "library_use", "track", "navigate", "natural_world",
+  ]);
+
+  // The action counts as a search if the typed text has a search verb OR the
+  // player explicitly picked a search-type skill from the skill box.
+  const isSearchAction =
+    SEARCH_RE.test(actionText) || SEARCH_SKILLS.has(roll?.stat_used ?? "");
 
   if (locationGraph && locState) {
     // A search that NAMES another location should relocate the party there
@@ -384,7 +397,7 @@ export async function POST(request: Request) {
     // the normal soft-wall/unknown directives fire and nobody moves.
     const searchElsewhere =
       !looksLikeTravel(actionText) &&
-      SEARCH_RE.test(actionText) &&
+      isSearchAction &&
       detectTravelTarget(actionText, locationGraph, locState) != null;
 
     // 1. TRAVEL — on an explicit movement verb, OR a search that names another
@@ -453,7 +466,7 @@ export async function POST(request: Request) {
       !!roll?.requires_check &&
       (roll.outcome === "success" || roll.outcome === "critical_success");
     if (passedCheck) {
-      const found = matchEvidence(actionText, locationGraph, locState, SEARCH_RE.test(actionText));
+      const found = matchEvidence(actionText, locationGraph, locState, isSearchAction);
       for (const ev of found) {
         locState.evidence_found.push(ev.id);
         locationProgress = true;
