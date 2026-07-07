@@ -74,7 +74,7 @@ const FIELD_TIPS = {
   initial: `開放（起點）：遊戲一開始玩家就可以去。\n已知但鎖定：玩家知道這裡存在，但暫時進不去（地圖上顯示🔒）。\n隱藏：玩家完全不知道這裡存在，需要被「發現」後才會出現在地圖。`,
   desc: "GM 看的場景備註，不會給玩家看。描述這個地點的氛圍、有什麼重要道具、NPC 狀態等。",
   unlock: `填解鎖條件，滿足後系統自動開門。\n留空 = 永遠鎖定（只靠 discovers 才能解開）。\n\n語法：\n  visit:X        ── 去過地點 X\n  item:e1        ── 拿到證物 e1\n  count:標籤:3    ── 累積 3 件有該標籤的證物\n  round:5        ── 到第 5 回合\n  after:X:3      ── 進入 X 滿 3 回合後\n  objective:obj_1 ── 完成某個任務目標\n\n用 & 代表「且」、| 代表「或」\n例：item:e1 & visit:B | round:10`,
-  discovers: `到達此地點後，系統自動把哪些「隱藏」地點變成「已知但鎖定」狀態（顯示在玩家地圖）。\n填地點 id，逗號分隔。\n例：D, E`,
+  discovers: `到達此地點後，系統自動把哪些「隱藏」地點變成「已知但鎖定」狀態（顯示在玩家地圖）。\n點選要自動發現的地點即可（可多選）。`,
   on_enter: "第一次進入此地點時，GM 收到的敘事提示。例：「描述昏黃路燈、遠處傳來貓叫聲」",
   locked_narration: "玩家試圖進入但還沒解鎖時，GM 用來拒絕的故事理由。例：「鐵閘已拉下，無法進入」",
   stuck_hint: "玩家在此地點停滯太久時，GM 會自然帶出的暗示。例：「桌上有一張字條...」",
@@ -271,15 +271,46 @@ export function LocationGraphEditor({
               />
             </div>
             <div>
-              <FieldLabel label="進入後自動發現的地點 id" tip={FIELD_TIPS.discovers} />
-              <input
-                className={blockCls}
-                placeholder="例：D, E"
-                value={node.discovers.join(", ")}
-                onChange={(e) =>
-                  update(i, { discovers: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })
-                }
-              />
+              <FieldLabel label="進入後自動發現的地點" tip={FIELD_TIPS.discovers} />
+              {nodeOptions.filter((o) => o.id !== node.id).length === 0 ? (
+                <p className="text-xs text-zinc-500 py-1.5">先為其他地點填上 id 才能選擇</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {nodeOptions
+                    .filter((o) => o.id !== node.id)
+                    .map((o) => {
+                      const active = node.discovers.includes(o.id);
+                      return (
+                        <button
+                          key={o.id}
+                          type="button"
+                          onClick={() =>
+                            update(i, {
+                              discovers: active
+                                ? node.discovers.filter((d) => d !== o.id)
+                                : [...node.discovers, o.id],
+                            })
+                          }
+                          className={`px-2 py-1 rounded text-xs border transition-colors ${
+                            active
+                              ? "border-gold text-gold bg-[rgba(201,169,110,0.12)]"
+                              : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
+                          }`}
+                        >
+                          {o.name?.trim() ? o.name : o.id}
+                          <span className="opacity-50 ml-1">{o.id}</span>
+                        </button>
+                      );
+                    })}
+                </div>
+              )}
+              {/* Keep any discovers pointing at not-yet-named / deleted ids visible so
+                  they aren't silently dropped. */}
+              {node.discovers.filter((d) => !nodeOptions.some((o) => o.id === d)).length > 0 && (
+                <p className="text-xs text-amber-500/80 mt-1">
+                  未知 id：{node.discovers.filter((d) => !nodeOptions.some((o) => o.id === d)).join(", ")}
+                </p>
+              )}
             </div>
           </div>
 
