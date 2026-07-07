@@ -189,6 +189,16 @@ const THINKING_MESSAGES: { text: string; dice?: boolean }[] = [
   { text: "迷霧正在散去…" },
   { text: "古老的書頁沙沙作響…" },
   { text: "陰影正在挪移…" },
+  { text: "主持人正在傾聽黑暗…" },
+  { text: "命運之輪緩緩轉動…" },
+  { text: "燭火搖曳，故事繼續…" },
+  { text: "遠處傳來低沉的鐘聲…" },
+  { text: "無形之物正在窺視…" },
+  { text: "主持人正在編織後續…" },
+  { text: "空氣中的絲線正在交纏…" },
+  { text: "星辰正在重新排列…" },
+  { text: "主持人正在推演接下來的可能…" },
+  { text: "古神在夢中翻了個身…" },
 ];
 
 const STAT_ZH: Record<string, string> = {
@@ -271,6 +281,11 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [endingGame, setEndingGame] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState<Record<string, boolean>>({});
+  // True from the moment this player submits until their own fetchAll() has
+  // synced the persisted turn. While true, the background 3s poll is skipped so
+  // it can't load the persisted gm_response and briefly render it ALONGSIDE the
+  // still-visible live streaming box (the "two GM boxes that vanish" flash).
+  const streamingRef = useRef(false);
   const logEndRef = useRef<HTMLDivElement>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const [atBottom, setAtBottom] = useState(true);
@@ -308,7 +323,12 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
 
   useEffect(() => {
     fetchAll();
-    const interval = setInterval(fetchAll, 3000);
+    const interval = setInterval(() => {
+      // Skip the poll while THIS player is mid-stream — their own fetchAll at
+      // the end of submitAction is the source of truth, and polling here would
+      // duplicate the streaming box with the freshly-persisted DB entry.
+      if (!streamingRef.current) fetchAll();
+    }, 3000);
     return () => clearInterval(interval);
   }, [fetchAll]);
 
@@ -423,6 +443,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     // An explicit per-call skill wins; otherwise use the manually-picked skill.
     const forcedSkill = skill !== undefined ? skill : selectedSkill;
     setSubmitting(true);
+    streamingRef.current = true; // pause background polling for the duration
     setActionText("");
     setSelectedSkill(null);
     setSkillMenuOpen(false);
@@ -482,9 +503,10 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     }
     setGmThinking(false);
 
-    await fetchAll();
+    await fetchAll();      // load the persisted turn (streaming box already hidden above)
     setStreamingText(null);
     setSubmitting(false);
+    streamingRef.current = false; // resume background polling
   }
 
   // A GM choice may be tagged like "[偵查] <Name> 翻找抽屜". Pull the skill out so
@@ -890,8 +912,8 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                       {canGo ? (
                         <button
                           type="button"
-                          onClick={() => setActionText(`前往${short(n.name)}`)}
-                          title={`前往${short(n.name)}`}
+                          onClick={() => setActionText(short(n.name))}
+                          title={short(n.name)}
                           className="text-left hover:text-gold hover:underline decoration-dotted underline-offset-2 transition-colors"
                         >
                           {label}
