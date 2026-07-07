@@ -735,10 +735,10 @@ export function buildLocationBlock(
     } else if (travel.kind === "off_graph") {
       lines.push(
         [
-          `OFF-GRAPH MOVEMENT: the actor wants to go to a place that is NOT in the scenario's location list. Judge it:`,
-          `(a) MUNDANE & PLAUSIBLE for this setting (e.g. a shop, café, street corner, public office) — play a side-scene there: atmosphere, rumors, NPC chatter, or soft hints pointing toward the known locations. The party may stay as long as the players wish, but you must NOT award any listed evidence, confirm any hidden place, or advance unlock conditions there — anything truly important always lives at the listed locations, so naturally nudge them back when the scene runs dry.`,
-          `(b) A PLOT-RELEVANT place from your story notes that is not yet open, or an attempt to bypass locked areas, or something that doesn't fit the world — deny it with an in-world reason (road closed, no address, too dangerous) and steer the players toward the known locations listed above. Give no confirmation the place exists.`,
-          `If the party is already in such a side-scene (see recent story log), keep narrating from there — they can move on to any 可前往 location at any time, or to another mundane place under the same rules.`,
+          `OFF-GRAPH MOVEMENT (STRICT — this scenario's map is FIXED to the KNOWN LOCATIONS listed above; there is nothing beyond it):`,
+          `the actor tried to leave to a place that is NOT on the map (e.g. "go outside", "leave this room", a street, a shop, "anywhere else"). Do NOT invent a new area, side-scene, exterior, or destination, and do NOT let the party leave the map. Keep them at CURRENT LOCATION.`,
+          `Narrate briefly and in-world why they can't simply wander off that way (the exit is blocked/leads nowhere useful/there is no reason to leave), then point them at the real routes: name the 可前往 locations as the only ways onward.${discoveredLocked.length ? " Locked-but-known places exist too, but stay closed until their conditions are met." : ""}`,
+          `Set "move_to" to null. Award no evidence, confirm no hidden place, advance no unlock condition.`,
         ].join(" ")
       );
     }

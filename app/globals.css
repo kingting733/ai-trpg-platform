@@ -71,7 +71,27 @@ body {
   margin: 0.9rem auto;
   background: linear-gradient(90deg, transparent, rgba(201, 169, 110, 0.4), transparent);
 }
+/* GM "thinking" indicator — three pulsing dots shown before the first
+   narration token arrives, so the wait reads as "working" not "frozen". */
+.gm-dots { display: inline-flex; align-items: center; gap: 4px; margin-left: 4px; }
+.gm-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: #c9a96e;
+  animation: gm-dot-pulse 1.2s infinite ease-in-out both;
+}
+.gm-dot:nth-child(2) { animation-delay: 0.15s; }
+.gm-dot:nth-child(3) { animation-delay: 0.30s; }
+@keyframes gm-dot-pulse { 0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); } 40% { opacity: 1; transform: scale(1); } }
+
+/* Blinking caret appended to streaming narration so it visibly "types". */
+.gm-caret {
+  display: inline-block; width: 2px; height: 1.05em;
+  background: #c9a96e; margin-left: 2px; vertical-align: text-bottom;
+  animation: gm-caret-blink 1s steps(1) infinite;
+}
+@keyframes gm-caret-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
 /* Respect users who prefer no motion. */
 @media (prefers-reduced-motion: reduce) {
-  .fx-dread { animation: none; }
+  .fx-dread, .gm-dot, .gm-caret { animation: none; }
 }
