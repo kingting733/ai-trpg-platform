@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateGMResponse, GMAIInput, ScenarioGMContext, LedgerEntry, NpcEntry } from "@/lib/ai/gm";
+import { generateGMResponseStreaming, GMAIInput, ScenarioGMContext, LedgerEntry, NpcEntry } from "@/lib/ai/gm";
 import { createClient } from "@/lib/supabase/server";
 import {
   resolveAction, rollInjuryDamage, rollFirstAidHeal, InjurySeverity,
@@ -1007,8 +1007,25 @@ export async function POST(request: Request) {
       : null,
   };
 
+  // === STREAMING RESPONSE ===
+  // Narration is streamed to the client token-by-token as the AI generates it
+  // (the slow part of a turn); every OTHER piece of logic below — injury,
+  // items, move_to, npc_calmed, objectives, endings — is UNCHANGED from the
+  // non-streaming version, it just runs after the stream finishes instead of
+  // after a single blocking await. NDJSON over a plain streamed fetch body
+  // (one JSON object per line) rather than SSE, since the client already does
+  // a normal POST with fetch() and doesn't need EventSource's GET-only reconnect
+  // machinery.
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      function send(obj: any) {
+        controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
+      }
   try {
-    const gmResponse = await generateGMResponse(input);
+    const gmResponse = await generateGMResponseStreaming(input, (deltaText) => {
+      send({ type: "delta", text: deltaText });
+    });
 
     await supabase.from("story_logs").insert({
       room_id: roomId,
@@ -1269,11 +1286,14 @@ export async function POST(request: Request) {
         ending_title: tplTitle,
         ending_summary: tplSummary,
       }).eq("id", roomId);
-      return NextResponse.json({
+      send({
+        type: "done",
         response: gmResponse.narration,
         gameEnded: true,
         ending: { type: "failure", title: tplTitle, summary: tplSummary },
       });
+      controller.close();
+      return;
     }
 
     // Check 1: all party members dead → forced failure ending (pure code).
@@ -1437,7 +1457,8 @@ export async function POST(request: Request) {
         ending_summary: ending.summary,
       }).eq("id", roomId);
 
-      return NextResponse.json({
+      send({
+        type: "done",
         response: gmResponse.narration,
         gameEnded: true,
         ending: {
@@ -1446,6 +1467,8 @@ export async function POST(request: Request) {
           summary: ending.summary,
         },
       });
+      controller.close();
+      return;
     }
 
     // No ending triggered — update choices for next player as normal
@@ -1454,13 +1477,26 @@ export async function POST(request: Request) {
       current_choices_for_player_id: nextPlayerId,
     }).eq("id", roomId);
 
-    return NextResponse.json({
+    send({
+      type: "done",
       response: gmResponse.narration,
       choices: gmResponse.choices,
       choicesForPlayerId: nextPlayerId,
       gameEnded: false,
     });
+    controller.close();
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    send({ type: "error", error: err.message });
+    controller.close();
   }
+    },
+  });
+
+  return new NextResponse(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }

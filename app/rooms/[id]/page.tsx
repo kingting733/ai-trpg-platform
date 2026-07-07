@@ -248,6 +248,11 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   const [submitting, setSubmitting] = useState(false);
   const [initializing, setInitializing] = useState(false);
   const [gmThinking, setGmThinking] = useState(false);
+  // Live narration text as it streams in from the GM this turn. null = not
+  // currently streaming (either idle, or waiting for the first token — the
+  // "thinking..." placeholder covers that gap). Cleared once fetchAll() pulls
+  // the persisted turn from the DB, so there's never a duplicate/stale copy.
+  const [streamingText, setStreamingText] = useState<string | null>(null);
   const [endingGame, setEndingGame] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState<Record<string, boolean>>({});
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -382,10 +387,16 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     setSelectedSkill(null);
     setSkillMenuOpen(false);
 
-    // All game state changes (action save, turn advance, GM response) happen server-side
+    // All game state changes (action save, turn advance, GM response) happen
+    // server-side. The route streams the GM's narration back as NDJSON (one
+    // JSON object per line: {type:"delta",text} while narrating, then a single
+    // {type:"done",...} or {type:"error",...} at the end) so the player sees
+    // the story appear token-by-token instead of staring at "thinking..." for
+    // the whole turn.
     setGmThinking(true);
+    setStreamingText("");
     try {
-      await fetch("/api/gm/respond", {
+      const res = await fetch("/api/gm/respond", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -396,12 +407,43 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           forcedSkill: forcedSkill ?? null,
         }),
       });
+      const reader = res.body?.getReader();
+      if (reader) {
+        const decoder = new TextDecoder();
+        let buf = "";
+        let live = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          let nl: number;
+          while ((nl = buf.indexOf("\n")) !== -1) {
+            const line = buf.slice(0, nl).trim();
+            buf = buf.slice(nl + 1);
+            if (!line) continue;
+            try {
+              const evt = JSON.parse(line);
+              if (evt.type === "delta" && typeof evt.text === "string") {
+                live += evt.text;
+                setStreamingText(live);
+              }
+              // "done"/"error" events carry the same info fetchAll() will pick
+              // up from the DB right after — no need to act on them here.
+            } catch {
+              // Malformed line — ignore and keep reading; fetchAll() below is
+              // the source of truth regardless.
+            }
+          }
+        }
+      }
     } catch {
-      // non-blocking
+      // non-blocking — fetchAll() below still syncs whatever the server
+      // actually persisted, even if the stream connection itself hiccuped.
     }
     setGmThinking(false);
 
     await fetchAll();
+    setStreamingText(null);
     setSubmitting(false);
   }
 
@@ -554,7 +596,11 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           {gmThinking && (
             <div className="rounded-lg p-3.5" style={{ background: "rgba(20,16,11,0.5)", border: "1px solid rgba(201,169,110,0.10)" }}>
               <span className="text-xs text-gold/60 font-medium uppercase tracking-wider block mb-1">GM</span>
-              <span className="text-zinc-600 text-sm italic">thinking...</span>
+              {streamingText ? (
+                <GmText content={streamingText} />
+              ) : (
+                <span className="text-zinc-600 text-sm italic">thinking...</span>
+              )}
             </div>
           )}
           <div ref={logEndRef} />
