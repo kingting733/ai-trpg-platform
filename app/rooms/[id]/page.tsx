@@ -178,6 +178,19 @@ const SKILL_PICKER: { label: string; keys: string[] }[] = [
   { label: "行動 / 風險", keys: ["dodge", "stealth", "lockpick", "drive_auto", "first_aid", "fighting", "firearms"] },
 ];
 
+// Flavor lines shown while the GM is thinking, BEFORE the first narration token
+// streams in (once real prose arrives it takes over). Cosmetic only — they cycle
+// on a timer and don't reflect real server phases. The dice line gets a rolling-
+// die animation (also cosmetic; the real roll is shown in the dice-result box).
+const THINKING_MESSAGES: { text: string; dice?: boolean }[] = [
+  { text: "主持人正在翻閱筆記…" },
+  { text: "命運正在低語…" },
+  { text: "骰子仍在滾動…", dice: true },
+  { text: "迷霧正在散去…" },
+  { text: "古老的書頁沙沙作響…" },
+  { text: "陰影正在挪移…" },
+];
+
 const STAT_ZH: Record<string, string> = {
   hp: "生命", san: "理智", mp: "魔力",
   str: "力量", con: "體質", siz: "體型", dex: "敏捷", app: "外貌",
@@ -252,6 +265,10 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   // "thinking..." placeholder covers that gap). Cleared once fetchAll() pulls
   // the persisted turn from the DB, so there's never a duplicate/stale copy.
   const [streamingText, setStreamingText] = useState<string | null>(null);
+  // Which flavor line is showing while the GM thinks (pre-stream). Cycles on a 2s timer.
+  const [thinkingMsgIdx, setThinkingMsgIdx] = useState(0);
+  // Evidence/reveal image opened full-size in the lightbox, or null.
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [endingGame, setEndingGame] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState<Record<string, boolean>>({});
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -294,6 +311,30 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     const interval = setInterval(fetchAll, 3000);
     return () => clearInterval(interval);
   }, [fetchAll]);
+
+  // Cycle the GM "thinking" flavor line every 2s — only while waiting for the
+  // FIRST narration token (once prose streams in, that view takes over).
+  useEffect(() => {
+    if (!gmThinking || streamingText) return;
+    setThinkingMsgIdx(Math.floor(Math.random() * THINKING_MESSAGES.length));
+    const id = setInterval(() => {
+      setThinkingMsgIdx((cur) => {
+        if (THINKING_MESSAGES.length <= 1) return cur;
+        let next = cur;
+        while (next === cur) next = Math.floor(Math.random() * THINKING_MESSAGES.length);
+        return next;
+      });
+    }, 2000);
+    return () => clearInterval(id);
+  }, [gmThinking, streamingText]);
+
+  // ESC closes the evidence lightbox.
+  useEffect(() => {
+    if (!lightboxSrc) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setLightboxSrc(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightboxSrc]);
 
   // The scenario's location graph is static for the whole game — fetch once.
   useEffect(() => {
@@ -490,6 +531,33 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
 
   return (
     <>
+    {/* Evidence / reveal image lightbox — click any 發現 image to inspect it full-size */}
+    {lightboxSrc && (
+      <div
+        onClick={() => setLightboxSrc(null)}
+        className="fixed inset-0 z-50 flex items-center justify-center p-6 cursor-zoom-out"
+        style={{ background: "rgba(0,0,0,0.88)" }}
+        role="dialog"
+        aria-modal="true"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={lightboxSrc}
+          alt="發現"
+          onClick={(e) => e.stopPropagation()}
+          className="max-w-full max-h-full rounded-lg cursor-default"
+          style={{ border: "1px solid rgba(201,169,110,0.4)", boxShadow: "0 8px 40px rgba(0,0,0,0.6)" }}
+        />
+        <button
+          type="button"
+          onClick={() => setLightboxSrc(null)}
+          aria-label="關閉"
+          className="fixed top-5 right-6 text-3xl text-zinc-300 hover:text-white leading-none"
+        >
+          ×
+        </button>
+      </div>
+    )}
     {/* OOC player chat — floating button + slide-over drawer (GM never sees it) */}
     <ChatDrawer
       roomId={params.id}
@@ -582,7 +650,9 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                     <img
                       src={entry.media_url}
                       alt="發現"
-                      className="rounded-lg w-full object-contain mb-2 border"
+                      title="點擊放大檢視"
+                      onClick={() => setLightboxSrc(entry.media_url!)}
+                      className="rounded-lg w-full object-contain mb-2 border cursor-zoom-in hover:brightness-110 transition"
                       style={{ borderColor: "rgba(201,169,110,0.25)", maxHeight: "22rem", background: "rgba(0,0,0,0.25)" }}
                       onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                     />
@@ -601,13 +671,9 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                   <span className="gm-caret" aria-hidden />
                 </div>
               ) : (
-                <span className="text-zinc-500 text-sm italic inline-flex items-center">
-                  主持人思考中
-                  <span className="gm-dots" aria-hidden>
-                    <span className="gm-dot" />
-                    <span className="gm-dot" />
-                    <span className="gm-dot" />
-                  </span>
+                <span className="gm-thinking-line text-zinc-400 text-sm italic inline-flex items-center gap-1.5">
+                  {THINKING_MESSAGES[thinkingMsgIdx]?.dice && <span className="dice-roll" aria-hidden />}
+                  {THINKING_MESSAGES[thinkingMsgIdx]?.text ?? "主持人思考中…"}
                 </span>
               )}
             </div>
@@ -802,19 +868,35 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                   const st = ls.status[n.id];
                   const isCurrent = ls.current === n.id;
                   const visited = ls.visited.includes(n.id);
+                  // Unlocked, non-current places are clickable on your turn:
+                  // clicking fills the input with a travel action (fill-only —
+                  // the player still reviews and submits).
+                  const canGo = st === "unlocked" && !isCurrent && isMyTurn && !submitting;
+                  const label = (
+                    <span className={
+                      isCurrent ? "text-gold font-semibold"
+                      : st === "unlocked" ? (visited ? "text-zinc-500" : "text-zinc-300")
+                      : "text-zinc-600"
+                    }>
+                      {short(n.name)}
+                      {st === "discovered" && <span className="ml-1 text-[10px] text-zinc-700">尚未能進入</span>}
+                    </span>
+                  );
                   return (
                     <div key={n.id} className="flex items-center gap-2 text-xs">
                       <span className="shrink-0 w-4 text-center">
                         {isCurrent ? "📍" : st === "unlocked" ? (visited ? "✓" : "○") : "🔒"}
                       </span>
-                      <span className={
-                        isCurrent ? "text-gold font-semibold"
-                        : st === "unlocked" ? (visited ? "text-zinc-500" : "text-zinc-300")
-                        : "text-zinc-600"
-                      }>
-                        {short(n.name)}
-                        {st === "discovered" && <span className="ml-1 text-[10px] text-zinc-700">尚未能進入</span>}
-                      </span>
+                      {canGo ? (
+                        <button
+                          type="button"
+                          onClick={() => setActionText(`前往${short(n.name)}`)}
+                          title={`前往${short(n.name)}`}
+                          className="text-left hover:text-gold hover:underline decoration-dotted underline-offset-2 transition-colors"
+                        >
+                          {label}
+                        </button>
+                      ) : label}
                     </div>
                   );
                 })}

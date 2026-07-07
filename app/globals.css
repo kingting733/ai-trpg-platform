@@ -91,7 +91,23 @@ body {
 }
 @keyframes gm-caret-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 
+/* Rotating GM thinking line — a gentle pulse so it reads as "working" even
+   while a single message is on screen between 2s rotations. */
+.gm-thinking-line { animation: gm-thinking-pulse 1.9s ease-in-out infinite; }
+@keyframes gm-thinking-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+
+/* Purely-cosmetic rolling die for the 骰子仍在滾動… message — it shakes and
+   cycles faces; it is NOT the real dice roll (that is resolved server-side and
+   shown in the action's dice-result box). */
+.dice-roll { display: inline-block; font-size: 1.05em; animation: dice-shake 0.55s ease-in-out infinite; }
+.dice-roll::after { content: "\2680"; animation: dice-cycle 0.66s steps(1) infinite; }
+@keyframes dice-shake { 0%, 100% { transform: rotate(-14deg); } 50% { transform: rotate(14deg) translateY(-1px); } }
+@keyframes dice-cycle {
+  0%   { content: "\2680"; } 16%  { content: "\2681"; } 33%  { content: "\2682"; }
+  50%  { content: "\2683"; } 66%  { content: "\2684"; } 83%  { content: "\2685"; }
+}
+
 /* Respect users who prefer no motion. */
 @media (prefers-reduced-motion: reduce) {
-  .fx-dread, .gm-dot, .gm-caret { animation: none; }
+  .fx-dread, .gm-dot, .gm-caret, .gm-thinking-line, .dice-roll, .dice-roll::after { animation: none; }
 }
