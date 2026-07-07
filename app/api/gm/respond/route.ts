@@ -36,7 +36,7 @@ import {
   type NpcEncounter,
 } from "@/lib/game/locations";
 import { type NpcRef, resolveNpc, npcStateKey, npcStateEntry, npcDisplayName } from "@/lib/game/npc";
-import { npcAsAttacker, npcAttackType, coerceDisposition, isNpcHostile } from "@/lib/game/npc-combat";
+import { npcAsAttacker, npcAttackType, coerceDisposition, isNpcHostile, effectiveStance } from "@/lib/game/npc-combat";
 import {
   coerceInventory,
   applyItemEvents,
@@ -915,6 +915,33 @@ export async function POST(request: Request) {
   const npcKnowledgeDirective = npcKnowledgeLines.length
     ? `NPC KNOWLEDGE (authoritative — the ONLY information each NPC may give, and ONLY when a player actually talks to THAT NPC and asks/brings up the matching topic in some form; match the player's meaning, not exact words). Reveal it naturally in the NPC's own voice when the topic genuinely comes up. Do NOT volunteer it unprompted, do NOT reveal an entry whose topic the player did not raise, and do NOT invent NPC knowledge beyond this list — anything not listed is either unknown to the NPC or not yet unlocked:\n${npcKnowledgeLines.join("\n")}`
     : null;
+
+  // === PRESENT NPCS (player-facing 在場人物 panel) ===
+  // Placement NPCs at the current location + every alive NPC tracked in state.
+  // Stored on the room so the client can show who the party can act on.
+  const presentRefs = new Set<string>();
+  if (locationGraph && locState) {
+    for (const ref of evaluateNpcPlacements(locationGraph, locState, room.current_round, objProgress)) presentRefs.add(ref);
+  }
+  for (const key of Object.keys(npcStateNow)) {
+    if (npcStateNow[key]?.alive !== false) presentRefs.add(key);
+  }
+  const presentNpcs: { name: string; stance: "hostile" | "friendly" | "neutral" }[] = [];
+  const seenPresent = new Set<string>();
+  for (const ref of Array.from(presentRefs)) {
+    const name = npcDisplayName(ref, npcRoster);
+    if (seenPresent.has(name)) continue;
+    seenPresent.add(name);
+    const declared: any = resolveNpc(ref, scenarioNpcs);
+    const st = npcStateEntry(ref, npcRoster, npcStateNow);
+    const disposition = coerceDisposition(declared?.disposition);
+    const stance: "hostile" | "friendly" | "neutral" =
+      isNpcHostile(st, disposition) ? "hostile"
+      : effectiveStance(st, disposition) === "friendly" ? "friendly"
+      : "neutral";
+    presentNpcs.push({ name, stance });
+  }
+  await supabase.from("rooms").update({ present_npcs: presentNpcs }).eq("id", roomId);
 
   const input: GMAIInput = {
     scenarioTitle: scenario?.title ?? "Unknown Scenario",

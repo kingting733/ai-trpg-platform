@@ -85,6 +85,7 @@ interface Room {
     evidence_found: string[];
   } | null;
   inventory: { name: string; note?: string; evidence_id?: string | null; round?: number }[] | null;
+  present_npcs: { name: string; stance: "hostile" | "friendly" | "neutral" }[] | null;
 }
 
 interface LocGraphNode {
@@ -766,6 +767,32 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
             </Panel>
           );
         })()}
+
+        {/* In-scene NPCs — who the party can currently interact with */}
+        {room.present_npcs && room.present_npcs.length > 0 && (
+          <Panel className="p-4 shrink-0">
+            <PanelHeader title="在場人物" />
+            <div className="flex flex-col gap-1.5">
+              {room.present_npcs.map((npc, i) => (
+                <div key={`${npc.name}-${i}`} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="text-zinc-300 truncate">{npc.name}</span>
+                  {npc.stance === "hostile" && (
+                    <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded"
+                      style={{ background: "rgba(127,29,29,0.4)", color: "#fca5a5", border: "1px solid rgba(153,27,27,0.6)" }}>
+                      ⚔ 敵對
+                    </span>
+                  )}
+                  {npc.stance === "friendly" && (
+                    <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded"
+                      style={{ background: "rgba(6,78,59,0.4)", color: "#6ee7b7", border: "1px solid rgba(6,95,70,0.6)" }}>
+                      ☘ 友善
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Panel>
+        )}
 
         {/* Party Inventory — shared bag, soft-tracked from the GM's narration */}
         {room.inventory && room.inventory.length > 0 && (
