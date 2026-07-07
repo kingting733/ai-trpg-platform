@@ -935,6 +935,11 @@ export async function POST(request: Request) {
       ? `NPC ACTIONS THIS TURN (the system already resolved these hostile-NPC attacks — narrate them AS THEY HAPPENED; do NOT invent different outcomes, extra attacks, or attacks that were not listed):\n${npcActionLines.map((l) => `- ${l}`).join("\n")}`
       : null,
     npcKnowledgeDirective,
+    itemsAwardedDirective: evidenceAwardedThisTurn.length
+      ? `ITEMS AWARDED THIS TURN (the system already granted these to the party as a result of this action — the character now physically has them; you MUST work each pickup naturally into your narration, describing them noticing/finding/taking the item. Do NOT omit any, and do NOT invent items that are not listed):\n${evidenceAwardedThisTurn
+          .map((e) => `- ${e.name}`)
+          .join("\n")}`
+      : null,
     currentRound: room.current_round,
     actingCharacterName: resolvedActor?.name ?? "Unknown",
     nextCharacterName: nextActor?.name ?? "Unknown",
