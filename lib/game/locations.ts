@@ -543,34 +543,59 @@ export function detectTravelTarget(
 ): { node: LocationNode; status: LocationStatus } | null {
   const a = actionText.toLowerCase();
   const cjkRuns = (a.match(/[㐀-鿿]+/g) ?? []).filter((r) => r.length >= 2);
-  const scored: { node: LocationNode; score: number }[] = [];
+  // Track BOTH how strongly each node matched (score) and WHERE its mention sits
+  // in the action (pos) — the position drives the destination-last tiebreak.
+  const scored: { node: LocationNode; score: number; pos: number }[] = [];
   for (const node of graph.nodes) {
     if (node.id === state.current) continue;
-    let score = mentionScore(a, node.name); // exact / whole-segment (≥100)
+    let score = 0;
+    let pos = -1;
+    const nameLower = node.name.toLowerCase();
+    const sn = shortName(node.name).toLowerCase();
+    // Full short-name match (strong, ≥100).
+    const full = sn ? a.indexOf(sn) : -1;
+    if (full >= 0) {
+      score = sn.length + 100;
+      pos = full;
+    }
+    // Whole distinctive segment (weak).
     if (score === 0) {
-      const nameLower = node.name.toLowerCase();
-      // Partial (a): a CJK chunk the player typed sits inside the name — works
-      // when the player typed the name in isolation ("神位").
-      for (const run of cjkRuns) {
-        if (nameLower.includes(run) && run.length > score) score = run.length;
-      }
-      // Partial (b): a distinctive CJK chunk OF THE NAME appears in the action —
-      // works when the name's core is glued into a longer run the player typed,
-      // e.g. "神位" buried in "走近客廳角落嘅神位" vs node "1404神位". Without this,
-      // the (a) test fails because the name doesn't contain the whole long run.
-      const nameRuns = (nameLower.match(/[㐀-鿿]+/g) ?? []).filter((r) => r.length >= 2);
-      for (const run of nameRuns) {
-        if (a.includes(run) && run.length > score) score = run.length;
+      for (const seg of nameSegments(shortName(node.name))) {
+        const i = a.indexOf(seg.toLowerCase());
+        if (i >= 0 && seg.length > score) { score = seg.length; pos = i; }
       }
     }
-    if (score > 0) scored.push({ node, score });
+    // Partial CJK-chunk matches (weak), both directions.
+    if (score === 0) {
+      // (a) a CJK chunk the player typed sits inside the name ("神位" typed alone).
+      for (const run of cjkRuns) {
+        if (nameLower.includes(run) && run.length > score) { score = run.length; pos = a.indexOf(run); }
+      }
+      // (b) a distinctive CJK chunk OF THE NAME appears in the action — handles
+      // the name's core glued into a longer run, e.g. "神位" buried in
+      // "走近客廳角落嘅神位" vs node "1404神位".
+      const nameRuns = (nameLower.match(/[㐀-鿿]+/g) ?? []).filter((r) => r.length >= 2);
+      for (const run of nameRuns) {
+        const i = a.indexOf(run);
+        if (i >= 0 && run.length > score) { score = run.length; pos = i; }
+      }
+    }
+    if (score > 0) scored.push({ node, score, pos });
   }
   if (scored.length === 0) return null;
-  scored.sort((x, y) => y.score - x.score);
+
+  // DESTINATION-LAST tiebreak: in Chinese, "A角落嘅B" and "從A去B" put the true
+  // destination (B) LAST — the earlier location is a landmark/origin. So prefer
+  // the location whose mention appears latest in the action, not the one with
+  // the highest raw score (a full-name landmark like 客廳 would otherwise beat
+  // the partial-name destination 神位 that comes after it). Score breaks ties
+  // when two mentions sit at the same position.
+  scored.sort((x, y) => (y.pos - x.pos) || (y.score - x.score));
   const [best, second] = scored;
-  // Weak (partial, <100) matches must clearly beat the runner-up, else it's
-  // ambiguous ("神位" shared by two rooms) and we don't guess.
-  if (best.score < 100 && second && best.score < second.score * 2) return null;
+  // Ambiguity guard: a weak (<100) winner that matched the SAME text position as
+  // a comparable runner-up is a genuine tie ("神位" shared by two rooms) — don't
+  // guess. Different positions are resolved by destination-last above.
+  if (best.score < 100 && second && best.pos === second.pos && best.score < second.score * 2) return null;
   return { node: best.node, status: state.status[best.node.id] ?? "hidden" };
 }
 

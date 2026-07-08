@@ -360,6 +360,7 @@ SUGGESTED ACTIONS — SKILL-TAGGED, 3 DISTINCT SLOTS (STRICT):
 - KEEP IT SHORT: each choice is at most 15 Chinese words/characters (about 12 English words) and states ONLY the action itself. Do NOT add the reason for it, what it hopes to find, or its potential outcome/consequence. No "以便…", "來查明…", "which might…", "in order to…".
   Good: "[偵查] <Name>翻找書桌抽屜", "[說服] <Name>勸守衛讓路", "[搏鬥] <Name>撲向襲擊者".
   Bad (too long / explains why): "[偵查] <Name>仔細翻找書桌的抽屜，希望能找到與案件有關的線索".
+- ONE DESTINATION PER CHOICE: a choice may name AT MOST ONE location. If it moves the party or searches a place, name only that single target — do NOT also mention a second location as a landmark or origin (the travel system reads the location name from the option, and two names make the destination ambiguous). Bad: "<Name>走近客廳角落嘅神位" (two places). Good: "<Name>檢查神位的香爐".
 - The tag MUST be one of the EXACT skill names listed above (write the tag in the scenario's language only if it is Chinese; otherwise keep the Chinese skill name as the tag is fine). Pick the skill that genuinely fits the action.
 - Tailor choices to the NEXT character's actual strengths when possible (their sheet/skills are given), but never fabricate a skill they cannot attempt.
 - If the scene is purely narrative (no meaningful check possible), you may omit the tag on a choice, but still keep the three options distinct.
