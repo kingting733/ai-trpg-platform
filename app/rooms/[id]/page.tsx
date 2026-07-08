@@ -292,6 +292,9 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   const logEndRef = useRef<HTMLDivElement>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const [atBottom, setAtBottom] = useState(true);
+  // Mobile: the suggested-action list can be collapsed to free up the short
+  // story window; it re-shows automatically on a new turn.
+  const [choicesHidden, setChoicesHidden] = useState(false);
   const [locGraphNodes, setLocGraphNodes] = useState<LocGraphNode[] | null>(null);
   function toggleSkills(id: string) { setSkillsOpen((p) => ({ ...p, [id]: !p[id] })); }
 
@@ -391,6 +394,19 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     if (!el) return;
     setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 120);
   }, []);
+
+  // Follow-the-bottom auto-scroll: when the player is already at the latest
+  // message, keep pinning to the bottom as new GM text streams / logs arrive.
+  // If they've scrolled up to read, DON'T yank them down — leave them put (the
+  // "↓ 最新訊息" button lets them return on demand).
+  useEffect(() => {
+    if (atBottom) logEndRef.current?.scrollIntoView({ behavior: "auto" });
+  }, [storyLog, streamingText, gmThinking, atBottom]);
+
+  // Re-show the collapsed suggested actions when a new turn begins.
+  useEffect(() => {
+    setChoicesHidden(false);
+  }, [room?.current_round]);
 
   async function initializeTurns() {
     if (!room || initializing) return;
@@ -830,18 +846,20 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
 
         {/* Story log */}
         <div className="relative flex-1 min-h-0 flex flex-col rounded-xl" style={PANEL}>
-          {/* Ornate frame + decorations (fixed to the panel, not the scroll content) */}
-          <div className="absolute inset-[6px] rounded-lg pointer-events-none z-10" style={{ border: "1px solid rgba(201,169,110,0.16)" }} />
-          <Clip className="-top-1.5 left-7" />
-          <div className="absolute -top-2 right-9 px-3 py-1 rotate-3 pointer-events-none z-10 text-[10px] italic"
+          {/* Ornate frame + decorations (fixed to the panel, not the scroll
+              content). Hidden below sm — on a phone they only eat width/height
+              that the narration needs. */}
+          <div className="absolute inset-[6px] rounded-lg pointer-events-none z-10 hidden sm:block" style={{ border: "1px solid rgba(201,169,110,0.16)" }} />
+          <Clip className="hidden sm:block -top-1.5 left-7" />
+          <div className="absolute -top-2 right-9 px-3 py-1 rotate-3 pointer-events-none z-10 text-[10px] italic hidden sm:block"
             style={{ background: "rgba(40,34,24,0.92)", border: "1px solid rgba(201,169,110,0.2)", color: "rgba(201,169,110,0.5)", boxShadow: "0 2px 8px rgba(0,0,0,0.5)" }}>
             observe · record
           </div>
-          <div className="absolute bottom-5 right-6 pointer-events-none z-0 opacity-[0.10]">
+          <div className="absolute bottom-5 right-6 pointer-events-none z-0 opacity-[0.10] hidden sm:block">
             <Seal size={88} glyph="◬" />
           </div>
 
-          <div ref={logContainerRef} onScroll={onLogScroll} className="relative z-[1] flex-1 p-5 overflow-y-auto min-h-0 flex flex-col gap-3">
+          <div ref={logContainerRef} onScroll={onLogScroll} className="relative z-[1] flex-1 p-3 sm:p-5 overflow-y-auto min-h-0 flex flex-col gap-3">
           {storyLog.length === 0 && (
             <p className="text-zinc-600 text-sm italic text-center mt-8">
               {needsInit ? "準備就緒 — 點擊下方「開始冒險」！" : "等待所有玩家選擇調查員..."}
@@ -910,8 +928,8 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           {!atBottom && (
             <button
               onClick={scrollToBottom}
-              className="absolute bottom-3 right-3 z-20 text-xs font-medium px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1 transition-colors"
-              style={{ background: "rgba(26,21,14,0.95)", border: "1px solid rgba(201,169,110,0.35)", color: "#c9a96e" }}
+              className="absolute bottom-3 right-3 z-20 text-sm sm:text-xs font-medium px-4 py-2.5 sm:py-1.5 rounded-full shadow-lg flex items-center gap-1 transition-colors active:brightness-125"
+              style={{ background: "rgba(26,21,14,0.97)", border: "1px solid rgba(201,169,110,0.45)", color: "#c9a96e" }}
             >
               ↓ 最新訊息
             </button>
@@ -921,7 +939,17 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
         {/* Suggested choices — only shown if they were generated FOR the current turn player */}
         {isMyTurn && choicesAreForMe && (room.current_choices?.length ?? 0) === 3 && hasStarted && (
           <div className="flex flex-col gap-2 shrink-0">
-            <p className="text-xs tracking-wider"><span className="text-gold font-medium">建議行動</span> <span className="text-zinc-600">— 或在下方輸入自己的行動</span></p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs tracking-wider"><span className="text-gold font-medium">建議行動</span> <span className="text-zinc-600">— 或在下方輸入自己的行動</span></p>
+              <button
+                type="button"
+                onClick={() => setChoicesHidden((h) => !h)}
+                className="text-[11px] text-zinc-500 hover:text-gold transition-colors shrink-0 px-1"
+              >
+                {choicesHidden ? "顯示 ▾" : "隱藏 ▴"}
+              </button>
+            </div>
+            {!choicesHidden && (
             <div className="grid grid-cols-1 gap-2">
               {room.current_choices!.map((c, i) => {
                 // Split a "[技能] 行動" choice so the skill tag renders as its own chip.
@@ -949,6 +977,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                 );
               })}
             </div>
+            )}
           </div>
         )}
 
