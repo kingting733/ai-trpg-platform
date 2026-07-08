@@ -44,7 +44,7 @@ The server owns all mechanical state (location, HP, hostility, evidence, objecti
 **The architecture that works (follow it, don't reinvent)**
 - **Server decides; GM narrates.** Pure code + dice make every mechanical decision.
 - When natural-language understanding is needed, use the **structured-field pattern**: the GM emits a JSON field (`injury`, `items`, `move_to`, `npc_calmed`), and the **server validates it against authoritative state** before applying (e.g. `resolveMoveTarget` only accepts unlocked nodes). The GM expresses intent; it never gains authority.
-- Deterministic parsers stay as the fast path, with **conservative fuzzy fallbacks + ambiguity guards** (decline rather than guess when two candidates are close) — see `resolveFuzzyNpcTarget`, `detectTravelTarget`.
+- Deterministic parsers stay as the fast path, with **conservative fuzzy fallbacks + ambiguity guards** (decline rather than guess when two candidates are close) — see `resolveFuzzyNpcTarget`, `resolveTravelIntent`.
 - Feed authoritative state back to the GM every turn as directive blocks (LOCATION SYSTEM, NPC STATUS, CURRENT PARTY POSSESSIONS, OBJECTIVE TRACKER) so its narration can't drift.
 
 **How a smaller model recognizes it**
