@@ -362,6 +362,14 @@ SUGGESTED ACTIONS — SKILL-TAGGED, 3 DISTINCT SLOTS (STRICT):
   Good: "[偵查] 翻找書桌抽屜", "[說服] 勸守衛讓路", "[搏鬥] 撲向襲擊者".
   Bad (too long / explains why): "[偵查] 仔細翻找書桌的抽屜，希望能找到與案件有關的線索".
 - ONE DESTINATION PER CHOICE: a choice may name AT MOST ONE location. If it moves the party or searches a place, name only that single target — do NOT also mention a second location as a landmark or origin (the travel system reads the location name from the option, and two names make the destination ambiguous). Bad: "走近客廳角落嘅神位" (two places). Good: "檢查神位的香爐".
+- CHOICES ARE BOUND TO THE LOCATION SYSTEM (STRICT — read the LOCATION SYSTEM block above). Locations are SEPARATE scenes; the party can only act where it currently is. Every choice MUST be one of exactly two kinds:
+  (1) an action performed AT the CURRENT LOCATION, or
+  (2) travelling to exactly ONE place listed under 可前往 (phrased plainly as going there, e.g. "前往走廊").
+  HARD RULES for choices:
+  · NEVER assume the party is standing anywhere other than the CURRENT LOCATION. Do NOT write "站在B…", "在B處聆聽C", or any option set at a place the party has not moved to.
+  · NEVER let a single choice combine a move with a remote action ("go to B and listen to C", "from B search C"). No multi-hop. Move OR act here — not both.
+  · You CANNOT see, hear, search, or otherwise act on another location remotely — the character must travel there first. So never suggest perceiving/investigating a place that is not the CURRENT LOCATION.
+  · NEVER name a location that is not the CURRENT LOCATION or a 可前往 exit — not a 已知但尚未能進入 place, and never an UNKNOWN (unlisted) one.
 - The tag MUST be one of the EXACT skill names listed above (write the tag in the scenario's language only if it is Chinese; otherwise keep the Chinese skill name as the tag is fine). Pick the skill that genuinely fits the action.
 - Tailor choices to the NEXT character's actual strengths when possible (their sheet/skills are given), but never fabricate a skill they cannot attempt.
 - If the scene is purely narrative (no meaningful check possible), you may omit the tag on a choice, but still keep the three options distinct.
