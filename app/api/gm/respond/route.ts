@@ -370,6 +370,42 @@ export async function POST(request: Request) {
   const locationLedgerEntries: LedgerEntry[] = [];
   let locationFiredEncounters: NpcEncounter[] = [];
 
+  // SEED — on the room's very first turn there is no saved location_state, so
+  // initLocationState places the party at the starting node but never runs the
+  // start node's `discovers`, and its `visit:`-gated neighbours are only picked
+  // up later. Apply the starting node's discoveries and evaluate unlocks NOW,
+  // before the player's action, so B/C/D reveal on turn 1 even if the player's
+  // first move leaves the starting node. (arrival-based discovers only fire for
+  // nodes you travel INTO, never the one you start in.)
+  const freshLocationState =
+    !room.location_state ||
+    (typeof room.location_state === "object" && Object.keys(room.location_state).length === 0);
+  if (locationGraph && locState && freshLocationState && locState.current) {
+    const seededDiscovers = applyDiscovers(locationGraph, locState, locState.current);
+    const seededUnlocks = evaluateUnlocks(locationGraph, locState, room.current_round, objProgress);
+    // A node revealed by both this turn should only log as the stronger state.
+    const unlockedIds = new Set(seededUnlocks.unlocked.map((n) => n.id));
+    for (const n of seededDiscovers) {
+      if (unlockedIds.has(n.id)) continue;
+      locationProgress = true;
+      await supabase.from("story_logs").insert({
+        room_id: roomId,
+        round_number: room.current_round,
+        entry_type: "system",
+        content: `🧭 得知新地點：${locationShortName(n.name)}`,
+      });
+    }
+    for (const n of seededUnlocks.unlocked) {
+      locationProgress = true;
+      await supabase.from("story_logs").insert({
+        room_id: roomId,
+        round_number: room.current_round,
+        entry_type: "system",
+        content: `🗺 新地點解鎖：${locationShortName(n.name)}`,
+      });
+    }
+  }
+
   // Party-wide soft inventory (context for the GM; never gates progression).
   // 證物 awarded THIS turn are bridged into the bag after narration.
   let inventory: InventoryItem[] = coerceInventory((room as any).inventory);
