@@ -672,6 +672,158 @@ export function evaluateEncounters(
   return fired;
 }
 
+// ── v2 runtime: adjacency, exits, reachability ────────────────────────────────
+
+/** Resolve a container id to the place node the party lands on when entering
+ *  it — the configured entry, or the first child as fallback. */
+export function entryNodeOf(graph: LocationGraph, containerId: string): LocationNode | null {
+  const c = graph.containers.find((x) => x.id === containerId);
+  if (!c) return null;
+  const children = graph.nodes.filter((n) => n.container === containerId);
+  if (children.length === 0) return null;
+  return children.find((n) => n.id === c.entry) ?? children[0];
+}
+
+/** Directed adjacency between PLACE nodes: edges (container endpoints resolved
+ *  to their entry node) plus sibling links inside all_children_connected
+ *  containers. Pure structure — lock status is applied by the callers. */
+function buildAdjacency(graph: LocationGraph): Map<string, Set<string>> {
+  const adj = new Map<string, Set<string>>();
+  const link = (a: string, b: string) => {
+    if (!adj.has(a)) adj.set(a, new Set());
+    adj.get(a)!.add(b);
+  };
+  const nodeIds = new Set(graph.nodes.map((n) => n.id));
+  const resolve = (id: string): string | null =>
+    nodeIds.has(id) ? id : entryNodeOf(graph, id)?.id ?? null;
+  for (const e of graph.edges) {
+    const from = resolve(e.from);
+    const to = resolve(e.to);
+    if (!from || !to || from === to) continue;
+    link(from, to);
+    if (e.two_way) link(to, from);
+  }
+  for (const c of graph.containers) {
+    if (!c.all_children_connected) continue;
+    const kids = graph.nodes.filter((n) => n.container === c.id);
+    for (const a of kids) for (const b of kids) if (a.id !== b.id) link(a.id, b.id);
+  }
+  return adj;
+}
+
+export interface ComputedExits {
+  /** Enterable this turn（可前往）. Edges mode: every node reachable from the
+   *  current one via a path of open (unlocked) nodes — BFS one-turn travel.
+   *  Free mode: every unlocked node (v1 behavior). */
+  open: LocationNode[];
+  /** Visible but not enterable（看得到但進不去）: discovered nodes, plus locked
+   *  children of the current container when it shows locked children. */
+  locked: LocationNode[];
+}
+
+/** BFS over open (unlocked) nodes only, starting at `fromId` (inclusive). */
+function openReachable(graph: LocationGraph, adj: Map<string, Set<string>>, fromId: string): Set<string> {
+  const reached = new Set<string>([fromId]);
+  const queue = [fromId];
+  while (queue.length) {
+    const cur = queue.shift()!;
+    for (const nxt of Array.from(adj.get(cur) ?? [])) {
+      if (reached.has(nxt)) continue;
+      const node = graph.nodes.find((n) => n.id === nxt);
+      if (!node) continue;
+      reached.add(nxt);
+      // Note: reached-but-locked nodes are recorded (they're the frontier) but
+      // never traversed further.
+      queue.push(nxt);
+    }
+  }
+  return reached;
+}
+
+/** The authoritative per-turn exit computation used by the GM directive, the
+ *  travel matcher, GM move_to validation and the player panel. */
+export function computeExits(graph: LocationGraph, state: LocationState): ComputedExits {
+  if (graph.travel_mode !== "edges") {
+    return {
+      open: graph.nodes.filter((n) => n.id !== state.current && state.status[n.id] === "unlocked"),
+      locked: graph.nodes.filter((n) => state.status[n.id] === "discovered"),
+    };
+  }
+  if (!state.current) return { open: [], locked: [] };
+  const adj = buildAdjacency(graph);
+  // Walk only THROUGH unlocked nodes; locked ones end the walk (frontier).
+  const reached = new Set<string>([state.current]);
+  const queue = [state.current];
+  const frontierLocked = new Set<string>();
+  while (queue.length) {
+    const cur = queue.shift()!;
+    for (const nxt of Array.from(adj.get(cur) ?? [])) {
+      if (reached.has(nxt) || frontierLocked.has(nxt)) continue;
+      if (state.status[nxt] === "unlocked") {
+        reached.add(nxt);
+        queue.push(nxt);
+      } else {
+        frontierLocked.add(nxt);
+      }
+    }
+  }
+  const open = graph.nodes.filter((n) => n.id !== state.current && reached.has(n.id));
+
+  const lockedIds = new Set<string>();
+  // Globally known-but-locked places (the system announced them).
+  for (const n of graph.nodes) if (state.status[n.id] === "discovered") lockedIds.add(n.id);
+  // Locked doors you can literally see from an open node you can stand in.
+  for (const id of Array.from(frontierLocked)) {
+    if (state.status[id] === "discovered") lockedIds.add(id);
+  }
+  // Standing inside a container that shows its locked children reveals them
+  // (walking into the flat, you can see the bedroom door) — any status.
+  const curNode = graph.nodes.find((n) => n.id === state.current);
+  const curContainer = curNode?.container ? graph.containers.find((c) => c.id === curNode.container) : null;
+  if (curContainer?.show_locked_children) {
+    for (const n of graph.nodes) {
+      if (n.container === curContainer.id && state.status[n.id] !== "unlocked") lockedIds.add(n.id);
+    }
+  }
+  const locked = graph.nodes.filter((n) => lockedIds.has(n.id) && !reached.has(n.id) && n.id !== state.current);
+  return { open, locked };
+}
+
+/** For an unlocked-but-unreachable target: is there ANY physical path, and if
+ *  so which locked node blocks it first? (Ignores lock status while walking,
+ *  then reports the first non-open node on the found path.) */
+export function findPathBlocker(
+  graph: LocationGraph,
+  state: LocationState,
+  targetId: string
+): { hasPath: boolean; blocker: LocationNode | null } {
+  if (!state.current) return { hasPath: false, blocker: null };
+  const adj = buildAdjacency(graph);
+  const parent = new Map<string, string>();
+  const queue = [state.current];
+  const seen = new Set<string>([state.current]);
+  while (queue.length) {
+    const cur = queue.shift()!;
+    if (cur === targetId) break;
+    for (const nxt of Array.from(adj.get(cur) ?? [])) {
+      if (seen.has(nxt)) continue;
+      seen.add(nxt);
+      parent.set(nxt, cur);
+      queue.push(nxt);
+    }
+  }
+  if (!seen.has(targetId)) return { hasPath: false, blocker: null };
+  // Reconstruct current → target and report the first non-unlocked hop.
+  const path: string[] = [];
+  for (let cur: string | undefined = targetId; cur && cur !== state.current; cur = parent.get(cur)) path.unshift(cur);
+  for (const id of path) {
+    if (state.status[id] !== "unlocked") {
+      return { hasPath: true, blocker: graph.nodes.find((n) => n.id === id) ?? null };
+    }
+  }
+  return { hasPath: true, blocker: null };
+}
+
 // ── Fuzzy matching (shared with the media-reveal logic style) ─────────────────
 
 function shortName(name: string): string {
@@ -700,30 +852,31 @@ function mentionScore(actionLower: string, name: string): number {
   return best;
 }
 
-/** Find the location the action most plausibly refers to (any status).
+/** A named travel candidate — a place node under its own name, or under its
+ *  container's name (container mention resolves to the entry node). */
+interface TravelCandidate {
+  name: string;
+  node: LocationNode;
+}
+
+/** Find the candidate the action most plausibly refers to.
  *
  *  Scoring, strongest first: full short-name match, then a whole distinctive
- *  segment, then a PARTIAL match — a CJK chunk (≥2 chars) the player typed that
- *  is a substring of the name (so "神位" reaches "1404神位", whose number is glued
- *  to the name and forms one segment). Partial matches are weak and gated by an
- *  ambiguity guard: if two locations match a partial equally, we decline rather
- *  than guess. */
-export function detectTravelTarget(
-  actionText: string,
-  graph: LocationGraph,
-  state: LocationState
-): { node: LocationNode; status: LocationStatus } | null {
+ *  segment, then a PARTIAL match — a CJK chunk (≥2 chars) shared between the
+ *  typed text and the name (both directions, so "神位" reaches "1404神位" and
+ *  "神位" buried in "走近客廳角落嘅神位" still matches). DESTINATION-LAST
+ *  tiebreak: in Chinese, "A角落嘅B" / "從A去B" put the true destination LAST, so
+ *  the latest-mentioned location wins over raw score. Ambiguity guard: a weak
+ *  winner tied at the same text position as a comparable runner-up → decline. */
+function matchLocationName(actionText: string, candidates: TravelCandidate[]): LocationNode | null {
   const a = actionText.toLowerCase();
   const cjkRuns = (a.match(/[㐀-鿿]+/g) ?? []).filter((r) => r.length >= 2);
-  // Track BOTH how strongly each node matched (score) and WHERE its mention sits
-  // in the action (pos) — the position drives the destination-last tiebreak.
   const scored: { node: LocationNode; score: number; pos: number }[] = [];
-  for (const node of graph.nodes) {
-    if (node.id === state.current) continue;
+  for (const cand of candidates) {
     let score = 0;
     let pos = -1;
-    const nameLower = node.name.toLowerCase();
-    const sn = shortName(node.name).toLowerCase();
+    const nameLower = cand.name.toLowerCase();
+    const sn = shortName(cand.name).toLowerCase();
     // Full short-name match (strong, ≥100).
     const full = sn ? a.indexOf(sn) : -1;
     if (full >= 0) {
@@ -732,43 +885,114 @@ export function detectTravelTarget(
     }
     // Whole distinctive segment (weak).
     if (score === 0) {
-      for (const seg of nameSegments(shortName(node.name))) {
+      for (const seg of nameSegments(shortName(cand.name))) {
         const i = a.indexOf(seg.toLowerCase());
         if (i >= 0 && seg.length > score) { score = seg.length; pos = i; }
       }
     }
-    // Partial CJK-chunk matches (weak), both directions.
-    if (score === 0) {
-      // (a) a CJK chunk the player typed sits inside the name ("神位" typed alone).
-      for (const run of cjkRuns) {
-        if (nameLower.includes(run) && run.length > score) { score = run.length; pos = a.indexOf(run); }
-      }
-      // (b) a distinctive CJK chunk OF THE NAME appears in the action — handles
-      // the name's core glued into a longer run, e.g. "神位" buried in
-      // "走近客廳角落嘅神位" vs node "1404神位".
+    // Partial CJK match (weak): the longest common substring (≥2 chars)
+    // between any CJK run of the NAME and the action text. Subsumes both
+    // "typed chunk inside name" (神位 → 1404神位) and "name core buried in a
+    // longer typed run" (神位 in 走近客廳角落嘅神位), and also survives names
+    // whose CJK is split by digits — "14樓走廊" has run 樓走廊, whose substring
+    // 走廊 still matches "返回走廊".
+    if (score === 0 && cjkRuns.length) {
       const nameRuns = (nameLower.match(/[㐀-鿿]+/g) ?? []).filter((r) => r.length >= 2);
-      for (const run of nameRuns) {
-        const i = a.indexOf(run);
-        if (i >= 0 && run.length > score) { score = run.length; pos = i; }
+      for (const nr of nameRuns) {
+        for (let len = Math.min(nr.length, 30); len >= 2; len--) {
+          if (len <= score) break;
+          let found = false;
+          for (let i = 0; i + len <= nr.length; i++) {
+            const sub = nr.slice(i, i + len);
+            const j = a.indexOf(sub);
+            if (j >= 0) { score = len; pos = j; found = true; break; }
+          }
+          if (found) break;
+        }
       }
     }
-    if (score > 0) scored.push({ node, score, pos });
+    if (score > 0) scored.push({ node: cand.node, score, pos });
   }
   if (scored.length === 0) return null;
-
-  // DESTINATION-LAST tiebreak: in Chinese, "A角落嘅B" and "從A去B" put the true
-  // destination (B) LAST — the earlier location is a landmark/origin. So prefer
-  // the location whose mention appears latest in the action, not the one with
-  // the highest raw score (a full-name landmark like 客廳 would otherwise beat
-  // the partial-name destination 神位 that comes after it). Score breaks ties
-  // when two mentions sit at the same position.
   scored.sort((x, y) => (y.pos - x.pos) || (y.score - x.score));
   const [best, second] = scored;
-  // Ambiguity guard: a weak (<100) winner that matched the SAME text position as
-  // a comparable runner-up is a genuine tie ("神位" shared by two rooms) — don't
-  // guess. Different positions are resolved by destination-last above.
-  if (best.score < 100 && second && best.pos === second.pos && best.score < second.score * 2) return null;
-  return { node: best.node, status: state.status[best.node.id] ?? "hidden" };
+  if (
+    best.score < 100 &&
+    second &&
+    second.node.id !== best.node.id && // same node via two names is not ambiguity
+    best.pos === second.pos &&
+    best.score < second.score * 2
+  ) {
+    return null;
+  }
+  return best.node;
+}
+
+/** What the player's travel-ish action resolves to, mode-aware. */
+export type TravelIntent =
+  | { kind: "go"; node: LocationNode }
+  /** Known but not enterable（soft wall）. */
+  | { kind: "locked"; node: LocationNode }
+  /** Edges mode: destination is open but every path crosses a locked node
+   *  (blocker) — or no physical path exists at all (blocker null). */
+  | { kind: "blocked"; node: LocationNode; blocker: LocationNode | null }
+  /** Free mode only: the player named a place they should not know exists. */
+  | { kind: "unknown"; node: LocationNode };
+
+/**
+ * Resolve which location an action refers to and whether the party can go.
+ *
+ * Free mode (v1): matches ANY node; unlocked → go, discovered → locked,
+ * hidden → unknown. Edges mode: hidden nodes are NEVER matchable (naming one
+ * falls through to off_graph — the system won't confirm it exists); travel is
+ * one-turn BFS over open nodes; unlocked-but-cut-off destinations report the
+ * blocking node. Container names always resolve to their entry node.
+ */
+export function resolveTravelIntent(
+  actionText: string,
+  graph: LocationGraph,
+  state: LocationState
+): TravelIntent | null {
+  const edgesMode = graph.travel_mode === "edges";
+  const exits = edgesMode ? computeExits(graph, state) : null;
+
+  const candidates: TravelCandidate[] = [];
+  if (edgesMode) {
+    const visible = new Set([...exits!.open, ...exits!.locked].map((n) => n.id));
+    for (const n of graph.nodes) {
+      if (n.id === state.current) continue;
+      // Known places: current exits + anything unlocked/discovered before
+      // (announced to the players when it opened, even if now cut off).
+      if (visible.has(n.id) || state.status[n.id] === "unlocked" || state.status[n.id] === "discovered") {
+        candidates.push({ name: n.name, node: n });
+      }
+    }
+  } else {
+    for (const n of graph.nodes) {
+      if (n.id !== state.current) candidates.push({ name: n.name, node: n });
+    }
+  }
+  // Containers are addressable by name; the party lands on the entry node.
+  for (const c of graph.containers) {
+    const entry = entryNodeOf(graph, c.id);
+    if (!entry || entry.id === state.current) continue;
+    if (edgesMode && state.status[entry.id] === "hidden") continue; // unknown region
+    candidates.push({ name: c.name, node: entry });
+  }
+
+  const node = matchLocationName(actionText, candidates);
+  if (!node) return null;
+  const status = state.status[node.id] ?? "hidden";
+
+  if (!edgesMode) {
+    if (status === "unlocked") return { kind: "go", node };
+    if (status === "discovered") return { kind: "locked", node };
+    return { kind: "unknown", node };
+  }
+  if (status !== "unlocked") return { kind: "locked", node };
+  if (exits!.open.some((n) => n.id === node.id)) return { kind: "go", node };
+  const { hasPath, blocker } = findPathBlocker(graph, state, node.id);
+  return { kind: "blocked", node, blocker: hasPath ? blocker : null };
 }
 
 /**
@@ -785,19 +1009,25 @@ export function resolveMoveTarget(
 ): LocationNode | null {
   const q = name.trim().toLowerCase();
   if (!q) return null;
+  // The pool is the server-computed OPEN exits — in edges mode that already
+  // means "reachable via a path of open nodes", so the GM can never move the
+  // party across a locked door or to a disconnected place.
+  const pool: TravelCandidate[] = computeExits(graph, state).open.map((n) => ({ name: n.name, node: n }));
+  for (const c of graph.containers) {
+    const entry = entryNodeOf(graph, c.id);
+    if (entry && pool.some((p) => p.node.id === entry.id)) pool.push({ name: c.name, node: entry });
+  }
   let best: LocationNode | null = null;
   let bestScore = 0;
-  for (const node of graph.nodes) {
-    if (node.id === state.current) continue;
-    if (state.status[node.id] !== "unlocked") continue; // locked/hidden: never
-    const full = node.name.trim().toLowerCase();
-    const sn = shortName(node.name).toLowerCase();
+  for (const cand of pool) {
+    const full = cand.name.trim().toLowerCase();
+    const sn = shortName(cand.name).toLowerCase();
     let score = 0;
     if (q === full || q === sn) score = 1000;
     else if (full.includes(q) || q.includes(sn)) score = 100 + Math.min(q.length, full.length);
-    else score = mentionScore(q, node.name);
+    else score = mentionScore(q, cand.name);
     if (score > bestScore) {
-      best = node;
+      best = cand.node;
       bestScore = score;
     }
   }
@@ -867,6 +1097,9 @@ export function matchEvidence(
 export type TravelDirective =
   | { kind: "arrived"; node: LocationNode; firstVisit?: boolean }
   | { kind: "soft_wall"; node: LocationNode }
+  /** Edges mode: destination is open, but the way there crosses a locked node
+   *  (blocker) — or no physical route exists at all (blocker null). */
+  | { kind: "blocked_path"; node: LocationNode; blocker: LocationNode | null }
   | { kind: "unknown_place"; node: LocationNode }
   | { kind: "off_graph" };
 
@@ -887,7 +1120,9 @@ export function buildLocationBlock(
   const lines: string[] = ["LOCATION SYSTEM (server-authoritative — you MUST follow this; you cannot reveal hidden places yourself, and the party's position only changes via the move_to field below or a TRAVEL notice from the system):"];
 
   if (current) {
-    lines.push(`CURRENT LOCATION: ${current.name}${current.desc ? ` — ${current.desc}` : ""}`);
+    // Region breadcrumb (1404室 › 1404神位) so the GM narrates the right scale.
+    const region = current.container ? graph.containers.find((c) => c.id === current.container) : null;
+    lines.push(`CURRENT LOCATION: ${region ? `${region.name} › ` : ""}${current.name}${current.desc ? ` — ${current.desc}` : ""}`);
     const unfound = current.evidence.filter((e) => !state.evidence_found.includes(e.id));
     if (unfound.length) {
       lines.push(
@@ -910,8 +1145,11 @@ export function buildLocationBlock(
   const found = graph.nodes.flatMap((n) => n.evidence).filter((e) => state.evidence_found.includes(e.id));
   if (found.length) lines.push(`EVIDENCE THE PARTY HOLDS: ${found.map((e) => e.name).join("、")}`);
 
-  const unlockedOthers = graph.nodes.filter((n) => n.id !== state.current && state.status[n.id] === "unlocked");
-  const discoveredLocked = graph.nodes.filter((n) => state.status[n.id] === "discovered");
+  // Server-computed exits: in edges mode 可前往 = reachable via open paths from
+  // HERE (not every unlocked node); free mode = v1 lists unchanged.
+  const exits = computeExits(graph, state);
+  const unlockedOthers = exits.open;
+  const discoveredLocked = exits.locked;
   const exitsParts: string[] = [];
   if (unlockedOthers.length) exitsParts.push(`可前往：${unlockedOthers.map((n) => shortName(n.name)).join("、")}`);
   if (discoveredLocked.length) exitsParts.push(`已知但尚未能進入：${discoveredLocked.map((n) => shortName(n.name)).join("、")}`);
@@ -933,6 +1171,14 @@ export function buildLocationBlock(
         `TRAVEL BLOCKED: the actor tried to go to ${travel.node.name}, which is NOT yet accessible. Narrate an in-world reason entry fails${
           travel.node.locked_narration ? `（建議：${travel.node.locked_narration}）` : ""
         }. You may hint at what might open the way, but do NOT let them in. The party stays where it is.`
+      );
+    } else if (travel.kind === "blocked_path") {
+      lines.push(
+        travel.blocker
+          ? `TRAVEL BLOCKED EN ROUTE: the actor tried to reach ${travel.node.name}, but the way there passes through ${travel.blocker.name}, which is not yet passable${
+              travel.blocker.locked_narration ? `（建議：${travel.blocker.locked_narration}）` : ""
+            }. Narrate that the route is cut off at ${travel.blocker.name} — do NOT teleport them past it. The party stays where it is; set move_to to null.`
+          : `TRAVEL IMPOSSIBLE: the actor tried to reach ${travel.node.name}, but no route leads there from the party's position. Narrate in-world that there is simply no way through from here. The party stays where it is; set move_to to null.`
       );
     } else if (travel.kind === "unknown_place") {
       lines.push(

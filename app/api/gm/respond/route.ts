@@ -21,7 +21,7 @@ import { resolveScenarioObjectives } from "@/lib/game/objectives-def";
 import {
   coerceLocationGraph,
   coerceLocationState,
-  detectTravelTarget,
+  resolveTravelIntent,
   looksLikeTravel,
   matchEvidence,
   applyDiscovers,
@@ -451,21 +451,25 @@ export async function POST(request: Request) {
     const searchElsewhere =
       !looksLikeTravel(actionText) &&
       isSearchAction &&
-      detectTravelTarget(actionText, locationGraph, locState) != null;
+      resolveTravelIntent(actionText, locationGraph, locState) != null;
 
     // 1. TRAVEL — on an explicit movement verb, OR a search that names another
     //    location. Merely mentioning a place in passing does not teleport,
-    //    because detectTravelTarget only matches a real location name/segment.
+    //    because resolveTravelIntent only matches a real location name/segment.
+    //    In map (edges) mode it also enforces adjacency: "go" only comes back
+    //    for destinations reachable via open paths, container names resolve to
+    //    their entry node, and hidden places never match at all.
     if (looksLikeTravel(actionText) || searchElsewhere) {
-      const target = detectTravelTarget(actionText, locationGraph, locState);
-      if (target) {
-        if (target.status === "unlocked") {
-          const firstVisit = !locState.visited.includes(target.node.id);
-          locState.current = target.node.id;
+      const intent = resolveTravelIntent(actionText, locationGraph, locState);
+      if (intent) {
+        if (intent.kind === "go") {
+          const targetNode = intent.node;
+          const firstVisit = !locState.visited.includes(targetNode.id);
+          locState.current = targetNode.id;
           if (firstVisit) {
-            locState.visited.push(target.node.id);
-            locState.entered_round[target.node.id] = room.current_round;
-            const discovered = applyDiscovers(locationGraph, locState, target.node.id);
+            locState.visited.push(targetNode.id);
+            locState.entered_round[targetNode.id] = room.current_round;
+            const discovered = applyDiscovers(locationGraph, locState, targetNode.id);
             for (const d of discovered) {
               await supabase.from("story_logs").insert({
                 room_id: roomId,
@@ -475,18 +479,18 @@ export async function POST(request: Request) {
               });
             }
           }
-          travelDirective = { kind: "arrived", node: target.node, firstVisit };
+          travelDirective = { kind: "arrived", node: targetNode, firstVisit };
           locationProgress = true;
           await supabase.from("story_logs").insert({
             room_id: roomId,
             round_number: room.current_round,
             entry_type: "system",
-            content: `📍 隊伍前往：${locationShortName(target.node.name)}`,
+            content: `📍 隊伍前往：${locationShortName(targetNode.name)}`,
           });
           // First-visit node media: reveal the creator's image/text on arrival.
           if (firstVisit) {
-            const nodeImage = target.node.node_image?.trim();
-            const nodeText = target.node.node_text?.trim();
+            const nodeImage = targetNode.node_image?.trim();
+            const nodeText = targetNode.node_text?.trim();
             if (nodeImage || nodeText) {
               await supabase.from("story_logs").insert({
                 room_id: roomId,
@@ -495,19 +499,23 @@ export async function POST(request: Request) {
                 content:
                   nodeText && nodeText.length > 0
                     ? nodeText
-                    : `📍 你抵達了「${locationShortName(target.node.name)}」。`,
+                    : `📍 你抵達了「${locationShortName(targetNode.name)}」。`,
                 media_url: nodeImage || null,
               });
             }
           }
-        } else if (target.status === "discovered") {
-          travelDirective = { kind: "soft_wall", node: target.node };
+        } else if (intent.kind === "locked") {
+          travelDirective = { kind: "soft_wall", node: intent.node };
+        } else if (intent.kind === "blocked") {
+          // Map mode: destination is open but the route crosses a locked node.
+          travelDirective = { kind: "blocked_path", node: intent.node, blocker: intent.blocker };
         } else {
-          travelDirective = { kind: "unknown_place", node: target.node };
+          travelDirective = { kind: "unknown_place", node: intent.node };
         }
       } else {
         // Player seems to be moving but no graph node matched — place is not
-        // part of this scenario's location list at all.
+        // part of this scenario's location list at all (or, in map mode, is
+        // still hidden — the system won't confirm it exists).
         travelDirective = { kind: "off_graph" };
       }
     }
