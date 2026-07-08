@@ -281,9 +281,9 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [endingGame, setEndingGame] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState<Record<string, boolean>>({});
-  // Mobile only: the info panels (地點/隊伍/…) live in a bottom-sheet overlay
-  // opened from the fixed action bar, so the play area isn't a long scroll.
-  const [panelOpen, setPanelOpen] = useState(false);
+  // Mobile only: which info panel is open as a bottom-sheet popup (地點/物品/
+  // 隊伍), or null. Opened from the fixed bottom button bar.
+  const [activePanel, setActivePanel] = useState<"location" | "item" | "team" | null>(null);
   // True from the moment this player submits until their own fetchAll() has
   // synced the persisted turn. While true, the background 3s poll is skipped so
   // it can't load the persisted gm_response and briefly render it ALONGSIDE the
@@ -554,6 +554,206 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   const needsInit = room.status === "in_progress" && room.current_round === 0 && allHaveChars;
   const hasStarted = room.current_round > 0;
 
+  // ─── Info panels, defined once and rendered in BOTH the desktop sidebar and
+  // the mobile per-button popups (地點 / 物品 / 隊伍), so the JSX never diverges.
+  const shortLoc = (n: string) => n.split(/[：:，,。．\.\n——–\-（(【\[]/)[0].trim().slice(0, 30);
+  const locationPanel = locGraphNodes && room.location_state && (() => {
+    const ls = room.location_state!;
+    const visible = locGraphNodes.filter((n) => ls.status[n.id] === "unlocked" || ls.status[n.id] === "discovered");
+    if (visible.length === 0) return <p className="text-zinc-600 text-xs">尚無已知地點</p>;
+    return (
+      <Panel className="p-4 shrink-0">
+        <PanelHeader title="地點" />
+        <div className="flex flex-col gap-1.5">
+          {visible.map((n) => {
+            const st = ls.status[n.id];
+            const isCurrent = ls.current === n.id;
+            const visited = ls.visited.includes(n.id);
+            const canGo = st === "unlocked" && !isCurrent && isMyTurn && !submitting;
+            const label = (
+              <span className={
+                isCurrent ? "text-gold font-semibold"
+                : st === "unlocked" ? (visited ? "text-zinc-500" : "text-zinc-300")
+                : "text-zinc-600"
+              }>
+                {shortLoc(n.name)}
+                {st === "discovered" && <span className="ml-1 text-[10px] text-zinc-700">尚未能進入</span>}
+              </span>
+            );
+            return (
+              <div key={n.id} className="flex items-center gap-2 text-xs">
+                <span className="shrink-0 w-4 text-center">
+                  {isCurrent ? "📍" : st === "unlocked" ? (visited ? "✓" : "○") : "🔒"}
+                </span>
+                {canGo ? (
+                  <button
+                    type="button"
+                    onClick={() => { setActionText(shortLoc(n.name)); setActivePanel(null); }}
+                    title={shortLoc(n.name)}
+                    className="text-left hover:text-gold hover:underline decoration-dotted underline-offset-2 transition-colors"
+                  >
+                    {label}
+                  </button>
+                ) : label}
+              </div>
+            );
+          })}
+        </div>
+      </Panel>
+    );
+  })();
+
+  const itemPanel = (
+    <Panel className="p-4 shrink-0">
+      <PanelHeader title="隊伍物品" />
+      {room.inventory && room.inventory.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5">
+          {room.inventory.map((it, i) => (
+            <span
+              key={`${it.name}-${i}`}
+              title={it.note || undefined}
+              className="text-xs px-2 py-1 rounded"
+              style={{ background: "rgba(14,12,8,0.8)", color: "#d4d4d8", border: "1px solid #2e2416" }}
+            >
+              📦 {it.name}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="text-zinc-600 text-xs">尚無物品</p>
+      )}
+    </Panel>
+  );
+
+  const teamPanel = (
+    <>
+      {currentUserEmail === "kingtingtai@gmail.com" && room.objectives && room.objectives.length > 0 && (
+        <Panel className="p-4 shrink-0">
+          <PanelHeader title="任務目標" />
+          <div className="flex flex-col gap-2">
+            {room.objectives.map((obj) => {
+              const prog = room.objective_progress?.[obj.id];
+              const done = prog?.done === true;
+              return (
+                <div key={obj.id} className={`flex items-start gap-2 text-xs ${done ? "opacity-60" : ""}`}>
+                  <span className="shrink-0 mt-0.5 w-4 h-4 rounded flex items-center justify-center font-bold"
+                    style={done
+                      ? { background: "rgba(6,78,59,0.5)", color: "#6ee7b7", border: "1px solid rgba(6,95,70,0.7)" }
+                      : { background: "rgba(14,12,8,0.8)", color: "#71717a", border: "1px solid #2e2416" }}>
+                    {done ? "✓" : "○"}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <span className={done ? "text-zinc-500 line-through" : "text-zinc-300"}>{obj.text}</span>
+                    {obj.scope === "each_player" && !done && (
+                      <span className="ml-1.5 text-[10px] text-zinc-600">（各自完成）</span>
+                    )}
+                    {done && prog?.character && (
+                      <span className="ml-1.5 text-[10px] text-emerald-600">by {prog.character}</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Panel>
+      )}
+
+      <Panel className="p-4 shrink-0">
+        <PanelHeader title="行動順序" />
+        <div className="flex flex-col gap-1.5">
+          {sortedByDex.length === 0 && <p className="text-zinc-600 text-xs">尚無調查員</p>}
+          {sortedByDex.map((c, i) => {
+            const isActive = c.user_id === room.current_turn_player_id && hasStarted;
+            return (
+              <div
+                key={c.id}
+                className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs"
+                style={isActive ? { background: "rgba(201,169,110,0.10)", border: "1px solid rgba(201,169,110,0.30)" } : { border: "1px solid transparent" }}
+              >
+                <span className="text-zinc-600 w-3">{i + 1}.</span>
+                <span className={`flex-1 font-medium truncate ${isActive ? "text-gold" : "text-zinc-300"}`}>{c.name}</span>
+                <span className="text-zinc-500">DEX {c.dex}</span>
+                {isActive && <span className="w-1.5 h-1.5 rounded-full bg-gold shrink-0" />}
+              </div>
+            );
+          })}
+        </div>
+      </Panel>
+
+      {sortedByDex.map((c) => {
+        const isActive = c.user_id === room.current_turn_player_id && hasStarted;
+        const down = c.hp <= 0;
+        const insane = c.san <= 0;
+        const dead = down || insane;
+        return (
+          <Panel key={c.id} className="p-4 shrink-0"
+            frame={dead ? "rgba(185,28,28,0.4)" : isActive ? "rgba(201,169,110,0.40)" : "rgba(201,169,110,0.14)"}
+            style={dead ? { opacity: 0.65 } : undefined}>
+            <div className="flex items-center justify-between mb-3 gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-gold/70 text-sm leading-none">◈</span>
+                <h4 className="font-serif text-gold truncate">{c.name}</h4>
+                {c.occupation && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0"
+                    style={{ background: "rgba(201,169,110,0.1)", border: "1px solid rgba(201,169,110,0.3)", color: "#c9a96e" }}>
+                    {c.occupation}
+                  </span>
+                )}
+              </div>
+              {down && <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: "rgba(127,29,29,0.6)", color: "#fca5a5", border: "1px solid rgba(153,27,27,0.7)" }}>陣亡</span>}
+              {!down && insane && <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: "rgba(19,78,74,0.6)", color: "#5eead4", border: "1px solid rgba(17,94,89,0.7)" }}>發瘋</span>}
+            </div>
+            {(() => {
+              const maxHp = Math.max(1, Math.floor((c.con + c.siz) / 10));
+              const maxSan = Math.max(1, c.pow);
+              const maxMp = Math.max(1, Math.floor(c.pow / 5));
+              const hpPct = Math.min(100, Math.max(0, (c.hp / maxHp) * 100));
+              const sanPct = Math.min(100, Math.max(0, (c.san / maxSan) * 100));
+              const mpPct = Math.min(100, Math.max(0, (c.mp / maxMp) * 100));
+              return (
+                <div className="space-y-1.5 mb-2">
+                  <StatBar label="生命" cur={c.hp} max={maxHp} pct={hpPct}
+                    color={c.hp <= 3 ? "bg-red-500" : "bg-emerald-500"} />
+                  <StatBar label="理智" cur={c.san} max={maxSan} pct={sanPct}
+                    color={c.san <= 15 ? "bg-amber-500" : "bg-teal-400"} />
+                  <StatBar label="魔力" cur={c.mp} max={maxMp} pct={mpPct}
+                    color="bg-sky-500" />
+                </div>
+              );
+            })()}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-px">
+              {(["str","con","siz","dex","app","int","pow","edu","luck"] as const).map((k) => (
+                <div key={k} className="flex justify-between items-center py-1" style={{ borderBottom: "1px solid rgba(42,32,16,0.5)" }}>
+                  <span className="text-zinc-600 text-[11px]">{STAT_ZH[k]}</span>
+                  <span className="text-zinc-200 text-xs font-semibold">{c[k]}</span>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => toggleSkills(c.id)}
+              className="mt-3 w-full text-xs text-gold/80 hover:text-gold text-left"
+            >
+              {skillsOpen[c.id] ? "收起技能 ▲" : "查看技能 ▼"}
+            </button>
+            {skillsOpen[c.id] && (
+              <div className="mt-2 grid grid-cols-2 gap-1">
+                {c.skills && Object.entries(c.skills).filter(([,v]) => (v ?? 0) > 0).sort(([,a],[,b]) => b-a).map(([k,v]) => (
+                  <div key={k} className="flex justify-between rounded px-2 py-1" style={{ background: "rgba(0,0,0,0.3)" }}>
+                    <span className="text-zinc-500 text-xs truncate">{SKILL_ZH[k] ?? k.replace(/_/g," ")}</span>
+                    <span className="text-gold text-xs font-bold">{v}%</span>
+                  </div>
+                ))}
+                {(!c.skills || Object.values(c.skills).every(v => (v??0) === 0)) && (
+                  <p className="col-span-2 text-zinc-600 text-xs text-center py-1">尚未分配技能</p>
+                )}
+              </div>
+            )}
+          </Panel>
+        );
+      })}
+    </>
+  );
+
   return (
     <>
     {/* Evidence / reveal image lightbox — click any 發現 image to inspect it full-size */}
@@ -592,9 +792,9 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     {/* Faint occult texture behind the whole play view */}
     <div className="fixed inset-0 -z-10 pointer-events-none opacity-[0.04]" aria-hidden
       style={{ backgroundImage: "radial-gradient(circle, #c9a96e 1px, transparent 1px)", backgroundSize: "42px 42px" }} />
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4 h-[calc(100dvh-6rem)] lg:h-[calc(100vh-7rem)]">
+    <div className="fixed inset-x-0 top-14 bottom-0 z-30 flex flex-col gap-3 p-3 lg:static lg:z-auto lg:inset-auto lg:p-0 lg:grid lg:grid-cols-[1fr_280px] lg:gap-4 lg:h-[calc(100vh-7rem)]">
       {/* Main area */}
-      <div className="flex flex-col gap-3 min-h-0">
+      <div className="flex flex-col gap-3 min-h-0 flex-1 lg:flex-none">
         {/* Header */}
         <Panel className="px-5 py-3 shrink-0">
           <div className="flex items-center justify-between gap-3">
@@ -718,27 +918,6 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           )}
         </div>
 
-        {/* Mobile-only: buttons to open the info panels in a bottom sheet, so the
-            play area stays a single non-scrolling screen. */}
-        <div className="flex lg:hidden gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => setPanelOpen(true)}
-            className="flex-1 py-2 rounded-lg text-xs text-gold transition-colors hover:brightness-110"
-            style={{ background: "rgba(26,21,14,0.6)", border: "1px solid #2e2416" }}
-          >
-            🗺 地點
-          </button>
-          <button
-            type="button"
-            onClick={() => setPanelOpen(true)}
-            className="flex-1 py-2 rounded-lg text-xs text-gold transition-colors hover:brightness-110"
-            style={{ background: "rgba(26,21,14,0.6)", border: "1px solid #2e2416" }}
-          >
-            👥 隊伍狀態
-          </button>
-        </div>
-
         {/* Suggested choices — only shown if they were generated FOR the current turn player */}
         {isMyTurn && choicesAreForMe && (room.current_choices?.length ?? 0) === 3 && hasStarted && (
           <div className="flex flex-col gap-2 shrink-0">
@@ -794,7 +973,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           </div>
         ) : hasStarted ? (
           <div className="flex flex-col gap-2 shrink-0">
-          <div className="flex gap-3 items-stretch relative">
+          <div className="flex gap-2 sm:gap-3 items-stretch relative">
             {/* Skill picker */}
             <div className="relative shrink-0">
               <button
@@ -856,16 +1035,16 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && isMyTurn && !submitting) { e.preventDefault(); submitAction(); } }}
               placeholder={isMyTurn ? "描述你的行動..." : `等待 ${currentTurnChar?.name ?? "..."} 行動...`}
               disabled={!isMyTurn || submitting}
-              className="flex-1 rounded-xl px-4 py-3 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-gold/50 disabled:opacity-50 transition-colors"
+              className="flex-1 min-w-0 rounded-xl px-3 sm:px-4 py-3 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-gold/50 disabled:opacity-50 transition-colors"
               style={{ background: "rgba(14,12,8,0.8)", border: "1px solid #2e2416" }}
             />
             <button
               onClick={() => submitAction()}
               disabled={!isMyTurn || !actionText.trim() || submitting}
-              className="px-7 py-3 rounded-xl font-serif text-sm shrink-0 transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110"
+              className="px-4 sm:px-7 py-3 rounded-xl font-serif text-sm shrink-0 transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110"
               style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07", boxShadow: "0 0 16px rgba(201,169,110,0.18)" }}
             >
-              {submitting ? "..." : "Submit"}
+              {submitting ? "..." : "送出"}
             </button>
           </div>
           {selectedSkill && (
@@ -895,227 +1074,65 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
             })()}
           </div>
         )}
+
+        {/* Mobile-only: three buttons pinned at the very bottom; each opens its
+            own info panel as a bottom-sheet popup. Hidden on desktop (the panels
+            live in the right column there). */}
+        <div className="flex lg:hidden gap-2 shrink-0">
+          {([
+            { key: "location", label: "🗺 地點" },
+            { key: "item", label: "🎒 物品" },
+            { key: "team", label: "👥 隊伍" },
+          ] as const).map((b) => (
+            <button
+              key={b.key}
+              type="button"
+              onClick={() => setActivePanel((p) => (p === b.key ? null : b.key))}
+              className="flex-1 py-2.5 rounded-lg text-xs transition-colors hover:brightness-110"
+              style={activePanel === b.key
+                ? { background: "rgba(201,169,110,0.16)", border: "1px solid rgba(201,169,110,0.5)", color: "#e4d8be" }
+                : { background: "rgba(26,21,14,0.6)", border: "1px solid #2e2416", color: "#c9a96e" }}
+            >
+              {b.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Sidebar — desktop: right column. Mobile: hidden until opened as a
-          bottom-sheet overlay via the 地點/隊伍 buttons (same element, toggled
-          by classes so the panel JSX isn't duplicated). */}
-      <div
-        className={`flex-col gap-3 lg:flex lg:static lg:inset-auto lg:z-auto lg:p-0 lg:pt-0 lg:overflow-y-auto lg:bg-transparent ${
-          panelOpen
-            ? "flex fixed inset-x-0 bottom-0 top-14 z-50 overflow-y-auto p-4 pt-3 bg-[#0c0a07] rounded-t-2xl"
-            : "hidden"
-        }`}
-      >
-        {/* Mobile sheet header (close) — hidden on desktop. */}
-        <div className="flex lg:hidden items-center justify-between shrink-0 pb-1">
-          <span className="text-sm text-gold font-serif">資訊面板</span>
-          <button
-            type="button"
-            onClick={() => setPanelOpen(false)}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-zinc-100"
-            style={{ border: "1px solid #2e2416" }}
-            aria-label="關閉"
+      {/* Mobile-only: the active info panel as a bottom-sheet popup (partial
+          height, dim backdrop). Desktop uses the right-hand column below. */}
+      {activePanel && (
+        <div className="lg:hidden fixed inset-0 z-50 flex flex-col justify-end" onClick={() => setActivePanel(null)}>
+          <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.6)" }} />
+          <div
+            className="relative max-h-[65vh] overflow-y-auto p-4 pt-3 flex flex-col gap-3 rounded-t-2xl"
+            style={{ background: "#0c0a07", borderTop: "1px solid rgba(201,169,110,0.3)", boxShadow: "0 -8px 32px rgba(0,0,0,0.6)" }}
+            onClick={(e) => e.stopPropagation()}
           >
-            ✕
-          </button>
-        </div>
-
-        {/* Location map — unlocked & known-but-locked places (hidden ones never shown) */}
-        {locGraphNodes && room.location_state && (() => {
-          const ls = room.location_state!;
-          const short = (n: string) => n.split(/[：:，,。．\.\n——–\-（(【\[]/)[0].trim().slice(0, 30);
-          const visible = locGraphNodes.filter((n) => ls.status[n.id] === "unlocked" || ls.status[n.id] === "discovered");
-          if (visible.length === 0) return null;
-          return (
-            <Panel className="p-4 shrink-0">
-              <PanelHeader title="地點" />
-              <div className="flex flex-col gap-1.5">
-                {visible.map((n) => {
-                  const st = ls.status[n.id];
-                  const isCurrent = ls.current === n.id;
-                  const visited = ls.visited.includes(n.id);
-                  // Unlocked, non-current places are clickable on your turn:
-                  // clicking fills the input with a travel action (fill-only —
-                  // the player still reviews and submits).
-                  const canGo = st === "unlocked" && !isCurrent && isMyTurn && !submitting;
-                  const label = (
-                    <span className={
-                      isCurrent ? "text-gold font-semibold"
-                      : st === "unlocked" ? (visited ? "text-zinc-500" : "text-zinc-300")
-                      : "text-zinc-600"
-                    }>
-                      {short(n.name)}
-                      {st === "discovered" && <span className="ml-1 text-[10px] text-zinc-700">尚未能進入</span>}
-                    </span>
-                  );
-                  return (
-                    <div key={n.id} className="flex items-center gap-2 text-xs">
-                      <span className="shrink-0 w-4 text-center">
-                        {isCurrent ? "📍" : st === "unlocked" ? (visited ? "✓" : "○") : "🔒"}
-                      </span>
-                      {canGo ? (
-                        <button
-                          type="button"
-                          onClick={() => { setActionText(short(n.name)); setPanelOpen(false); }}
-                          title={short(n.name)}
-                          className="text-left hover:text-gold hover:underline decoration-dotted underline-offset-2 transition-colors"
-                        >
-                          {label}
-                        </button>
-                      ) : label}
-                    </div>
-                  );
-                })}
-              </div>
-            </Panel>
-          );
-        })()}
-
-        {/* Party Inventory — shared bag, soft-tracked from the GM's narration */}
-        {room.inventory && room.inventory.length > 0 && (
-          <Panel className="p-4 shrink-0">
-            <PanelHeader title="隊伍物品" />
-            <div className="flex flex-wrap gap-1.5">
-              {room.inventory.map((it, i) => (
-                <span
-                  key={`${it.name}-${i}`}
-                  title={it.note || undefined}
-                  className="text-xs px-2 py-1 rounded"
-                  style={{ background: "rgba(14,12,8,0.8)", color: "#d4d4d8", border: "1px solid #2e2416" }}
-                >
-                  📦 {it.name}
-                </span>
-              ))}
-            </div>
-          </Panel>
-        )}
-
-        {/* Objective Tracker — restricted to a single account */}
-        {currentUserEmail === "kingtingtai@gmail.com" && room.objectives && room.objectives.length > 0 && (
-          <Panel className="p-4 shrink-0">
-            <PanelHeader title="任務目標" />
-            <div className="flex flex-col gap-2">
-              {room.objectives.map((obj) => {
-                const prog = room.objective_progress?.[obj.id];
-                const done = prog?.done === true;
-                return (
-                  <div key={obj.id} className={`flex items-start gap-2 text-xs ${done ? "opacity-60" : ""}`}>
-                    <span className="shrink-0 mt-0.5 w-4 h-4 rounded flex items-center justify-center font-bold"
-                      style={done
-                        ? { background: "rgba(6,78,59,0.5)", color: "#6ee7b7", border: "1px solid rgba(6,95,70,0.7)" }
-                        : { background: "rgba(14,12,8,0.8)", color: "#71717a", border: "1px solid #2e2416" }}>
-                      {done ? "✓" : "○"}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <span className={done ? "text-zinc-500 line-through" : "text-zinc-300"}>{obj.text}</span>
-                      {obj.scope === "each_player" && !done && (
-                        <span className="ml-1.5 text-[10px] text-zinc-600">（各自完成）</span>
-                      )}
-                      {done && prog?.character && (
-                        <span className="ml-1.5 text-[10px] text-emerald-600">by {prog.character}</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </Panel>
-        )}
-
-        <Panel className="p-4 shrink-0">
-          <PanelHeader title="行動順序" />
-          <div className="flex flex-col gap-1.5">
-            {sortedByDex.length === 0 && <p className="text-zinc-600 text-xs">尚無調查員</p>}
-            {sortedByDex.map((c, i) => {
-              const isActive = c.user_id === room.current_turn_player_id && hasStarted;
-              return (
-                <div
-                  key={c.id}
-                  className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs"
-                  style={isActive ? { background: "rgba(201,169,110,0.10)", border: "1px solid rgba(201,169,110,0.30)" } : { border: "1px solid transparent" }}
-                >
-                  <span className="text-zinc-600 w-3">{i + 1}.</span>
-                  <span className={`flex-1 font-medium truncate ${isActive ? "text-gold" : "text-zinc-300"}`}>{c.name}</span>
-                  <span className="text-zinc-500">DEX {c.dex}</span>
-                  {isActive && <span className="w-1.5 h-1.5 rounded-full bg-gold shrink-0" />}
-                </div>
-              );
-            })}
-          </div>
-        </Panel>
-
-        {sortedByDex.map((c) => {
-          const isActive = c.user_id === room.current_turn_player_id && hasStarted;
-          const down = c.hp <= 0;
-          const insane = c.san <= 0;
-          const dead = down || insane;
-          return (
-            <Panel key={c.id} className="p-4 shrink-0"
-              frame={dead ? "rgba(185,28,28,0.4)" : isActive ? "rgba(201,169,110,0.40)" : "rgba(201,169,110,0.14)"}
-              style={dead ? { opacity: 0.65 } : undefined}>
-              <div className="flex items-center justify-between mb-3 gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-gold/70 text-sm leading-none">◈</span>
-                  <h4 className="font-serif text-gold truncate">{c.name}</h4>
-                  {c.occupation && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0"
-                      style={{ background: "rgba(201,169,110,0.1)", border: "1px solid rgba(201,169,110,0.3)", color: "#c9a96e" }}>
-                      {c.occupation}
-                    </span>
-                  )}
-                </div>
-                {down && <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: "rgba(127,29,29,0.6)", color: "#fca5a5", border: "1px solid rgba(153,27,27,0.7)" }}>陣亡</span>}
-                {!down && insane && <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: "rgba(19,78,74,0.6)", color: "#5eead4", border: "1px solid rgba(17,94,89,0.7)" }}>發瘋</span>}
-              </div>
-              {(() => {
-                const maxHp = Math.max(1, Math.floor((c.con + c.siz) / 10));
-                const maxSan = Math.max(1, c.pow);
-                const maxMp = Math.max(1, Math.floor(c.pow / 5));
-                const hpPct = Math.min(100, Math.max(0, (c.hp / maxHp) * 100));
-                const sanPct = Math.min(100, Math.max(0, (c.san / maxSan) * 100));
-                const mpPct = Math.min(100, Math.max(0, (c.mp / maxMp) * 100));
-                return (
-                  <div className="space-y-1.5 mb-2">
-                    <StatBar label="生命" cur={c.hp} max={maxHp} pct={hpPct}
-                      color={c.hp <= 3 ? "bg-red-500" : "bg-emerald-500"} />
-                    <StatBar label="理智" cur={c.san} max={maxSan} pct={sanPct}
-                      color={c.san <= 15 ? "bg-amber-500" : "bg-teal-400"} />
-                    <StatBar label="魔力" cur={c.mp} max={maxMp} pct={mpPct}
-                      color="bg-sky-500" />
-                  </div>
-                );
-              })()}
-              <div className="grid grid-cols-2 gap-x-4 gap-y-px">
-                {(["str","con","siz","dex","app","int","pow","edu","luck"] as const).map((k) => (
-                  <div key={k} className="flex justify-between items-center py-1" style={{ borderBottom: "1px solid rgba(42,32,16,0.5)" }}>
-                    <span className="text-zinc-600 text-[11px]">{STAT_ZH[k]}</span>
-                    <span className="text-zinc-200 text-xs font-semibold">{c[k]}</span>
-                  </div>
-                ))}
-              </div>
+            <div className="flex items-center justify-between shrink-0 pb-1">
+              <span className="text-sm text-gold font-serif">
+                {activePanel === "location" ? "地點" : activePanel === "item" ? "隊伍物品" : "隊伍狀態"}
+              </span>
               <button
-                onClick={() => toggleSkills(c.id)}
-                className="mt-3 w-full text-xs text-gold/80 hover:text-gold text-left"
+                type="button"
+                onClick={() => setActivePanel(null)}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-zinc-100"
+                style={{ border: "1px solid #2e2416" }}
+                aria-label="關閉"
               >
-                {skillsOpen[c.id] ? "收起技能 ▲" : "查看技能 ▼"}
+                ✕
               </button>
-              {skillsOpen[c.id] && (
-                <div className="mt-2 grid grid-cols-2 gap-1">
-                  {c.skills && Object.entries(c.skills).filter(([,v]) => (v ?? 0) > 0).sort(([,a],[,b]) => b-a).map(([k,v]) => (
-                    <div key={k} className="flex justify-between rounded px-2 py-1" style={{ background: "rgba(0,0,0,0.3)" }}>
-                      <span className="text-zinc-500 text-xs truncate">{SKILL_ZH[k] ?? k.replace(/_/g," ")}</span>
-                      <span className="text-gold text-xs font-bold">{v}%</span>
-                    </div>
-                  ))}
-                  {(!c.skills || Object.values(c.skills).every(v => (v??0) === 0)) && (
-                    <p className="col-span-2 text-zinc-600 text-xs text-center py-1">尚未分配技能</p>
-                  )}
-                </div>
-              )}
-            </Panel>
-          );
-        })}
+            </div>
+            {activePanel === "location" ? locationPanel : activePanel === "item" ? itemPanel : teamPanel}
+          </div>
+        </div>
+      )}
+
+      {/* Sidebar — desktop right column only; mobile uses the popups above. */}
+      <div className="hidden lg:flex flex-col gap-3 lg:overflow-y-auto">
+        {locationPanel}
+        {itemPanel}
+        {teamPanel}
       </div>
     </div>
     </>

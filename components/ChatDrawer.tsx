@@ -106,7 +106,7 @@ export function ChatDrawer({
       {/* Floating toggle button */}
       <button
         onClick={toggle}
-        className="fixed bottom-6 right-6 z-40 w-13 h-13 rounded-full flex items-center justify-center transition-all hover:brightness-110"
+        className="fixed bottom-32 right-4 lg:bottom-6 lg:right-6 z-40 w-13 h-13 rounded-full flex items-center justify-center transition-all hover:brightness-110"
         style={{
           width: 52, height: 52,
           background: "linear-gradient(180deg,#1c1813,#0f0c08)",
