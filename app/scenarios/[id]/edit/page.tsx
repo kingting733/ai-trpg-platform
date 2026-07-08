@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { NpcEntry } from "@/lib/ai/gm";
 import { CoverImageUpload } from "@/components/CoverImageUpload";
 import { LocationGraphEditor } from "@/components/LocationGraphEditor";
-import { coerceLocationGraph, nodesFromLegacyLocations, type LocationNode, type NpcPlacement, type NpcEncounter } from "@/lib/game/locations";
+import { coerceLocationGraph, nodesFromLegacyLocations, type LocationNode, type NpcPlacement, type NpcEncounter, type ContainerDef, type EdgeDef, type TravelMode } from "@/lib/game/locations";
 import { EndingsEditor } from "@/components/EndingsEditor";
 import { coerceEndings, type ScenarioEnding } from "@/lib/game/endings";
 import { newNpcId, ensureNpcIds, migrateNpcRefList, migrateNpcRefsInConditions } from "@/lib/game/npc";
@@ -66,6 +66,9 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
   const [coverImageUrl, setCoverImageUrl] = useState("");
   const [npcs, setNpcs] = useState<NpcEntry[]>([]);
   const [locNodes, setLocNodes] = useState<LocationNode[]>([]);
+  const [locContainers, setLocContainers] = useState<ContainerDef[]>([]);
+  const [locEdges, setLocEdges] = useState<EdgeDef[]>([]);
+  const [locTravelMode, setLocTravelMode] = useState<TravelMode>("free");
   const [locNpcPlacements, setLocNpcPlacements] = useState<NpcPlacement[]>([]);
   const [locNpcEncounters, setLocNpcEncounters] = useState<NpcEncounter[]>([]);
   const [endings, setEndings] = useState<ScenarioEnding[]>([]);
@@ -128,6 +131,9 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
         ? (data.locations as any[]).filter((l) => l && typeof l === "object" && typeof l.name === "string")
         : [];
       setLocNodes(loadedNodes.length ? loadedNodes : nodesFromLegacyLocations(legacyLocs));
+      setLocContainers(loadedGraph?.containers ?? []);
+      setLocEdges(loadedGraph?.edges ?? []);
+      setLocTravelMode(loadedGraph?.travel_mode ?? "free");
       setLocNpcPlacements(migrateNpcRefList((loadedGraph?.npc_placements as NpcPlacement[]) ?? [], loadedNpcs));
       setLocNpcEncounters(migrateNpcRefList((loadedGraph?.npc_encounters as NpcEncounter[]) ?? [], loadedNpcs));
       setEndings(
@@ -190,7 +196,16 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
         gm_notes: gmNotes.trim() || null,
         source_document: sourceDocument.trim() || null,
         cover_image_url: coverImageUrl.trim() || null,
-        location_graph: locNodes.length ? coerceLocationGraph({ nodes: locNodes, npc_placements: locNpcPlacements, npc_encounters: locNpcEncounters }) : null,
+        location_graph: locNodes.length
+          ? coerceLocationGraph({
+              nodes: locNodes,
+              containers: locContainers,
+              edges: locEdges,
+              travel_mode: locTravelMode,
+              npc_placements: locNpcPlacements,
+              npc_encounters: locNpcEncounters,
+            })
+          : null,
         endings: endings.length ? endings : [],
         language,
         status,
@@ -378,6 +393,12 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
               <LocationGraphEditor
                 nodes={locNodes}
                 onChange={setLocNodes}
+                containers={locContainers}
+                onContainersChange={setLocContainers}
+                edges={locEdges}
+                onEdgesChange={setLocEdges}
+                travelMode={locTravelMode}
+                onTravelModeChange={setLocTravelMode}
                 npcPlacements={locNpcPlacements}
                 onNpcPlacementsChange={setLocNpcPlacements}
                 npcEncounters={locNpcEncounters}

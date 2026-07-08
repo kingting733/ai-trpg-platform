@@ -7,7 +7,7 @@ import type { NpcEntry } from "@/lib/ai/gm";
 import { newNpcId } from "@/lib/game/npc";
 import { CoverImageUpload } from "@/components/CoverImageUpload";
 import { LocationGraphEditor } from "@/components/LocationGraphEditor";
-import { coerceLocationGraph, nodesFromLegacyLocations, type LocationNode, type NpcPlacement, type NpcEncounter } from "@/lib/game/locations";
+import { coerceLocationGraph, nodesFromLegacyLocations, type LocationNode, type NpcPlacement, type NpcEncounter, type ContainerDef, type EdgeDef, type TravelMode } from "@/lib/game/locations";
 import { EndingsEditor, emptyEnding } from "@/components/EndingsEditor";
 import { coerceEndings, type ScenarioEnding } from "@/lib/game/endings";
 import { NpcRosterEditor } from "@/components/NpcRosterEditor";
@@ -71,6 +71,11 @@ export default function NewScenarioPage() {
   const [gmNotes, setGmNotes] = useState("");
   const [npcs, setNpcs] = useState<NpcEntry[]>([]);
   const [locNodes, setLocNodes] = useState<LocationNode[]>([]);
+  const [locContainers, setLocContainers] = useState<ContainerDef[]>([]);
+  const [locEdges, setLocEdges] = useState<EdgeDef[]>([]);
+  // New scenarios start in map mode — the visual editor is the default
+  // authoring experience; the editor offers a switch back to free mode.
+  const [locTravelMode, setLocTravelMode] = useState<TravelMode>("edges");
   const [locNpcPlacements, setLocNpcPlacements] = useState<NpcPlacement[]>([]);
   const [locNpcEncounters, setLocNpcEncounters] = useState<NpcEncounter[]>([]);
   const [endings, setEndings] = useState<ScenarioEnding[]>([]);
@@ -108,6 +113,9 @@ export default function NewScenarioPage() {
     setLocNodes(importedNodes.length ? importedNodes : nodesFromLegacyLocations(d.locations ?? []));
     setLocNpcPlacements(((d as any).location_graph?.npc_placements as NpcPlacement[]) ?? []);
     setLocNpcEncounters(((d as any).location_graph?.npc_encounters as NpcEncounter[]) ?? []);
+    // AI imports produce flat graphs (no edges/containers) — keep them playable
+    // in free mode; the creator can 升級為地圖模式 and draw paths afterwards.
+    if (importedNodes.length || (d.locations ?? []).length) setLocTravelMode("free");
     setEndings(coerceEndings((d as any).endings));
     if (d.language) setLanguage(d.language);
     setActiveTab("player");
@@ -214,7 +222,16 @@ export default function NewScenarioPage() {
         gm_notes: gmNotes.trim() || null,
         source_document: sourceDocument.trim() || null,
         cover_image_url: coverImageUrl.trim() || null,
-        location_graph: locNodes.length ? coerceLocationGraph({ nodes: locNodes, npc_placements: locNpcPlacements, npc_encounters: locNpcEncounters }) : null,
+        location_graph: locNodes.length
+          ? coerceLocationGraph({
+              nodes: locNodes,
+              containers: locContainers,
+              edges: locEdges,
+              travel_mode: locTravelMode,
+              npc_placements: locNpcPlacements,
+              npc_encounters: locNpcEncounters,
+            })
+          : null,
         endings: endings.length ? endings : [],
         language,
         status,
@@ -421,6 +438,12 @@ export default function NewScenarioPage() {
               <LocationGraphEditor
                 nodes={locNodes}
                 onChange={setLocNodes}
+                containers={locContainers}
+                onContainersChange={setLocContainers}
+                edges={locEdges}
+                onEdgesChange={setLocEdges}
+                travelMode={locTravelMode}
+                onTravelModeChange={setLocTravelMode}
                 npcPlacements={locNpcPlacements}
                 onNpcPlacementsChange={setLocNpcPlacements}
                 npcEncounters={locNpcEncounters}
