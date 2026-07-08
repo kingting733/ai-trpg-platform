@@ -88,10 +88,10 @@ NARRATION RULES:
 - TONE & ATMOSPHERE: Match the mood of the genre and setting, using sensory detail to make the world vivid and immersive.
 - INFORMATION GATING: Set the scene and hook the players, but do NOT reveal the plot, clues, secrets, or twists up front — those are uncovered through play.
 
-${openingInstruction} Then suggest exactly 3 possible first actions written for ${firstCharName} in third person (e.g., "${firstCharName} examines the door" not "Examine the door").
+${openingInstruction} Then suggest exactly 3 possible first actions. Write each as the action itself WITHOUT naming any character and WITHOUT "you" (e.g. "檢查大門" / "examine the door", NOT "${firstCharName} examines the door") — the game already knows whose turn it is. Keep each short and action-only.
 
 Respond ONLY with valid JSON in this exact format (no markdown, no extra text):
-{"scene":"<opening narration here>","choices":["<${firstCharName} action 1>","<${firstCharName} action 2>","<${firstCharName} action 3>"]}`;
+{"scene":"<opening narration here>","choices":["<action 1>","<action 2>","<action 3>"]}`;
 
   const userMessage = "Begin the adventure.";
 

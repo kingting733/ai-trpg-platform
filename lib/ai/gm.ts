@@ -356,11 +356,12 @@ SUGGESTED ACTIONS — SKILL-TAGGED, 3 DISTINCT SLOTS (STRICT):
   • Slot 1 — INVESTIGATION / PERCEPTION: 偵查, 聆聽, 圖書館使用, 神秘學 (search, examine, recall lore).
   • Slot 2 — SOCIAL / INSIGHT: 說服, 話術, 魅惑, 恐嚇, 心理學 (only when an NPC or social opening exists; otherwise use another investigation/perception or 急救 option).
   • Slot 3 — ACTION / RISK: a physical or risky option — 潛行, 閃避, 搏鬥, 射擊, 開鎖, 駕駛汽車, 急救, or a raw physical feat (STR/DEX). Favour the option that raises tension.
-- EACH choice MUST begin with its skill tag in square brackets, then the concrete third-person action. Format exactly: "[技能名] <具體行動>".
+- EACH choice MUST begin with its skill tag in square brackets, then the concrete action itself. Format exactly: "[技能名] <具體行動>".
+- NO CHARACTER NAME: write the action WITHOUT naming the acting character (no "<Name>…", no pronoun). State only the action verb phrase — the game already knows whose turn it is. Good: "[偵查] 翻找書桌抽屜". Bad: "[偵查] 陳大文翻找書桌抽屜".
 - KEEP IT SHORT: each choice is at most 15 Chinese words/characters (about 12 English words) and states ONLY the action itself. Do NOT add the reason for it, what it hopes to find, or its potential outcome/consequence. No "以便…", "來查明…", "which might…", "in order to…".
-  Good: "[偵查] <Name>翻找書桌抽屜", "[說服] <Name>勸守衛讓路", "[搏鬥] <Name>撲向襲擊者".
-  Bad (too long / explains why): "[偵查] <Name>仔細翻找書桌的抽屜，希望能找到與案件有關的線索".
-- ONE DESTINATION PER CHOICE: a choice may name AT MOST ONE location. If it moves the party or searches a place, name only that single target — do NOT also mention a second location as a landmark or origin (the travel system reads the location name from the option, and two names make the destination ambiguous). Bad: "<Name>走近客廳角落嘅神位" (two places). Good: "<Name>檢查神位的香爐".
+  Good: "[偵查] 翻找書桌抽屜", "[說服] 勸守衛讓路", "[搏鬥] 撲向襲擊者".
+  Bad (too long / explains why): "[偵查] 仔細翻找書桌的抽屜，希望能找到與案件有關的線索".
+- ONE DESTINATION PER CHOICE: a choice may name AT MOST ONE location. If it moves the party or searches a place, name only that single target — do NOT also mention a second location as a landmark or origin (the travel system reads the location name from the option, and two names make the destination ambiguous). Bad: "走近客廳角落嘅神位" (two places). Good: "檢查神位的香爐".
 - The tag MUST be one of the EXACT skill names listed above (write the tag in the scenario's language only if it is Chinese; otherwise keep the Chinese skill name as the tag is fine). Pick the skill that genuinely fits the action.
 - Tailor choices to the NEXT character's actual strengths when possible (their sheet/skills are given), but never fabricate a skill they cannot attempt.
 - If the scene is purely narrative (no meaningful check possible), you may omit the tag on a choice, but still keep the three options distinct.
