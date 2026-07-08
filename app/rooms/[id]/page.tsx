@@ -589,7 +589,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     {/* Faint occult texture behind the whole play view */}
     <div className="fixed inset-0 -z-10 pointer-events-none opacity-[0.04]" aria-hidden
       style={{ backgroundImage: "radial-gradient(circle, #c9a96e 1px, transparent 1px)", backgroundSize: "42px 42px" }} />
-    <div className="grid grid-cols-[1fr_280px] gap-4 h-[calc(100vh-7rem)]">
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4 lg:h-[calc(100vh-7rem)]">
       {/* Main area */}
       <div className="flex flex-col gap-3 min-h-0">
         {/* Header */}
@@ -626,7 +626,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
         </Panel>
 
         {/* Story log */}
-        <div className="relative flex-1 min-h-0 flex flex-col rounded-xl" style={PANEL}>
+        <div className="relative flex-1 min-h-[55vh] lg:min-h-0 flex flex-col rounded-xl" style={PANEL}>
           {/* Ornate frame + decorations (fixed to the panel, not the scroll content) */}
           <div className="absolute inset-[6px] rounded-lg pointer-events-none z-10" style={{ border: "1px solid rgba(201,169,110,0.16)" }} />
           <Clip className="-top-1.5 left-7" />
@@ -873,8 +873,8 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
         )}
       </div>
 
-      {/* Sidebar */}
-      <div className="flex flex-col gap-3 overflow-y-auto">
+      {/* Sidebar — stacks below the game on mobile, scrolls within the column on desktop */}
+      <div className="flex flex-col gap-3 lg:overflow-y-auto">
 
         {/* Location map — unlocked & known-but-locked places (hidden ones never shown) */}
         {locGraphNodes && room.location_state && (() => {

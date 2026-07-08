@@ -221,22 +221,24 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
         })}
       </div>
 
-      {/* Confirm bar */}
-      <div className="flex items-center gap-5">
+      {/* Confirm bar — sticky to the bottom of the viewport so it's always
+          reachable on phones without scrolling the full card list. */}
+      <div
+        className="sticky bottom-0 z-20 -mx-4 px-4 pt-4 pb-4 sm:pb-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-5"
+        style={{ background: "linear-gradient(180deg, rgba(12,10,7,0) 0%, rgba(12,10,7,0.92) 30%, #0c0a07 100%)" }}
+      >
         <button
           onClick={confirmCard}
           disabled={!selectedId || confirming}
-          className="px-8 py-3 rounded-lg font-serif text-base transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="w-full sm:w-auto px-8 py-3 rounded-lg font-serif text-base transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07", boxShadow: "0 0 18px rgba(201,169,110,0.2)" }}
         >
           {confirming ? "進入房間中..." : selected ? `出戰：${selected.name} →` : "選擇一位調查員以繼續"}
         </button>
-        <Link href="/characters" className="text-sm transition-colors text-zinc-600 hover:text-zinc-300">
+        <Link href="/characters" className="text-center sm:text-left text-sm transition-colors text-zinc-600 hover:text-zinc-300">
           抽取更多調查員
         </Link>
       </div>
-
-      <div className="h-px mt-10" style={{ background: "linear-gradient(90deg,transparent,rgba(201,169,110,0.15),transparent)" }} />
     </div>
   );
 }

@@ -13,7 +13,7 @@ export function NavbarLinks({ isAdmin, isLoggedIn }: Props) {
       <Link
         key={href}
         href={href}
-        className={`relative text-sm pb-0.5 transition-colors ${
+        className={`relative text-sm pb-0.5 whitespace-nowrap transition-colors ${
           active ? "text-gold" : `text-zinc-400 hover:text-zinc-100 ${extra ?? ""}`
         }`}
       >
@@ -26,7 +26,7 @@ export function NavbarLinks({ isAdmin, isLoggedIn }: Props) {
   };
 
   return (
-    <div className="flex items-center gap-7 text-sm">
+    <div className="flex items-center gap-4 sm:gap-7 text-sm">
       {link("/", "劇本")}
       {isLoggedIn && link("/characters", "調查員")}
       {isLoggedIn && link("/dashboard", "後台")}
