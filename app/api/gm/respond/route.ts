@@ -381,6 +381,23 @@ export async function POST(request: Request) {
     !room.location_state ||
     (typeof room.location_state === "object" && Object.keys(room.location_state).length === 0);
   if (locationGraph && locState && freshLocationState && locState.current) {
+    // Reveal the starting scene's own media (image/text) — like arrival media,
+    // but the start node is never "arrived at", so it must fire here or never.
+    const startNode = locationGraph.nodes.find((n) => n.id === locState!.current);
+    const startImage = startNode?.node_image?.trim();
+    const startText = startNode?.node_text?.trim();
+    if (startImage || startText) {
+      await supabase.from("story_logs").insert({
+        room_id: roomId,
+        round_number: room.current_round,
+        entry_type: "location_media",
+        content:
+          startText && startText.length > 0
+            ? startText
+            : `📍 你身處「${locationShortName(startNode!.name)}」。`,
+        media_url: startImage || null,
+      });
+    }
     const seededDiscovers = applyDiscovers(locationGraph, locState, locState.current);
     const seededUnlocks = evaluateUnlocks(locationGraph, locState, room.current_round, objProgress);
     // A node revealed by both this turn should only log as the stronger state.
