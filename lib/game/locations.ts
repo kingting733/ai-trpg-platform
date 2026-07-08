@@ -60,6 +60,44 @@ export interface LocationNode {
   node_image?: string;
   /** Optional text revealed to the players on the party's FIRST entry here. */
   node_text?: string;
+  /** v2: parent container id. Undefined = top-level place node. */
+  container?: string;
+  /** v2: editor canvas position (layout only — no gameplay meaning). */
+  pos?: { x: number; y: number };
+}
+
+// ── v2 map-mode types (containers + edges) ────────────────────────────────────
+// Design doc: docs/design/location-map-v2.md. Containers group place nodes into
+// regions (1404室 holding 門口/客廳/神位…). They are NEVER standable — the
+// party's `current` is always a place node. Edges define adjacency; all
+// lock/visibility gating stays on NODE status (single gating authority).
+
+/** "free" = v1 behavior: every unlocked node reachable from anywhere (legacy
+ *  default). "edges" = map mode: movement follows edges/containers. */
+export type TravelMode = "free" | "edges";
+
+export interface ContainerDef {
+  id: string;
+  /** Creator/player-facing region name, e.g. 「1404室」. */
+  name: string;
+  /** Child place-node id the party lands on when entering this container. */
+  entry: string;
+  /** 此區域內地點可互相前往 — children are mutually adjacent without edges. */
+  all_children_connected: boolean;
+  /** Show still-locked children on the player map (as 🔒). */
+  show_locked_children: boolean;
+  /** Editor canvas position (layout only). */
+  pos?: { x: number; y: number };
+}
+
+/** Adjacency between two place nodes and/or containers. A container endpoint
+ *  resolves to that container's entry node at runtime. No conditions on edges
+ *  in MVP — lock state lives on the destination node. */
+export interface EdgeDef {
+  from: string;
+  to: string;
+  /** true = 雙向路徑 (default), false = 單向路徑 (from → to only). */
+  two_way: boolean;
 }
 
 /**
@@ -90,7 +128,15 @@ export interface NpcEncounter {
 }
 
 export interface LocationGraph {
+  /** 2 = container/edge-aware schema. Absent in raw legacy data; coercion
+   *  always outputs 2. */
+  version?: 2;
+  /** Movement rules — see TravelMode. Legacy graphs coerce to "free". */
+  travel_mode: TravelMode;
+  containers: ContainerDef[];
+  /** Place nodes — the only standable locations. */
   nodes: LocationNode[];
+  edges: EdgeDef[];
   npc_placements: NpcPlacement[];
   npc_encounters: NpcEncounter[];
 }
@@ -166,7 +212,56 @@ function coerceNpcEncounters(v: unknown): NpcEncounter[] {
     .slice(0, 50);
 }
 
-/** Coerce arbitrary JSON into a valid LocationGraph, or null if unusable. */
+function coercePos(v: any): { x: number; y: number } | undefined {
+  if (v && typeof v === "object" && Number.isFinite(Number(v.x)) && Number.isFinite(Number(v.y))) {
+    return { x: Number(v.x), y: Number(v.y) };
+  }
+  return undefined;
+}
+
+function coerceContainers(v: unknown): ContainerDef[] {
+  if (!Array.isArray(v)) return [];
+  const out = v
+    .filter((c) => c && typeof c === "object" && asStr((c as any).id) && asStr((c as any).name))
+    .map((c: any): ContainerDef => ({
+      id: asStr(c.id),
+      name: asStr(c.name),
+      entry: asStr(c.entry),
+      all_children_connected: c.all_children_connected !== false, // default ON
+      show_locked_children: c.show_locked_children !== false,     // default ON
+      pos: coercePos(c.pos),
+    }))
+    .slice(0, 12);
+  const seen = new Set<string>();
+  return out.filter((c) => (seen.has(c.id) ? false : (seen.add(c.id), true)));
+}
+
+function coerceEdges(v: unknown): EdgeDef[] {
+  if (!Array.isArray(v)) return [];
+  const out = v
+    .filter((e) => e && typeof e === "object" && asStr((e as any).from) && asStr((e as any).to))
+    .map((e: any): EdgeDef => ({
+      from: asStr(e.from),
+      to: asStr(e.to),
+      two_way: e.two_way !== false, // default 雙向
+    }))
+    .filter((e) => e.from !== e.to)
+    .slice(0, 120);
+  // Dedupe identical pairs (a→b twice, or a↔b duplicated in both directions).
+  const seen = new Set<string>();
+  return out.filter((e) => {
+    const k1 = `${e.from}→${e.to}`;
+    const k2 = e.two_way ? `${e.to}→${e.from}` : null;
+    if (seen.has(k1) || (k2 && seen.has(k2))) return false;
+    seen.add(k1);
+    if (k2) seen.add(k2);
+    return true;
+  });
+}
+
+/** Coerce arbitrary JSON into a valid LocationGraph, or null if unusable.
+ *  Legacy flat graphs (no travel_mode/containers/edges) coerce to
+ *  travel_mode "free" — byte-identical v1 movement behavior. */
 export function coerceLocationGraph(raw: any): LocationGraph | null {
   const nodesRaw = Array.isArray(raw?.nodes) ? raw.nodes : Array.isArray(raw) ? raw : null;
   if (!nodesRaw) return null;
@@ -185,6 +280,8 @@ export function coerceLocationGraph(raw: any): LocationGraph | null {
       discovers: asStrArr(n.discovers),
       node_image: asStr(n.node_image) || undefined,
       node_text: asStr(n.node_text) || undefined,
+      container: asStr(n.container) || undefined,
+      pos: coercePos(n.pos),
     }))
     .slice(0, 40);
   // Dedupe ids — first definition wins.
@@ -193,8 +290,28 @@ export function coerceLocationGraph(raw: any): LocationGraph | null {
   if (deduped.length === 0) return null;
   // At least one node must be initially enterable, or the game can never start.
   if (!deduped.some((n) => n.initial === "unlocked")) deduped[0].initial = "unlocked";
+
+  const containers = coerceContainers(raw?.containers);
+  const containerIds = new Set(containers.map((c) => c.id));
+  // Drop dangling container references; a place with an unknown parent is
+  // treated as top-level rather than silently vanishing.
+  for (const n of deduped) {
+    if (n.container && !containerIds.has(n.container)) n.container = undefined;
+  }
+  // Container/node ids must not collide (edges reference both namespaces).
+  const nodeIds = new Set(deduped.map((n) => n.id));
+  const validContainers = containers.filter((c) => !nodeIds.has(c.id));
+  // Entry fallback: keep whatever is stored; runtime + validator handle a
+  // missing/invalid entry (fallback = first child).
+  const validIds = new Set([...Array.from(nodeIds), ...validContainers.map((c) => c.id)]);
+  const edges = coerceEdges(raw?.edges).filter((e) => validIds.has(e.from) && validIds.has(e.to));
+
   return {
+    version: 2,
+    travel_mode: raw?.travel_mode === "edges" ? "edges" : "free",
+    containers: validContainers,
     nodes: deduped,
+    edges,
     npc_placements: coerceNpcPlacements(raw?.npc_placements),
     npc_encounters: coerceNpcEncounters(raw?.npc_encounters),
   };
@@ -244,6 +361,60 @@ export function validateLocationGraph(
     validateTerms(n.unlock, `地點「${n.name}」的解鎖條件`);
     if (n.initial !== "unlocked" && n.unlock.length === 0 && !graph.nodes.some((m) => m.discovers.includes(n.id))) {
       warnings.push(`地點「${n.name}」被鎖定但沒有任何解鎖條件，也沒有其他地點能發現它 — 玩家永遠到不了。`);
+    }
+  }
+
+  // ── v2 map-mode checks ──
+  for (const c of graph.containers) {
+    const children = graph.nodes.filter((n) => n.container === c.id);
+    if (children.length === 0) {
+      warnings.push(`區域「${c.name}」內沒有任何地點 — 遊戲中會被忽略。`);
+      continue;
+    }
+    if (!c.entry || !children.some((n) => n.id === c.entry)) {
+      warnings.push(`區域「${c.name}」沒有設定有效的入口地點 — 進入時會落在第一個子地點（建議明確設定）。`);
+    }
+  }
+  if (graph.travel_mode === "edges") {
+    // Stranded-node check: BFS over edges + container sibling links from every
+    // initially-unlocked node. Unreachable place nodes can never be stood on.
+    const adj = new Map<string, Set<string>>();
+    const link = (a: string, b: string) => {
+      if (!adj.has(a)) adj.set(a, new Set());
+      adj.get(a)!.add(b);
+    };
+    const entryOf = (cid: string) => {
+      const c = graph.containers.find((x) => x.id === cid);
+      if (!c) return null;
+      const children = graph.nodes.filter((n) => n.container === cid);
+      return children.some((n) => n.id === c.entry) ? c.entry : children[0]?.id ?? null;
+    };
+    const resolveEndpoint = (id: string): string | null =>
+      ids.has(id) ? id : entryOf(id);
+    for (const e of graph.edges) {
+      const from = resolveEndpoint(e.from);
+      const to = resolveEndpoint(e.to);
+      if (!from || !to) continue;
+      link(from, to);
+      if (e.two_way) link(to, from);
+    }
+    for (const c of graph.containers) {
+      if (!c.all_children_connected) continue;
+      const children = graph.nodes.filter((n) => n.container === c.id);
+      for (const a of children) for (const b of children) if (a.id !== b.id) link(a.id, b.id);
+    }
+    const queue = graph.nodes.filter((n) => n.initial === "unlocked").map((n) => n.id);
+    const reached = new Set(queue);
+    while (queue.length) {
+      const cur = queue.shift()!;
+      for (const nxt of Array.from(adj.get(cur) ?? [])) {
+        if (!reached.has(nxt)) { reached.add(nxt); queue.push(nxt); }
+      }
+    }
+    for (const n of graph.nodes) {
+      if (!reached.has(n.id)) {
+        warnings.push(`地圖模式下地點「${n.name}」沒有任何路徑可以到達（不與任何起點連通）— 玩家永遠走不到。`);
+      }
     }
   }
 
@@ -363,7 +534,8 @@ const EMPTY_LOCATION_STATE: LocationState = {
   stuck_counter: 0, encounters_fired: [],
 };
 const EMPTY_LOCATION_GRAPH: LocationGraph = {
-  nodes: [], npc_placements: [], npc_encounters: [],
+  version: 2, travel_mode: "free", containers: [], nodes: [], edges: [],
+  npc_placements: [], npc_encounters: [],
 };
 
 /**
