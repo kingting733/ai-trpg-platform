@@ -38,6 +38,54 @@ export function ChatDrawer({
   openRef.current = open;
   const listEndRef = useRef<HTMLDivElement>(null);
 
+  // ── Draggable floating button ───────────────────────────────────────────────
+  // The button can overlap other fixed UI (e.g. the mobile action bar), so let
+  // the player drag it anywhere. Position (viewport px) persists in localStorage;
+  // null = use the default CSS corner. A tap that doesn't move is a normal click.
+  const [btnPos, setBtnPos] = useState<{ x: number; y: number } | null>(null);
+  const dragRef = useRef<{ sx: number; sy: number; ox: number; oy: number; moved: boolean; dragging: boolean }>({
+    sx: 0, sy: 0, ox: 0, oy: 0, moved: false, dragging: false,
+  });
+
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem("chatBtnPos");
+      if (s) setBtnPos(JSON.parse(s));
+    } catch { /* ignore */ }
+  }, []);
+
+  const onBtnPointerDown = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    dragRef.current = { sx: e.clientX, sy: e.clientY, ox: r.left, oy: r.top, moved: false, dragging: true };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }, []);
+
+  const onBtnPointerMove = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+    const d = dragRef.current;
+    if (!d.dragging) return;
+    const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
+    if (!d.moved && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+    d.moved = true;
+    const size = 52;
+    const x = Math.max(4, Math.min(window.innerWidth - size - 4, d.ox + dx));
+    const y = Math.max(60, Math.min(window.innerHeight - size - 4, d.oy + dy));
+    setBtnPos({ x, y });
+  }, []);
+
+  const onBtnPointerUp = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+    const d = dragRef.current;
+    if (!d.dragging) return;
+    d.dragging = false;
+    if (d.moved) {
+      setBtnPos((p) => {
+        if (p) { try { localStorage.setItem("chatBtnPos", JSON.stringify(p)); } catch { /* ignore */ } }
+        return p;
+      });
+    } else {
+      toggle(); // treat a non-drag press as a click
+    }
+  }, []);
+
   const addMessage = useCallback((m: ChatMessage) => {
     setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
     if (!openRef.current && m.user_id !== currentUserId) {
@@ -103,17 +151,22 @@ export function ChatDrawer({
 
   return (
     <>
-      {/* Floating toggle button */}
+      {/* Floating toggle button — draggable (see handlers above). */}
       <button
-        onClick={toggle}
-        className="fixed bottom-32 right-4 lg:bottom-6 lg:right-6 z-40 w-13 h-13 rounded-full flex items-center justify-center transition-all hover:brightness-110"
+        onPointerDown={onBtnPointerDown}
+        onPointerMove={onBtnPointerMove}
+        onPointerUp={onBtnPointerUp}
+        className={`fixed z-40 w-13 h-13 rounded-full flex items-center justify-center transition-[filter] hover:brightness-110 touch-none cursor-grab active:cursor-grabbing ${
+          btnPos ? "" : "bottom-32 right-4 lg:bottom-6 lg:right-6"
+        }`}
         style={{
           width: 52, height: 52,
+          ...(btnPos ? { left: btnPos.x, top: btnPos.y } : {}),
           background: "linear-gradient(180deg,#1c1813,#0f0c08)",
           border: "1px solid rgba(201,169,110,0.45)",
           boxShadow: "0 4px 18px rgba(0,0,0,0.5), 0 0 16px rgba(201,169,110,0.12)",
         }}
-        title="玩家聊天室"
+        title="玩家聊天室（可拖曳移動）"
       >
         <span className="text-xl">💬</span>
         {unread > 0 && (

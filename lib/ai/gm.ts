@@ -892,33 +892,50 @@ export async function generateGMResponseStreaming(
   const systemPrompt = buildSystemPrompt(input);
   const userMessage = buildTurnMessage(input);
 
-  try {
-    let raw = "";
-    if (provider === "anthropic") {
-      raw = await callAnthropicStream(apiKey, model, systemPrompt, userMessage, onNarrationChunk);
-    } else {
-      const baseOverride = process.env.AI_BASE_URL?.trim().replace(/\/+$/, "").replace(/\/v1$/i, "");
-      const defaultBase = provider === "deepseek" ? "https://api.deepseek.com" : "https://api.openai.com";
-      const baseUrl = baseOverride ?? defaultBase;
-      raw = await callOpenAICompatibleStream(apiKey, model, systemPrompt, userMessage, baseUrl, onNarrationChunk);
+  // A model occasionally returns a malformed / truncated response that can't be
+  // parsed into (narration + 3 choices). Rather than surfacing the ugly
+  // "could not be parsed" fallback, auto-regenerate up to MAX_ATTEMPTS times.
+  // Only the FIRST attempt streams to the client (best UX when it works); a
+  // retry runs silently — the client's live box is replaced by the DB copy
+  // (fetchAll) right after the turn, so the corrected narration still shows.
+  const MAX_ATTEMPTS = 2;
+  const baseOverride = process.env.AI_BASE_URL?.trim().replace(/\/+$/, "").replace(/\/v1$/i, "");
+  const defaultBase = provider === "deepseek" ? "https://api.deepseek.com" : "https://api.openai.com";
+  const baseUrl = baseOverride ?? defaultBase;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const chunkCb = attempt === 1 ? onNarrationChunk : () => {};
+    try {
+      let raw = "";
+      if (provider === "anthropic") {
+        raw = await callAnthropicStream(apiKey, model, systemPrompt, userMessage, chunkCb);
+      } else {
+        raw = await callOpenAICompatibleStream(apiKey, model, systemPrompt, userMessage, baseUrl, chunkCb);
+      }
+      const { narration, dataRaw } = splitNarrationAndData(raw);
+      const parsed = JSON.parse(extractJSONObject(dataRaw)) as Omit<GMResponseWithChoices, "narration">;
+      if (narration && Array.isArray(parsed.choices) && parsed.choices.length === 3) {
+        return { narration, ...parsed };
+      }
+      throw new Error("Invalid shape");
+    } catch (e) {
+      console.error(`[gm] streaming attempt ${attempt}/${MAX_ATTEMPTS} parse failed:`, e instanceof Error ? e.message : e);
+      if (attempt < MAX_ATTEMPTS) continue; // auto-regenerate
+      const fallbackText = "[GM response could not be parsed. Please try again.]";
+      // The player may already have seen partial narration stream in before the
+      // failure; sending the fallback text as one more chunk keeps the visible
+      // log consistent with what generateGMResponse's own fallback would show.
+      onNarrationChunk(`\n\n${fallbackText}`);
+      return {
+        narration: fallbackText,
+        choices: ["Look around carefully", "Move forward cautiously", "Wait and listen"],
+      };
     }
-    const { narration, dataRaw } = splitNarrationAndData(raw);
-    const parsed = JSON.parse(extractJSONObject(dataRaw)) as Omit<GMResponseWithChoices, "narration">;
-    if (narration && Array.isArray(parsed.choices) && parsed.choices.length === 3) {
-      return { narration, ...parsed };
-    }
-    throw new Error("Invalid shape");
-  } catch (e) {
-    console.error("[gm] streaming response parse failed:", e instanceof Error ? e.message : e);
-    const fallbackText = "[GM response could not be parsed. Please try again.]";
-    // The player may already have seen partial narration stream in before the
-    // failure; sending the fallback text as one more chunk keeps the visible
-    // log consistent with what generateGMResponse's own fallback would show.
-    onNarrationChunk(`\n\n${fallbackText}`);
-    return {
-      narration: fallbackText,
-      choices: ["Look around carefully", "Move forward cautiously", "Wait and listen"],
-    };
   }
+  // Unreachable (the loop always returns), but satisfies the type checker.
+  return {
+    narration: "[GM response could not be parsed. Please try again.]",
+    choices: ["Look around carefully", "Move forward cautiously", "Wait and listen"],
+  };
 }
 
