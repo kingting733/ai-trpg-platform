@@ -1104,27 +1104,35 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           </div>
         )}
 
-        {/* Mobile-only: three buttons pinned at the very bottom; each opens its
-            own info panel as a bottom-sheet popup. Hidden on desktop (the panels
-            live in the right column there). */}
-        <div className="flex lg:hidden gap-2 shrink-0">
+        {/* Mobile-only: a solid edge-to-edge bottom bar — three main buttons,
+            each opening its own info panel as a bottom-sheet popup. Negative
+            margins cancel the shell's padding so it reaches the screen edges.
+            Hidden on desktop (the panels live in the right column there). */}
+        <div className="flex lg:hidden -mx-3 -mb-3 shrink-0" style={{ borderTop: "1px solid rgba(201,169,110,0.22)" }}>
           {([
-            { key: "location", label: "🗺 地點" },
-            { key: "item", label: "🎒 物品" },
-            { key: "team", label: "👥 隊伍" },
-          ] as const).map((b) => (
-            <button
-              key={b.key}
-              type="button"
-              onClick={() => setActivePanel((p) => (p === b.key ? null : b.key))}
-              className="flex-1 py-2.5 rounded-lg text-xs transition-colors hover:brightness-110"
-              style={activePanel === b.key
-                ? { background: "rgba(201,169,110,0.16)", border: "1px solid rgba(201,169,110,0.5)", color: "#e4d8be" }
-                : { background: "rgba(26,21,14,0.6)", border: "1px solid #2e2416", color: "#c9a96e" }}
-            >
-              {b.label}
-            </button>
-          ))}
+            { key: "location", icon: "🗺", label: "地點" },
+            { key: "item", icon: "🎒", label: "物品" },
+            { key: "team", icon: "👥", label: "隊伍" },
+          ] as const).map((b, idx) => {
+            const active = activePanel === b.key;
+            return (
+              <button
+                key={b.key}
+                type="button"
+                onClick={() => setActivePanel((p) => (p === b.key ? null : b.key))}
+                className="flex-1 flex flex-col items-center justify-center gap-0.5 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] transition-colors active:brightness-125"
+                style={{
+                  borderLeft: idx > 0 ? "1px solid rgba(46,36,22,0.9)" : "none",
+                  background: active ? "rgba(201,169,110,0.16)" : "rgba(16,13,9,0.95)",
+                  color: active ? "#e4d8be" : "#c9a96e",
+                  boxShadow: active ? "inset 0 2px 0 #c9a96e" : "none",
+                }}
+              >
+                <span className="text-lg leading-none">{b.icon}</span>
+                <span className="text-[11px] tracking-wide">{b.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
