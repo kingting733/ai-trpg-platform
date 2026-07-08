@@ -2,6 +2,13 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { buildPartyRoster, buildLanguageInstruction, ROSTER_CONSTRAINT, ScenarioGMContext, NpcEntry } from "@/lib/ai/gm";
 import { resolveScenarioObjectives } from "@/lib/game/objectives-def";
+import {
+  coerceLocationGraph,
+  initLocationState,
+  applyDiscovers,
+  evaluateUnlocks,
+  locationShortName,
+} from "@/lib/game/locations";
 
 export interface OpeningScene {
   scene: string;
@@ -163,7 +170,7 @@ export async function POST(request: Request) {
 
   const { data: room } = await supabase
     .from("rooms")
-    .select("*, scenarios(title, objective, rules, opening_scene, npcs, objectives, winning_targets, each_player_targets, failure_conditions, failure_turn_limit, ending_conditions, gm_notes, source_document, language)")
+    .select("*, scenarios(title, objective, rules, opening_scene, npcs, objectives, winning_targets, each_player_targets, failure_conditions, failure_turn_limit, ending_conditions, gm_notes, source_document, language, location_graph)")
     .eq("id", roomId)
     .single();
   if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -223,9 +230,63 @@ export async function POST(request: Request) {
     content: opening.scene,
   });
 
+  // === SEED THE LOCATION SYSTEM AT GAME START ===
+  // The location panel (current location + travelable exits) only renders once
+  // the room has a location_state. Initialise it here — when the opening scene
+  // is created — so players know where they are and where they can go BEFORE
+  // their first action, instead of the map appearing a turn late. Also reveal
+  // the start node's discovers[]/unlocks and its scene image/intro text.
+  const locationGraph = coerceLocationGraph((room as any).scenarios?.location_graph);
+  let locationState: ReturnType<typeof initLocationState> | null = null;
+  if (locationGraph) {
+    locationState = initLocationState(locationGraph);
+    if (locationState.current) {
+      const startNode = locationGraph.nodes.find((n) => n.id === locationState!.current);
+      // Starting scene media (image/text) — the start node is never "arrived
+      // at", so reveal it here or it never shows.
+      const startImage = startNode?.node_image?.trim();
+      const startText = startNode?.node_text?.trim();
+      if (startImage || startText) {
+        await supabase.from("story_logs").insert({
+          room_id: roomId,
+          round_number: 1,
+          entry_type: "location_media",
+          content:
+            startText && startText.length > 0
+              ? startText
+              : `📍 你身處「${locationShortName(startNode!.name)}」。`,
+          media_url: startImage || null,
+        });
+      }
+      // Reveal neighbours the start node discovers, and unlock any node whose
+      // conditions are already met (e.g. visit:<start>).
+      const discovered = applyDiscovers(locationGraph, locationState, locationState.current);
+      const unlocks = evaluateUnlocks(locationGraph, locationState, 1, {});
+      const unlockedIds = new Set(unlocks.unlocked.map((n) => n.id));
+      for (const n of discovered) {
+        if (unlockedIds.has(n.id)) continue;
+        await supabase.from("story_logs").insert({
+          room_id: roomId,
+          round_number: 1,
+          entry_type: "system",
+          content: `🧭 得知新地點：${locationShortName(n.name)}`,
+        });
+      }
+      for (const n of unlocks.unlocked) {
+        await supabase.from("story_logs").insert({
+          room_id: roomId,
+          round_number: 1,
+          entry_type: "system",
+          content: `🗺 新地點解鎖：${locationShortName(n.name)}`,
+        });
+      }
+    }
+  }
+
   await supabase.from("rooms").update({
     current_choices: opening.choices,
     current_choices_for_player_id: firstPlayerId,
+    ...(locationState ? { location_state: locationState } : {}),
   }).eq("id", roomId);
 
   return NextResponse.json({ ...opening, choicesForPlayerId: firstPlayerId });
