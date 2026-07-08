@@ -548,10 +548,19 @@ export function detectTravelTarget(
     if (node.id === state.current) continue;
     let score = mentionScore(a, node.name); // exact / whole-segment (≥100)
     if (score === 0) {
-      // Partial: a CJK chunk the player typed appears inside the name.
       const nameLower = node.name.toLowerCase();
+      // Partial (a): a CJK chunk the player typed sits inside the name — works
+      // when the player typed the name in isolation ("神位").
       for (const run of cjkRuns) {
         if (nameLower.includes(run) && run.length > score) score = run.length;
+      }
+      // Partial (b): a distinctive CJK chunk OF THE NAME appears in the action —
+      // works when the name's core is glued into a longer run the player typed,
+      // e.g. "神位" buried in "走近客廳角落嘅神位" vs node "1404神位". Without this,
+      // the (a) test fails because the name doesn't contain the whole long run.
+      const nameRuns = (nameLower.match(/[㐀-鿿]+/g) ?? []).filter((r) => r.length >= 2);
+      for (const run of nameRuns) {
+        if (a.includes(run) && run.length > score) score = run.length;
       }
     }
     if (score > 0) scored.push({ node, score });
