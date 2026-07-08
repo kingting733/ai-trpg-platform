@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { currentSkillValue, SKILL_KEY_BY_ZH } from "@/lib/game/skills";
 import { endingAllowsGrowth } from "@/lib/game/endings";
+import { coerceLocationGraph, coerceLocationState, computeExits, type LocationGraph } from "@/lib/game/locations";
 import { ChatDrawer } from "@/components/ChatDrawer";
 
 interface Character {
@@ -87,11 +88,6 @@ interface Room {
   inventory: { name: string; note?: string; evidence_id?: string | null; round?: number }[] | null;
 }
 
-interface LocGraphNode {
-  id: string;
-  name: string;
-  evidence?: { id: string; name: string }[];
-}
 
 interface RoomPlayer {
   user_id: string;
@@ -295,7 +291,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   // Mobile: the suggested-action list can be collapsed to free up the short
   // story window; it re-shows automatically on a new turn.
   const [choicesHidden, setChoicesHidden] = useState(false);
-  const [locGraphNodes, setLocGraphNodes] = useState<LocGraphNode[] | null>(null);
+  const [locGraph, setLocGraph] = useState<LocationGraph | null>(null);
   function toggleSkills(id: string) { setSkillsOpen((p) => ({ ...p, [id]: !p[id] })); }
 
   const fetchAll = useCallback(async () => {
@@ -372,12 +368,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
       .eq("id", room.scenario_id)
       .single()
       .then(({ data }) => {
-        const nodes = (data?.location_graph as any)?.nodes;
-        setLocGraphNodes(
-          Array.isArray(nodes)
-            ? nodes.filter((n: any) => n && typeof n.id === "string" && typeof n.name === "string")
-            : null
-        );
+        setLocGraph(coerceLocationGraph(data?.location_graph));
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room?.scenario_id]);
@@ -573,47 +564,68 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   // ─── Info panels, defined once and rendered in BOTH the desktop sidebar and
   // the mobile per-button popups (地點 / 物品 / 隊伍), so the JSX never diverges.
   const shortLoc = (n: string) => n.split(/[：:，,。．\.\n——–\-（(【\[]/)[0].trim().slice(0, 30);
-  const locationPanel = locGraphNodes && room.location_state && (() => {
-    const ls = room.location_state!;
-    const visible = locGraphNodes.filter((n) => ls.status[n.id] === "unlocked" || ls.status[n.id] === "discovered");
-    if (visible.length === 0) return <p className="text-zinc-600 text-xs">尚無已知地點</p>;
+  const locationPanel = locGraph && room.location_state && (() => {
+    // Server-authoritative exits: in map (edges) mode 可前往 = places reachable
+    // via open paths from HERE; free mode = every unlocked place (v1). The same
+    // computeExits also drives the GM prompt, so panel and narration agree.
+    const ls = coerceLocationState(room.location_state, locGraph);
+    const exits = computeExits(locGraph, ls);
+    const current = locGraph.nodes.find((n) => n.id === ls.current);
+    const region = current?.container ? locGraph.containers.find((c) => c.id === current.container) : null;
+    if (!current && exits.open.length === 0 && exits.locked.length === 0) {
+      return <p className="text-zinc-600 text-xs">尚無已知地點</p>;
+    }
     return (
       <Panel className="p-4 shrink-0">
         <PanelHeader title="地點" />
         <div className="flex flex-col gap-1.5">
-          {visible.map((n) => {
-            const st = ls.status[n.id];
-            const isCurrent = ls.current === n.id;
-            const visited = ls.visited.includes(n.id);
-            const canGo = st === "unlocked" && !isCurrent && isMyTurn && !submitting;
-            const label = (
-              <span className={
-                isCurrent ? "text-gold font-semibold"
-                : st === "unlocked" ? (visited ? "text-zinc-500" : "text-zinc-300")
-                : "text-zinc-600"
-              }>
-                {shortLoc(n.name)}
-                {st === "discovered" && <span className="ml-1 text-[10px] text-zinc-700">尚未能進入</span>}
+          {current && (
+            <div className="flex items-center gap-2 text-xs mb-1">
+              <span className="shrink-0 w-4 text-center">📍</span>
+              <span className="text-gold font-semibold">
+                {region && <span className="text-gold/60">{shortLoc(region.name)} › </span>}
+                {shortLoc(current.name)}
               </span>
-            );
-            return (
-              <div key={n.id} className="flex items-center gap-2 text-xs">
-                <span className="shrink-0 w-4 text-center">
-                  {isCurrent ? "📍" : st === "unlocked" ? (visited ? "✓" : "○") : "🔒"}
-                </span>
-                {canGo ? (
-                  <button
-                    type="button"
-                    onClick={() => { setActionText(shortLoc(n.name)); setActivePanel(null); }}
-                    title={shortLoc(n.name)}
-                    className="text-left hover:text-gold hover:underline decoration-dotted underline-offset-2 transition-colors"
-                  >
-                    {label}
-                  </button>
-                ) : label}
-              </div>
-            );
-          })}
+            </div>
+          )}
+          {exits.open.length > 0 && (
+            <>
+              <p className="text-[10px] tracking-wider text-zinc-600 mt-1">可前往</p>
+              {exits.open.map((n) => {
+                const visited = ls.visited.includes(n.id);
+                const canGo = isMyTurn && !submitting;
+                const label = (
+                  <span className={visited ? "text-zinc-500" : "text-zinc-300"}>{shortLoc(n.name)}</span>
+                );
+                return (
+                  <div key={n.id} className="flex items-center gap-2 text-xs">
+                    <span className="shrink-0 w-4 text-center">{visited ? "✓" : "○"}</span>
+                    {canGo ? (
+                      <button
+                        type="button"
+                        onClick={() => { setActionText(shortLoc(n.name)); setActivePanel(null); }}
+                        title={shortLoc(n.name)}
+                        className="text-left hover:text-gold hover:underline decoration-dotted underline-offset-2 transition-colors"
+                      >
+                        {label}
+                      </button>
+                    ) : label}
+                  </div>
+                );
+              })}
+            </>
+          )}
+          {exits.locked.length > 0 && (
+            <>
+              <p className="text-[10px] tracking-wider text-zinc-600 mt-1">看得到但進不去</p>
+              {exits.locked.map((n) => (
+                <div key={n.id} className="flex items-center gap-2 text-xs">
+                  <span className="shrink-0 w-4 text-center">🔒</span>
+                  <span className="text-zinc-600">{shortLoc(n.name)}</span>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       </Panel>
     );
