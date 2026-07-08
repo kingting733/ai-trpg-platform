@@ -281,6 +281,9 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [endingGame, setEndingGame] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState<Record<string, boolean>>({});
+  // Mobile only: the info panels (地點/隊伍/…) live in a bottom-sheet overlay
+  // opened from the fixed action bar, so the play area isn't a long scroll.
+  const [panelOpen, setPanelOpen] = useState(false);
   // True from the moment this player submits until their own fetchAll() has
   // synced the persisted turn. While true, the background 3s poll is skipped so
   // it can't load the persisted gm_response and briefly render it ALONGSIDE the
@@ -589,7 +592,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     {/* Faint occult texture behind the whole play view */}
     <div className="fixed inset-0 -z-10 pointer-events-none opacity-[0.04]" aria-hidden
       style={{ backgroundImage: "radial-gradient(circle, #c9a96e 1px, transparent 1px)", backgroundSize: "42px 42px" }} />
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4 lg:h-[calc(100vh-7rem)]">
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4 h-[calc(100dvh-6rem)] lg:h-[calc(100vh-7rem)]">
       {/* Main area */}
       <div className="flex flex-col gap-3 min-h-0">
         {/* Header */}
@@ -626,7 +629,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
         </Panel>
 
         {/* Story log */}
-        <div className="relative flex-1 min-h-[55vh] lg:min-h-0 flex flex-col rounded-xl" style={PANEL}>
+        <div className="relative flex-1 min-h-0 flex flex-col rounded-xl" style={PANEL}>
           {/* Ornate frame + decorations (fixed to the panel, not the scroll content) */}
           <div className="absolute inset-[6px] rounded-lg pointer-events-none z-10" style={{ border: "1px solid rgba(201,169,110,0.16)" }} />
           <Clip className="-top-1.5 left-7" />
@@ -713,6 +716,27 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
               ↓ 最新訊息
             </button>
           )}
+        </div>
+
+        {/* Mobile-only: buttons to open the info panels in a bottom sheet, so the
+            play area stays a single non-scrolling screen. */}
+        <div className="flex lg:hidden gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setPanelOpen(true)}
+            className="flex-1 py-2 rounded-lg text-xs text-gold transition-colors hover:brightness-110"
+            style={{ background: "rgba(26,21,14,0.6)", border: "1px solid #2e2416" }}
+          >
+            🗺 地點
+          </button>
+          <button
+            type="button"
+            onClick={() => setPanelOpen(true)}
+            className="flex-1 py-2 rounded-lg text-xs text-gold transition-colors hover:brightness-110"
+            style={{ background: "rgba(26,21,14,0.6)", border: "1px solid #2e2416" }}
+          >
+            👥 隊伍狀態
+          </button>
         </div>
 
         {/* Suggested choices — only shown if they were generated FOR the current turn player */}
@@ -873,8 +897,29 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
         )}
       </div>
 
-      {/* Sidebar — stacks below the game on mobile, scrolls within the column on desktop */}
-      <div className="flex flex-col gap-3 lg:overflow-y-auto">
+      {/* Sidebar — desktop: right column. Mobile: hidden until opened as a
+          bottom-sheet overlay via the 地點/隊伍 buttons (same element, toggled
+          by classes so the panel JSX isn't duplicated). */}
+      <div
+        className={`flex-col gap-3 lg:flex lg:static lg:inset-auto lg:z-auto lg:p-0 lg:pt-0 lg:overflow-y-auto lg:bg-transparent ${
+          panelOpen
+            ? "flex fixed inset-x-0 bottom-0 top-14 z-50 overflow-y-auto p-4 pt-3 bg-[#0c0a07] rounded-t-2xl"
+            : "hidden"
+        }`}
+      >
+        {/* Mobile sheet header (close) — hidden on desktop. */}
+        <div className="flex lg:hidden items-center justify-between shrink-0 pb-1">
+          <span className="text-sm text-gold font-serif">資訊面板</span>
+          <button
+            type="button"
+            onClick={() => setPanelOpen(false)}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-zinc-100"
+            style={{ border: "1px solid #2e2416" }}
+            aria-label="關閉"
+          >
+            ✕
+          </button>
+        </div>
 
         {/* Location map — unlocked & known-but-locked places (hidden ones never shown) */}
         {locGraphNodes && room.location_state && (() => {
@@ -912,7 +957,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                       {canGo ? (
                         <button
                           type="button"
-                          onClick={() => setActionText(short(n.name))}
+                          onClick={() => { setActionText(short(n.name)); setPanelOpen(false); }}
                           title={short(n.name)}
                           className="text-left hover:text-gold hover:underline decoration-dotted underline-offset-2 transition-colors"
                         >
