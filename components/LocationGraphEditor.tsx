@@ -706,8 +706,10 @@ export function LocationGraphEditor({
           {/* Edge lines */}
           <svg className="absolute inset-0 w-full h-full pointer-events-none">
             <defs>
-              <marker id="loc-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
-                <path d="M0,0 L7,3.5 L0,7 Z" fill="#c9a96e" />
+              {/* userSpaceOnUse so the arrow is a fixed, clearly-visible size
+                  instead of scaling down with the thin stroke width. */}
+              <marker id="loc-arrow" markerUnits="userSpaceOnUse" markerWidth="16" markerHeight="16" refX="13" refY="8" orient="auto">
+                <path d="M2,2 L14,8 L2,14 Z" fill="#c9a96e" />
               </marker>
             </defs>
             {autoLinks.map((l, i) => (
@@ -718,7 +720,7 @@ export function LocationGraphEditor({
                 key={idx}
                 x1={a!.x} y1={a!.y} x2={b!.x} y2={b!.y}
                 stroke="rgba(201,169,110,0.55)"
-                strokeWidth={1.5}
+                strokeWidth={e.two_way ? 1.5 : 2}
                 markerEnd={e.two_way ? undefined : "url(#loc-arrow)"}
               />
             ))}
@@ -736,34 +738,47 @@ export function LocationGraphEditor({
               >
                 {e.two_way ? "⇄" : "→"}
               </button>
-              {edgeMenu === idx && (
-                <div className="absolute left-5 top-0 z-30 bg-slate-800 border border-slate-600 rounded-lg p-1.5 flex gap-1 text-[11px] whitespace-nowrap" onClick={(ev) => ev.stopPropagation()}>
-                  <button
-                    type="button"
-                    onClick={() => onEdgesChange?.(edges.map((x, j) => (j === idx ? { ...x, two_way: !x.two_way } : x)))}
-                    className="px-2 py-1 rounded border border-slate-600 text-slate-300 hover:border-gold hover:text-gold"
-                  >
-                    {e.two_way ? "改為單向 →" : "改為雙向 ⇄"}
-                  </button>
-                  {!e.two_way && (
+              {edgeMenu === idx && (() => {
+                const nameOf = (id: string) =>
+                  nodes.find((nn) => nn.id === id)?.name?.trim() || containers.find((c) => c.id === id)?.name?.trim() || id;
+                return (
+                <div className="absolute left-5 top-0 z-30 bg-slate-800 border border-slate-600 rounded-lg p-2 flex flex-col gap-1.5 text-[11px] whitespace-nowrap" onClick={(ev) => ev.stopPropagation()}>
+                  {/* Direction readout — updates live so 反向 has visible effect. */}
+                  <div className="px-1 text-slate-300">
+                    <span className="text-gold font-medium">{nameOf(e.from)}</span>
+                    <span className="mx-1 text-gold">{e.two_way ? "⇄" : "→"}</span>
+                    <span className="text-gold font-medium">{nameOf(e.to)}</span>
+                    <span className="ml-1.5 text-slate-500">{e.two_way ? "（雙向）" : "（單向）"}</span>
+                  </div>
+                  <div className="flex gap-1">
                     <button
                       type="button"
-                      onClick={() => onEdgesChange?.(edges.map((x, j) => (j === idx ? { ...x, from: x.to, to: x.from } : x)))}
+                      onClick={() => onEdgesChange?.(edges.map((x, j) => (j === idx ? { ...x, two_way: !x.two_way } : x)))}
                       className="px-2 py-1 rounded border border-slate-600 text-slate-300 hover:border-gold hover:text-gold"
-                      title="調換單向路徑的方向"
                     >
-                      反向 ⇋
+                      {e.two_way ? "改為單向 →" : "改為雙向 ⇄"}
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => { onEdgesChange?.(edges.filter((_, j) => j !== idx)); setEdgeMenu(null); }}
-                    className="px-2 py-1 rounded border border-slate-600 text-red-400/80 hover:border-red-400 hover:text-red-400"
-                  >
-                    刪除
-                  </button>
+                    {!e.two_way && (
+                      <button
+                        type="button"
+                        onClick={() => onEdgesChange?.(edges.map((x, j) => (j === idx ? { ...x, from: x.to, to: x.from } : x)))}
+                        className="px-2 py-1 rounded border border-slate-600 text-slate-300 hover:border-gold hover:text-gold"
+                        title="調換單向路徑的方向"
+                      >
+                        反向 ⇋
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => { onEdgesChange?.(edges.filter((_, j) => j !== idx)); setEdgeMenu(null); }}
+                      className="px-2 py-1 rounded border border-slate-600 text-red-400/80 hover:border-red-400 hover:text-red-400"
+                    >
+                      刪除
+                    </button>
+                  </div>
                 </div>
-              )}
+                );
+              })()}
             </div>
           ))}
 
