@@ -790,6 +790,13 @@ async function callOpenAICompatibleStream(
   const filter = createNarrationStreamFilter(onNarrationText);
   let full = "";
   try {
+    // DeepSeek V4 models default to thinking (reasoning) mode, which delays the
+    // first narration token and eats the Vercel wall. The server owns all game
+    // mechanics — the GM only narrates — so reasoning buys nothing here. Disable
+    // it via DeepSeek's request-body flag (this is NOT an OpenAI field, so only
+    // send it to DeepSeek; an OpenAI-provider request would 400 on it).
+    const provider = process.env.AI_PROVIDER ?? "deepseek";
+    const reqStart = Date.now(); // for first-token latency below
     const res = await fetch(`${baseUrl}/v1/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
@@ -799,6 +806,7 @@ async function callOpenAICompatibleStream(
         max_tokens: Number(process.env.AI_MAX_TOKENS) || 2000,
         temperature: 0.8,
         stream: true,
+        ...(provider === "deepseek" ? { thinking: { type: "disabled" } } : {}),
       }),
       signal: controller.signal,
     });
@@ -807,6 +815,9 @@ async function callOpenAICompatibleStream(
       throw new Error(`AI API error: ${err}`);
     }
     if (!res.body) throw new Error("AI API returned no response body for streaming request");
+    // Time-to-first-content-token — the metric that tells you whether disabling
+    // thinking helped. Logged once per turn; compare in Vercel logs before/after.
+    let firstTokenLogged = false;
     for await (const dataStr of sseLines(res.body)) {
       if (dataStr === "[DONE]") break;
       let evt: any;
@@ -814,6 +825,10 @@ async function callOpenAICompatibleStream(
       const delta = evt?.choices?.[0]?.delta;
       const piece = delta?.content ?? "";
       if (piece) {
+        if (!firstTokenLogged) {
+          firstTokenLogged = true;
+          console.log(`[gm:latency] first content token in ${Date.now() - reqStart}ms (model=${model}, thinking=${provider === "deepseek" ? "disabled" : "n/a"})`);
+        }
         full += piece;
         filter.feed(piece);
       }
