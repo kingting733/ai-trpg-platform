@@ -29,7 +29,10 @@ export function emptyLocationNode(): LocationNode {
     id: "",
     name: "",
     desc: "",
-    initial: "hidden",
+    // New locations are OPEN by default — with no unlock condition a place is
+    // simply reachable. The creator can switch it to 已知但鎖定 / 隱藏 if they
+    // want it gated.
+    initial: "unlocked",
     unlock: [],
     evidence: [],
     on_enter: "",
@@ -76,7 +79,7 @@ const FIELD_TIPS = {
   name: "玩家看得到的地點名稱，例：「阿澤住所」、「林士站月台」。",
   initial: `開放（起點）：遊戲一開始玩家就可以去。\n已知但鎖定：玩家知道這裡存在，但暫時進不去（地圖上顯示🔒）。\n隱藏：玩家完全不知道這裡存在，需要被「發現」後才會出現在地圖。`,
   desc: "GM 看的場景備註，不會給玩家看。描述這個地點的氛圍、有什麼重要道具、NPC 狀態等。",
-  unlock: `填解鎖條件，滿足後系統自動開門。\n留空 = 永遠鎖定（只靠 discovers 才能解開）。\n\n語法：\n  visit:X        ── 去過地點 X\n  item:e1        ── 拿到證物 e1\n  count:標籤:3    ── 累積 3 件有該標籤的證物\n  round:5        ── 到第 5 回合\n  after:X:3      ── 進入 X 滿 3 回合後\n  objective:obj_1 ── 完成某個任務目標\n\n用 & 代表「且」、| 代表「或」\n例：item:e1 & visit:B | round:10`,
+  unlock: `只有當此地點設為「已知但鎖定」或「隱藏」時才需要填。\n留空 = 不設額外條件（開放的地點本來就能去；鎖定的地點則只能靠其他地點的「自動發現」開啟）。\n填了條件，滿足後系統自動開門。\n\n語法：\n  visit:X        ── 去過地點 X\n  item:e1        ── 拿到證物 e1\n  count:標籤:3    ── 累積 3 件有該標籤的證物\n  round:5        ── 到第 5 回合\n  after:X:3      ── 進入 X 滿 3 回合後\n  objective:obj_1 ── 完成某個任務目標\n\n用 & 代表「且」、| 代表「或」\n例：item:e1 & visit:B | round:10`,
   discovers: `到達此地點後，系統自動把哪些「隱藏」地點變成「已知但鎖定」狀態（顯示在玩家地圖）。\n點選要自動發現的地點即可（可多選）。`,
   on_enter: "第一次進入此地點時，GM 收到的敘事提示。例：「描述昏黃路燈、遠處傳來貓叫聲」",
   locked_narration: "玩家試圖進入但還沒解鎖時，GM 用來拒絕的故事理由。例：「鐵閘已拉下，無法進入」",
@@ -426,7 +429,7 @@ export function LocationGraphEditor({
               items={itemOptions}
               tags={tagOptions}
               objectives={objectiveOptions}
-              emptyHint="留空 = 永遠鎖定（只靠 discovers 解開）"
+              emptyHint="留空 = 開放的地點可直接前往；鎖定／隱藏的地點靠「自動發現」開啟"
             />
           </div>
           <div>
