@@ -751,6 +751,16 @@ export function LocationGraphEditor({
                   >
                     {e.two_way ? "改為單向 →" : "改為雙向 ⇄"}
                   </button>
+                  {!e.two_way && (
+                    <button
+                      type="button"
+                      onClick={() => onEdgesChange?.(edges.map((x, j) => (j === idx ? { ...x, from: x.to, to: x.from } : x)))}
+                      className="px-2 py-1 rounded border border-slate-600 text-slate-300 hover:border-gold hover:text-gold"
+                      title="調換單向路徑的方向"
+                    >
+                      反向 ⇋
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => { onEdgesChange?.(edges.filter((_, j) => j !== idx)); setEdgeMenu(null); }}
@@ -864,6 +874,16 @@ export function LocationGraphEditor({
                   >
                     {e.two_way ? "改單向" : "改雙向"}
                   </button>
+                  {!e.two_way && (
+                    <button
+                      type="button"
+                      onClick={() => onEdgesChange?.(edges.map((x, j) => (j === idx ? { ...x, from: x.to, to: x.from } : x)))}
+                      className="text-slate-500 hover:text-gold"
+                      title="調換方向"
+                    >
+                      反向
+                    </button>
+                  )}
                   <button type="button" onClick={() => onEdgesChange?.(edges.filter((_, j) => j !== idx))} className="text-red-400/70 hover:text-red-400">✕</button>
                 </div>
               );
