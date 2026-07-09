@@ -222,6 +222,7 @@ export function LocationGraphEditor({
   const [selected, setSelected] = useState<string | null>(null);
   const [linking, setLinking] = useState<string | null>(null);
   const [edgeMenu, setEdgeMenu] = useState<number | null>(null);
+  const [edgeListOpen, setEdgeListOpen] = useState(false);
 
   // Valid NPC references = ids AND names (names tolerate legacy data).
   const npcRefs = useMemo(
@@ -835,11 +836,19 @@ export function LocationGraphEditor({
           )}
         </div>
 
-        {/* Edge list — the authoritative editor for ALL paths (including ones
-            whose endpoints live in different layers and can't be drawn here). */}
+        {/* Edge list — collapsed by default (the canvas covers normal editing);
+            still the only way to edit paths whose endpoints live in different
+            layers and can't be drawn on the current canvas view. */}
         {edges.length > 0 && (
-          <div className="bg-slate-800/40 border border-slate-700 rounded-lg p-3 space-y-1.5">
-            <p className="text-[11px] text-slate-400 font-medium">路徑一覽</p>
+          <div className="bg-slate-800/40 border border-slate-700 rounded-lg p-3">
+            <button
+              type="button"
+              onClick={() => setEdgeListOpen((o) => !o)}
+              className="text-[11px] text-slate-400 hover:text-slate-200 font-medium flex items-center gap-1"
+            >
+              {edgeListOpen ? "▾" : "▸"} 路徑一覽（{edges.length}）
+            </button>
+            {edgeListOpen && <div className="space-y-1.5 mt-2">
             {edges.map((e, idx) => {
               const nameOf = (id: string) =>
                 nodes.find((n) => n.id === id)?.name || containers.find((c) => c.id === id)?.name || id;
@@ -859,6 +868,7 @@ export function LocationGraphEditor({
                 </div>
               );
             })}
+            </div>}
           </div>
         )}
       </div>
