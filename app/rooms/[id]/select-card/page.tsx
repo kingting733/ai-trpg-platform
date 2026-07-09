@@ -56,6 +56,7 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
   const [cards, setCards]         = useState<CharacterCard[]>([]);
   const [loading, setLoading]     = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [busyCardIds, setBusyCardIds] = useState<Set<string>>(new Set());
   const [confirming, setConfirming] = useState(false);
   const [error, setError]         = useState<string | null>(null);
 
@@ -75,6 +76,14 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
         .eq("user_id", user.id)
         .order("total_stats", { ascending: false });
       setCards((data as CharacterCard[]) ?? []);
+      // Cards away on an interlude mission can't join a room (a DB trigger
+      // also enforces this server-side; here we just grey them out).
+      const { data: missions } = await supabase
+        .from("card_missions")
+        .select("card_id")
+        .eq("user_id", user.id)
+        .is("claimed_at", null);
+      setBusyCardIds(new Set((missions ?? []).map((m: any) => m.card_id as string)));
       setLoading(false);
     }
     load();
@@ -154,21 +163,30 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
         {cards.map((card) => {
           const accent = RARITY_ACCENT[card.rarity];
           const isSelected = selectedId === card.id;
+          const busy = busyCardIds.has(card.id);
           return (
             <button
               key={card.id}
+              disabled={busy}
               onClick={() => setSelectedId(isSelected ? null : card.id)}
-              className="text-left relative rounded-xl p-5 transition-all"
+              className="text-left relative rounded-xl p-5 transition-all disabled:cursor-not-allowed"
               style={{
                 ...PANEL,
                 border: isSelected ? `1px solid ${accent.frame}` : "1px solid #2e2416",
                 boxShadow: isSelected ? `0 0 24px ${accent.selectedGlow}, 0 4px 24px rgba(0,0,0,0.4)` : "0 4px 16px rgba(0,0,0,0.3)",
                 transform: isSelected ? "translateY(-2px)" : undefined,
+                opacity: busy ? 0.45 : undefined,
               }}
             >
               {/* Inner ornate frame */}
               <div className="absolute inset-[6px] rounded-lg pointer-events-none"
                 style={{ border: `1px solid ${accent.frame}` }} />
+              {busy && (
+                <span className="absolute top-3 right-3 z-10 text-[11px] px-2 py-0.5 rounded-full"
+                  style={{ background: "rgba(40,34,24,0.95)", border: "1px solid rgba(201,169,110,0.4)", color: "#c9a96e" }}>
+                  ⏳ 出任務中
+                </span>
+              )}
 
               <div className="relative">
                 {/* Name + rarity chip */}

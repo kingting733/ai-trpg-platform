@@ -29,6 +29,7 @@ Multiplayer AI-GM TRPG (Call of Cthulhu-style, zh-TW UI). Next.js 14 app router 
 | Endings (sole game-ending authority) | `lib/game/endings.ts` |
 | NPC identity / combat stance | `lib/game/npc.ts`, `lib/game/npc-combat.ts` |
 | Inventory (soft, party-wide) | `lib/game/inventory.ts` |
+| 幕間任務 interlude missions (24h idle, points, capped growth) | `lib/game/interlude.ts`, `app/api/interlude/*`, `components/InterludePanel.tsx` |
 | Player room UI (GmText effects, panels) | `app/rooms/[id]/page.tsx` |
 | Scenario editors | `app/scenarios/new/page.tsx`, `app/scenarios/[id]/edit/page.tsx`, `components/*Editor*.tsx` |
 | DB migrations (run manually!) | `supabase/migrations/` |

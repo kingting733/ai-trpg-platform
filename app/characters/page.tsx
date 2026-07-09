@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { CardRollReveal, RevealCard } from "@/components/CardRollReveal";
+import { InterludePanel } from "@/components/InterludePanel";
 
 interface CharacterCard {
   id: string;
@@ -204,6 +205,14 @@ export default function CharactersPage() {
       </div>
 
       <div className="h-px mb-6" style={{ background: "linear-gradient(90deg,transparent,rgba(201,169,110,0.2),transparent)" }} />
+
+      {/* 幕間任務 — send a card on a 24h off-screen mission */}
+      {!loading && cards.length > 0 && (
+        <InterludePanel
+          cards={cards.map((c) => ({ id: c.id, name: c.name, skills: c.skills ?? null, dex: c.dex, app: c.app }))}
+          onCardsChanged={loadCards}
+        />
+      )}
 
       {error && (
         <div className="border text-sm rounded-lg px-4 py-3 mb-6"
