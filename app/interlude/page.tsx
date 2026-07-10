@@ -266,13 +266,14 @@ export default function InterludePage() {
               {active && <span className="text-[11px] text-emerald-400/80 flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />{claimable ? "已歸來" : "離線進行中…"}</span>}
             </div>
 
-            {/* The scene */}
-            <div className="il-scene" style={{ height: 260, background: "#0b0e14" }}>
+            {/* The scene. bg is 2131×360; shown near native height for crisp
+                pixels. Scroll speed tuned to a stroll (adjustable). */}
+            <div className="il-scene" style={{ height: 300, background: "#0b0e14" }}>
               {bgError ? (
                 // Gradient street stand-in until bg-street.png exists.
                 <div className="absolute inset-0" style={{ background: "linear-gradient(180deg,#12233a,#0a0d14)" }} />
               ) : (
-                <div className={`il-track ${walking ? "" : "il-paused"}`} style={{ ["--il-speed" as any]: "40s" }}>
+                <div className={`il-track ${walking ? "" : "il-paused"}`} style={{ ["--il-speed" as any]: "42s" }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={BG_SRC} alt="" className="il-tile" onError={() => setBgError(true)} />
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -283,9 +284,9 @@ export default function InterludePage() {
               <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(180deg, rgba(8,10,16,0.35), rgba(8,10,16,0.15) 40%, rgba(8,10,16,0.55))" }} />
               {/* Character (centered). Falls back to an emoji until the art
                   files exist under /public/interlude/. */}
-              <div className="absolute left-1/2 bottom-4 -translate-x-1/2 z-10">
+              <div className="absolute left-1/2 bottom-3 -translate-x-1/2 z-10">
                 {charError ? (
-                  <div className={`il-char ${walking ? "" : "il-paused"}`} style={{ fontSize: 72, lineHeight: "110px" }}>🚶</div>
+                  <div className={`il-char ${walking ? "" : "il-paused"}`} style={{ fontSize: 96, lineHeight: "150px" }}>🚶</div>
                 ) : (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -293,7 +294,7 @@ export default function InterludePage() {
                     src={walking ? CHAR_WALK : CHAR_IDLE}
                     alt="調查員"
                     className={`il-char ${walking ? "" : "il-paused"}`}
-                    style={{ height: 110 }}
+                    style={{ height: 150 }}
                     onError={() => setCharError(true)}
                   />
                 )}
