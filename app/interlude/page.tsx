@@ -78,7 +78,7 @@ export default function InterludePage() {
       supabase.from("character_cards").select("id,name,rarity,occupation,skills,str,con,siz,dex,app,int,pow,edu,luck").eq("user_id", user.id).order("created_at", { ascending: false }),
       supabase.from("card_missions").select("id,card_id,mission_type,success_rate,points_on_success,started_at,claimable_at").is("claimed_at", null).eq("user_id", user.id),
       supabase.from("characters").select("source_card_id, rooms!inner(status)").eq("user_id", user.id).in("rooms.status", ["waiting", "in_progress"]),
-      supabase.from("card_missions").select("id,card_id,mission_type,cancelled,claimed_at,outcome").not("claimed_at", "is", null).eq("cancelled", false).eq("user_id", user.id).order("claimed_at", { ascending: false }).limit(6),
+      supabase.from("card_missions").select("id,card_id,mission_type,cancelled,claimed_at,outcome").not("claimed_at", "is", null).eq("cancelled", false).eq("user_id", user.id).order("claimed_at", { ascending: false }).limit(3),
     ]);
     setPoints(u?.points ?? 0);
     const list = (cardRows as Card[]) ?? [];
