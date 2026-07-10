@@ -28,12 +28,90 @@ interface ActiveMission {
   claimable_at: string;
 }
 
+interface Growth { skillName?: string; d100?: number; old?: number; gain?: number; new?: number; capped?: boolean }
+
 interface Outcome {
   roll: number;
   success: boolean;
   points: number;
-  growth: { skillName?: string; d100?: number; old?: number; gain?: number; new?: number; capped?: boolean } | null;
+  growth: Growth | null;
   narration: string;
+}
+
+/** Click-to-roll reveal of the interlude growth check. The result is already
+ *  decided by the server (stored in `growth`); this only animates the d100
+ *  settling on it — a CoC experience check passes when the roll is OVER the
+ *  current skill value. */
+function GrowthRollReveal({ growth, onRevealed }: { growth: Growth; onRevealed: () => void }) {
+  const [phase, setPhase] = useState<"idle" | "rolling" | "done">("idle");
+  const [display, setDisplay] = useState(0);
+  const target = growth.d100 ?? 0;
+  const threshold = growth.old ?? 0;
+  const passed = (growth.gain ?? 0) > 0;
+
+  function roll() {
+    if (phase !== "idle") return;
+    setPhase("rolling");
+    // Slot-machine deceleration: fast at first, then slowing before it lands.
+    const delays = [60, 60, 60, 60, 70, 80, 100, 130, 175, 240, 330, 450];
+    let i = 0;
+    const tick = () => {
+      if (i < delays.length - 1) {
+        setDisplay(Math.floor(Math.random() * 100) + 1);
+        setTimeout(tick, delays[i++]);
+      } else {
+        setDisplay(target);
+        setPhase("done");
+        onRevealed();
+      }
+    };
+    setTimeout(tick, delays[i++]);
+  }
+
+  const rolling = phase === "rolling";
+  const done = phase === "done";
+  const glow = done ? (passed ? "rgba(110,231,183,0.5)" : "rgba(120,120,120,0.25)") : "rgba(201,169,110,0.3)";
+  const numColor = done ? (passed ? "#6ee7b7" : "#a1a1aa") : "#e4d8be";
+
+  return (
+    <div className="flex items-center gap-3 flex-wrap mt-1">
+      {/* The die */}
+      <button
+        type="button"
+        onClick={roll}
+        disabled={phase !== "idle"}
+        title={phase === "idle" ? "點擊擲骰" : undefined}
+        className={`relative w-16 h-16 rounded-xl flex items-center justify-center shrink-0 transition-all ${phase === "idle" ? "cursor-pointer hover:brightness-125" : "cursor-default"}`}
+        style={{
+          background: "linear-gradient(150deg,#1c1813,#0f0c08)",
+          border: `1.5px solid ${glow}`,
+          boxShadow: `0 0 ${done ? 20 : 12}px ${glow}`,
+          // `dice-shake` keyframes are defined globally in globals.css.
+          animation: rolling ? "dice-shake 0.5s ease-in-out infinite" : undefined,
+        }}
+      >
+        <span className="tabular-nums font-bold" style={{ fontSize: phase === "idle" ? 22 : 24, color: numColor }}>
+          {phase === "idle" ? "🎲" : display}
+        </span>
+      </button>
+
+      {/* Label / result */}
+      <div className="text-xs">
+        {phase === "idle" && (
+          <>
+            <p className="text-gold">點擊擲骰進行成長檢定</p>
+            <p className="text-zinc-600 mt-0.5">「{growth.skillName}」目前 {threshold} — 擲出高於 {threshold} 即成長</p>
+          </>
+        )}
+        {rolling && <p className="text-zinc-400">擲骰中…（目標：高於 {threshold}）</p>}
+        {done && (
+          passed
+            ? <p style={{ color: "#6ee7b7" }}>✦ 成長檢定通過！「{growth.skillName}」{growth.old} → <span className="font-bold">{growth.new}</span></p>
+            : <p className="text-zinc-500">成長檢定未通過（{target} ≤ {threshold}）。下次再努力。</p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 /** 幕間任務 — dispatch a card on a 24h off-screen mission from the 調查員 page.
@@ -48,6 +126,8 @@ export function InterludePanel({ cards, onCardsChanged }: { cards: CardLike[]; o
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Outcome | null>(null);
+  // false while a rollable growth check awaits the player's click-to-roll.
+  const [growthRevealed, setGrowthRevealed] = useState(true);
   const [now, setNow] = useState(Date.now());
 
   async function load() {
@@ -101,7 +181,12 @@ export function InterludePanel({ cards, onCardsChanged }: { cards: CardLike[]; o
       const data = await res.json();
       if (!res.ok) setError(data.error ?? "領取失敗。");
       else {
-        setResult((data.outcome as Outcome) ?? null);
+        const outcome = (data.outcome as Outcome) ?? null;
+        setResult(outcome);
+        // A growth check with a real d100 (success mission, not capped) waits for
+        // the player to click-to-roll; everything else reveals immediately.
+        const g = outcome?.growth;
+        setGrowthRevealed(!(g && !g.capped && typeof g.d100 === "number"));
         await load();
         onCardsChanged(); // growth may have bumped a skill
       }
@@ -164,13 +249,18 @@ export function InterludePanel({ cards, onCardsChanged }: { cards: CardLike[]; o
           <div className="flex items-center gap-4 text-xs flex-wrap">
             <span className="text-gold">＋{result.points} 點數</span>
             {result.growth && result.growth.capped && <span className="text-zinc-500">本週成長已達上限</span>}
-            {result.growth && !result.growth.capped && (
-              (result.growth.gain ?? 0) > 0
-                ? <span style={{ color: "#6ee7b7" }}>「{result.growth.skillName}」成長檢定通過 {result.growth.old} → {result.growth.new}</span>
-                : <span className="text-zinc-500">成長檢定未通過（d100={result.growth.d100} ≤ {result.growth.old}）</span>
-            )}
           </div>
-          <button type="button" onClick={() => setResult(null)} className="mt-3 text-xs text-zinc-500 hover:text-zinc-300 underline decoration-dotted">收起</button>
+          {/* Growth check — click-to-roll dice reveal (success missions only) */}
+          {result.growth && !result.growth.capped && (
+            growthRevealed
+              ? (
+                (result.growth.gain ?? 0) > 0
+                  ? <p className="text-xs mt-2" style={{ color: "#6ee7b7" }}>✦ 「{result.growth.skillName}」成長檢定通過 {result.growth.old} → {result.growth.new}</p>
+                  : <p className="text-xs mt-2 text-zinc-500">成長檢定未通過（{result.growth.d100} ≤ {result.growth.old}）</p>
+              )
+              : <GrowthRollReveal growth={result.growth} onRevealed={() => setGrowthRevealed(true)} />
+          )}
+          <button type="button" onClick={() => setResult(null)} className="mt-3 block text-xs text-zinc-500 hover:text-zinc-300 underline decoration-dotted">收起</button>
         </div>
       )}
 
