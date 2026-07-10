@@ -29,8 +29,6 @@ const RARITY_CHIP: Record<string, string> = {
 const BG_SRC = "/interlude/bg-street.png";
 const CHAR_IDLE = "/interlude/char-idle.png";
 const CHAR_WALK = "/interlude/char-walk.gif";
-// Tile width for the seamless scroll loop — set to your bg PNG's pixel width.
-const BG_TILE_PX = 512;
 
 interface Card {
   id: string; name: string; rarity: string; occupation: string | null;
@@ -66,6 +64,7 @@ export default function InterludePage() {
   const [growthRevealed, setGrowthRevealed] = useState(true);
   const [now, setNow] = useState(Date.now());
   const [charError, setCharError] = useState(false);
+  const [bgError, setBgError] = useState(false);
 
   async function load() {
     const supabase = createClient();
@@ -268,18 +267,20 @@ export default function InterludePage() {
             </div>
 
             {/* The scene */}
-            <div className="il-scene" style={{ height: 260 }}>
-              <div
-                className={`il-bg ${walking ? "" : "il-paused"}`}
-                style={{
-                  ["--il-bg" as any]: `url(${BG_SRC})`,
-                  ["--il-tile" as any]: `${BG_TILE_PX}px`,
-                  ["--il-speed" as any]: "22s",
-                  // Fallback gradient street shows through if the PNG is absent.
-                  backgroundColor: "#0b0e14",
-                  backgroundImage: `linear-gradient(180deg, rgba(20,30,45,0.6), rgba(8,10,16,0.9)), var(--il-bg)`,
-                }}
-              />
+            <div className="il-scene" style={{ height: 260, background: "#0b0e14" }}>
+              {bgError ? (
+                // Gradient street stand-in until bg-street.png exists.
+                <div className="absolute inset-0" style={{ background: "linear-gradient(180deg,#12233a,#0a0d14)" }} />
+              ) : (
+                <div className={`il-track ${walking ? "" : "il-paused"}`} style={{ ["--il-speed" as any]: "40s" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={BG_SRC} alt="" className="il-tile" onError={() => setBgError(true)} />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={BG_SRC} alt="" className="il-tile" aria-hidden />
+                </div>
+              )}
+              {/* Mood/readability vignette over the street. */}
+              <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(180deg, rgba(8,10,16,0.35), rgba(8,10,16,0.15) 40%, rgba(8,10,16,0.55))" }} />
               {/* Character (centered). Falls back to an emoji until the art
                   files exist under /public/interlude/. */}
               <div className="absolute left-1/2 bottom-4 -translate-x-1/2 z-10">
