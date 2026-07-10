@@ -2,11 +2,11 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
   missionByKey,
-  failPoints,
   interludeGrowth,
   pickMissionNarration,
   INTERLUDE_WEEKLY_GROWTH_CAP,
 } from "@/lib/game/interlude";
+import { computeMissionModifiers } from "@/lib/game/items";
 
 const d = (sides: number) => Math.floor(Math.random() * sides) + 1;
 
@@ -42,9 +42,14 @@ export async function POST(req: Request) {
   if (!mission) return NextResponse.json({ error: "未知的任務類型。" }, { status: 500 });
 
   // === Roll the outcome (server-side, once) ===
+  // The item equipped at DISPATCH (snapshotted on the row) supplies the
+  // failure floor and growth-die bonus — mid-mission re-equips change nothing.
+  const mods = computeMissionModifiers(row.equipped_item ?? null, row.mission_type);
   const roll = d(100);
   const success = roll <= row.success_rate;
-  const points = success ? row.points_on_success : failPoints(row.points_on_success);
+  const points = success
+    ? row.points_on_success
+    : Math.ceil(row.points_on_success * mods.failFloor);
 
   // Growth check — success only, capped per card per rolling week.
   let growth: any = null;
@@ -67,7 +72,9 @@ export async function POST(req: Request) {
       if (card) {
         const { currentSkillValue } = await import("@/lib/game/skills");
         const oldValue = currentSkillValue(row.growth_skill, card.skills ?? null, { dex: card.dex ?? 50, app: card.app ?? 50 });
-        growth = interludeGrowth(row.growth_skill, oldValue, d(100));
+        // 舊神印 etc: the growth-die bonus is added to the d100 before the
+        // over-current comparison (shown to the player as the boosted roll).
+        growth = interludeGrowth(row.growth_skill, oldValue, d(100) + mods.growthBonus);
         if (growth.gain > 0) {
           const newSkills = { ...((card.skills as Record<string, number>) ?? {}), [row.growth_skill]: growth.new };
           const { error: skillErr } = await supabase

@@ -30,6 +30,7 @@ export function NavbarLinks({ isAdmin, isLoggedIn }: Props) {
       {link("/", "劇本")}
       {isLoggedIn && link("/characters", "調查員")}
       {isLoggedIn && link("/interlude", "幕間")}
+      {isLoggedIn && link("/pray", "祈願")}
       {isLoggedIn && link("/dashboard", "後台")}
       {isAdmin && link("/admin", "管理")}
     </div>

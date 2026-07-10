@@ -9,10 +9,10 @@ import {
   bestRelevantSkill,
   successRate,
   pointsFor,
-  failPoints,
 } from "@/lib/game/interlude";
 import { GrowthRollReveal, type Growth } from "@/components/GrowthRollReveal";
 import { SKILL_ZH_BY_KEY, currentSkillValue } from "@/lib/game/skills";
+import { computeMissionModifiers, applyRateBonus, applyPointsMult, itemById } from "@/lib/game/items";
 
 // Occupation portrait icons (mirrors select-card / CardRollReveal).
 const OCCUPATION_ICON: Record<string, string> = {
@@ -36,6 +36,7 @@ interface Card {
   skills: Record<string, number> | null;
   str: number; con: number; siz: number; dex: number; app: number;
   int: number; pow: number; edu: number; luck: number;
+  equipped_item: string | null;
 }
 interface ActiveMission {
   id: string; card_id: string; mission_type: string;
@@ -75,7 +76,7 @@ export default function InterludePage() {
     if (!user) { router.push("/login"); return; }
     const [{ data: u }, { data: cardRows }, { data: missions }, { data: inRooms }, { data: hist }] = await Promise.all([
       supabase.from("users").select("points").eq("id", user.id).single(),
-      supabase.from("character_cards").select("id,name,rarity,occupation,skills,str,con,siz,dex,app,int,pow,edu,luck").eq("user_id", user.id).order("created_at", { ascending: false }),
+      supabase.from("character_cards").select("id,name,rarity,occupation,skills,str,con,siz,dex,app,int,pow,edu,luck,equipped_item").eq("user_id", user.id).order("created_at", { ascending: false }),
       supabase.from("card_missions").select("id,card_id,mission_type,success_rate,points_on_success,started_at,claimable_at").is("claimed_at", null).eq("user_id", user.id),
       supabase.from("characters").select("source_card_id, rooms!inner(status)").eq("user_id", user.id).in("rooms.status", ["waiting", "in_progress"]),
       supabase.from("card_missions").select("id,card_id,mission_type,cancelled,claimed_at,outcome").not("claimed_at", "is", null).eq("cancelled", false).eq("user_id", user.id).order("claimed_at", { ascending: false }).limit(3),
@@ -353,8 +354,11 @@ export default function InterludePage() {
                 // The chosen training skill drives everything.
                 const chosenKey = selectedSkill && m.skills.includes(selectedSkill) ? selectedSkill : bestRelevantSkill({ skills: featured.skills, dex: featured.dex, app: featured.app }, m).key;
                 const chosenVal = currentSkillValue(chosenKey, featured.skills, attrs);
-                const rate = successRate(chosenVal);
-                const pts = pointsFor(chosenVal);
+                // Mirror the dispatch route: equipped-item modifiers baked in.
+                const mods = computeMissionModifiers(featured.equipped_item, m.key);
+                const rate = applyRateBonus(successRate(chosenVal), mods.rateBonus);
+                const pts = applyPointsMult(pointsFor(chosenVal), mods.pointsMult);
+                const equippedDef = itemById(featured.equipped_item);
                 return (
                   <>
                     <p className="text-gold mb-1">{m.emoji} {m.name}</p>
@@ -380,17 +384,21 @@ export default function InterludePage() {
                             <span className={sel ? "text-gold" : "text-zinc-400"}>{SKILL_ZH_BY_KEY[k] ?? k}</span>
                             <span className="flex items-center gap-2">
                               <span className={sel ? "text-gold font-semibold" : "text-zinc-500"}>{v}</span>
-                              <span className="text-[10px] text-zinc-600">成功 {successRate(v)}%</span>
+                              <span className="text-[10px] text-zinc-600">成功 {applyRateBonus(successRate(v), mods.rateBonus)}%</span>
                             </span>
                           </button>
                         );
                       })}
                     </div>
 
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center justify-between mb-1">
                       <span className="text-zinc-400">本次成功率</span>
                       <span className="text-gold font-bold text-sm">{rate}%</span>
                     </div>
+                    {equippedDef && (
+                      <p className="text-[10px] text-zinc-600 mb-2">🜏 已裝備「{equippedDef.name}」{mods.rateBonus > 0 || mods.pointsMult !== 1 || mods.failFloor !== 0.1 || mods.growthBonus > 0 ? "（效果已計入）" : "（此任務無效果）"}</p>
+                    )}
+                    <div className="mb-2" />
 
                     <div className="rounded-lg p-2.5 mb-2" style={{ background: "rgba(6,78,59,0.18)", border: "1px solid rgba(16,94,66,0.5)" }}>
                       <p style={{ color: "#6ee7b7" }}>✦ 成功時</p>
@@ -403,7 +411,7 @@ export default function InterludePage() {
                     <div className="rounded-lg p-2.5 mb-3" style={{ background: "rgba(127,29,29,0.15)", border: "1px solid rgba(153,27,27,0.45)" }}>
                       <p style={{ color: "#fca5a5" }}>✧ 失敗時</p>
                       <ul className="text-[11px] text-zinc-400 mt-1 space-y-0.5">
-                        <li>· 僅獲得 <span className="text-zinc-300">{failPoints(pts)}</span> 點數（10%）</li>
+                        <li>· 僅獲得 <span className="text-zinc-300">{Math.ceil(pts * mods.failFloor)}</span> 點數（{Math.round(mods.failFloor * 100)}%）</li>
                         <li>· 不進行成長檢定</li>
                         <li className="text-zinc-600">· 沒有任何其他損失</li>
                       </ul>

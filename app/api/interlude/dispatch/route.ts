@@ -8,6 +8,7 @@ import {
   missionDurationMs,
 } from "@/lib/game/interlude";
 import { currentSkillValue } from "@/lib/game/skills";
+import { computeMissionModifiers, applyRateBonus, applyPointsMult } from "@/lib/game/items";
 
 /**
  * Dispatch a character card on a 24h interlude mission.
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
 
   const { data: card } = await supabase
     .from("character_cards")
-    .select("id, user_id, name, skills, dex, app")
+    .select("id, user_id, name, skills, dex, app, equipped_item")
     .eq("id", cardId)
     .single();
   if (!card) return NextResponse.json({ error: "找不到調查員。" }, { status: 404 });
@@ -51,8 +52,11 @@ export async function POST(req: Request) {
   const cardLike = { skills: card.skills ?? null, dex: card.dex, app: card.app };
   const chosenKey = growthSkill && mission.skills.includes(growthSkill) ? growthSkill : bestRelevantSkill(cardLike, mission).key;
   const chosenValue = currentSkillValue(chosenKey, card.skills ?? null, { dex: card.dex ?? 50, app: card.app ?? 50 });
-  const rate = successRate(chosenValue);
-  const points = pointsFor(chosenValue);
+  // Equipped-item modifiers are baked into the SNAPSHOT (and the item id is
+  // stored on the row), so re-equipping mid-mission changes nothing in flight.
+  const mods = computeMissionModifiers(card.equipped_item ?? null, mission.key);
+  const rate = applyRateBonus(successRate(chosenValue), mods.rateBonus);
+  const points = applyPointsMult(pointsFor(chosenValue), mods.pointsMult);
   const claimableAt = new Date(Date.now() + missionDurationMs()).toISOString();
 
   const { data: row, error } = await supabase
@@ -64,6 +68,7 @@ export async function POST(req: Request) {
       success_rate: rate,
       points_on_success: points,
       growth_skill: chosenKey,
+      equipped_item: card.equipped_item ?? null,
       claimable_at: claimableAt,
     })
     .select("id, claimable_at")
