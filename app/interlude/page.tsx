@@ -197,6 +197,74 @@ export default function InterludePage() {
         </div>
       ) : (
         <>
+          {/* Animated mission scene */}
+          <div className="rounded-xl overflow-hidden mb-4" style={{ background: "rgba(16,13,9,0.9)", border: "1px solid #2a2418" }}>
+            <div className="flex items-center justify-between px-4 py-2 border-b" style={{ borderColor: "#2a2418" }}>
+              <span className="text-sm text-gold">{active ? "任務進行中" : "尚未出發"}</span>
+              {active && <span className="text-[11px] text-emerald-400/80 flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />{claimable ? "已歸來" : "離線進行中…"}</span>}
+            </div>
+
+            {/* The scene. bg is 2131×360; shown near native height for crisp
+                pixels. Scroll speed tuned to a stroll (adjustable). */}
+            <div className="il-scene" style={{ height: 300, background: "#0b0e14" }}>
+              {bgError ? (
+                <div className="absolute inset-0" style={{ background: "linear-gradient(180deg,#12233a,#0a0d14)" }} />
+              ) : (
+                <div className={`il-track ${walking ? "" : "il-paused"}`} style={{ ["--il-speed" as any]: "42s" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={BG_SRC} alt="" className="il-tile" onError={() => setBgError(true)} />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={BG_SRC} alt="" className="il-tile" aria-hidden />
+                </div>
+              )}
+              <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(180deg, rgba(8,10,16,0.35), rgba(8,10,16,0.15) 40%, rgba(8,10,16,0.55))" }} />
+              <div className="absolute left-1/2 bottom-3 -translate-x-1/2 z-10">
+                {charError ? (
+                  <div className={`il-char ${walking ? "" : "il-paused"}`} style={{ fontSize: 96, lineHeight: "150px" }}>🚶</div>
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    key={walking ? "walk" : "idle"}
+                    src={walking ? CHAR_WALK : CHAR_IDLE}
+                    alt="調查員"
+                    className={`il-char ${walking ? "" : "il-paused"}`}
+                    style={{ height: 150 }}
+                    onError={() => setCharError(true)}
+                  />
+                )}
+              </div>
+              {!active && (
+                <div className="absolute inset-0 flex items-center justify-center z-20" style={{ background: "rgba(8,7,4,0.55)" }}>
+                  <p className="text-zinc-400 text-sm">選擇下方任務，派出 <span className="text-gold">{featured?.name ?? "調查員"}</span> 出發</p>
+                </div>
+              )}
+            </div>
+
+            {active && (
+              <div className="flex items-center gap-4 px-4 py-3 flex-wrap">
+                <div className="flex items-center gap-2 min-w-[160px]">
+                  <span className="text-xl">{activeMission?.emoji}</span>
+                  <div><p className="text-sm text-zinc-200">{activeMission?.name}</p><p className="text-[11px] text-zinc-600">成功率 {active.success_rate}%</p></div>
+                </div>
+                <div className="flex-1 min-w-[160px]">
+                  <div className="flex justify-between text-[11px] text-zinc-500 mb-1"><span>進度</span><span>{progressPct}%</span></div>
+                  <div className="h-2 rounded-full overflow-hidden" style={{ background: "#0e0c08" }}>
+                    <div className="h-full rounded-full transition-all" style={{ width: `${progressPct}%`, background: "linear-gradient(90deg,#a8884f,#c9a96e)" }} />
+                  </div>
+                </div>
+                <div className="text-center">
+                  <p className="text-[11px] text-zinc-600">剩餘時間</p>
+                  <p className="font-mono text-lg tabular-nums" style={{ color: claimable ? "#6ee7b7" : "#e4d8be" }}>{claimable ? "已完成" : fmt(remainMs)}</p>
+                </div>
+                {claimable ? (
+                  <button type="button" onClick={claim} disabled={working} className="px-5 py-2.5 rounded-lg font-serif text-sm transition-all disabled:opacity-40 hover:brightness-110" style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07" }}>{working ? "..." : "領取成果"}</button>
+                ) : (
+                  <button type="button" onClick={cancel} disabled={working} className="px-4 py-2.5 rounded-lg text-xs transition-colors disabled:opacity-40" style={{ border: "1px solid rgba(185,28,28,0.4)", color: "#f87171" }}>取消任務</button>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Top row: featured card · mission picker · rules */}
           <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr_240px] gap-4 mb-4">
             {/* Featured investigator */}
@@ -354,79 +422,6 @@ export default function InterludePage() {
                 );
               })()}
             </div>
-          </div>
-
-          {/* Animated mission scene */}
-          <div className="rounded-xl overflow-hidden mb-4" style={{ background: "rgba(16,13,9,0.9)", border: "1px solid #2a2418" }}>
-            <div className="flex items-center justify-between px-4 py-2 border-b" style={{ borderColor: "#2a2418" }}>
-              <span className="text-sm text-gold">{active ? "任務進行中" : "尚未出發"}</span>
-              {active && <span className="text-[11px] text-emerald-400/80 flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />{claimable ? "已歸來" : "離線進行中…"}</span>}
-            </div>
-
-            {/* The scene. bg is 2131×360; shown near native height for crisp
-                pixels. Scroll speed tuned to a stroll (adjustable). */}
-            <div className="il-scene" style={{ height: 300, background: "#0b0e14" }}>
-              {bgError ? (
-                // Gradient street stand-in until bg-street.png exists.
-                <div className="absolute inset-0" style={{ background: "linear-gradient(180deg,#12233a,#0a0d14)" }} />
-              ) : (
-                <div className={`il-track ${walking ? "" : "il-paused"}`} style={{ ["--il-speed" as any]: "42s" }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={BG_SRC} alt="" className="il-tile" onError={() => setBgError(true)} />
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={BG_SRC} alt="" className="il-tile" aria-hidden />
-                </div>
-              )}
-              {/* Mood/readability vignette over the street. */}
-              <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(180deg, rgba(8,10,16,0.35), rgba(8,10,16,0.15) 40%, rgba(8,10,16,0.55))" }} />
-              {/* Character (centered). Falls back to an emoji until the art
-                  files exist under /public/interlude/. */}
-              <div className="absolute left-1/2 bottom-3 -translate-x-1/2 z-10">
-                {charError ? (
-                  <div className={`il-char ${walking ? "" : "il-paused"}`} style={{ fontSize: 96, lineHeight: "150px" }}>🚶</div>
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    key={walking ? "walk" : "idle"}
-                    src={walking ? CHAR_WALK : CHAR_IDLE}
-                    alt="調查員"
-                    className={`il-char ${walking ? "" : "il-paused"}`}
-                    style={{ height: 150 }}
-                    onError={() => setCharError(true)}
-                  />
-                )}
-              </div>
-              {!active && (
-                <div className="absolute inset-0 flex items-center justify-center z-20" style={{ background: "rgba(8,7,4,0.55)" }}>
-                  <p className="text-zinc-400 text-sm">選擇上方任務，派出 <span className="text-gold">{featured?.name ?? "調查員"}</span> 出發</p>
-                </div>
-              )}
-            </div>
-
-            {/* Progress / controls */}
-            {active && (
-              <div className="flex items-center gap-4 px-4 py-3 flex-wrap">
-                <div className="flex items-center gap-2 min-w-[160px]">
-                  <span className="text-xl">{activeMission?.emoji}</span>
-                  <div><p className="text-sm text-zinc-200">{activeMission?.name}</p><p className="text-[11px] text-zinc-600">成功率 {active.success_rate}%</p></div>
-                </div>
-                <div className="flex-1 min-w-[160px]">
-                  <div className="flex justify-between text-[11px] text-zinc-500 mb-1"><span>進度</span><span>{progressPct}%</span></div>
-                  <div className="h-2 rounded-full overflow-hidden" style={{ background: "#0e0c08" }}>
-                    <div className="h-full rounded-full transition-all" style={{ width: `${progressPct}%`, background: "linear-gradient(90deg,#a8884f,#c9a96e)" }} />
-                  </div>
-                </div>
-                <div className="text-center">
-                  <p className="text-[11px] text-zinc-600">剩餘時間</p>
-                  <p className="font-mono text-lg tabular-nums" style={{ color: claimable ? "#6ee7b7" : "#e4d8be" }}>{claimable ? "已完成" : fmt(remainMs)}</p>
-                </div>
-                {claimable ? (
-                  <button type="button" onClick={claim} disabled={working} className="px-5 py-2.5 rounded-lg font-serif text-sm transition-all disabled:opacity-40 hover:brightness-110" style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07" }}>{working ? "..." : "領取成果"}</button>
-                ) : (
-                  <button type="button" onClick={cancel} disabled={working} className="px-4 py-2.5 rounded-lg text-xs transition-colors disabled:opacity-40" style={{ border: "1px solid rgba(185,28,28,0.4)", color: "#f87171" }}>取消任務</button>
-                )}
-              </div>
-            )}
           </div>
 
           {/* Claim result */}
