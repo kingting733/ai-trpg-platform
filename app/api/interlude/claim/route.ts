@@ -4,65 +4,11 @@ import {
   missionByKey,
   failPoints,
   interludeGrowth,
-  fallbackNarration,
+  pickMissionNarration,
   INTERLUDE_WEEKLY_GROWTH_CAP,
 } from "@/lib/game/interlude";
 
 const d = (sides: number) => Math.floor(Math.random() * sides) + 1;
-
-/** One-paragraph mission narration. Copies the callAI pattern from
- *  lib/ai/objectives.ts (every failure logs its cause; empty string on any
- *  problem — the caller substitutes the template fallback, so a claim is never
- *  storyless). */
-async function narrate(
-  missionName: string,
-  missionDesc: string,
-  characterName: string,
-  success: boolean,
-  growthLine: string | null
-): Promise<string> {
-  const provider = process.env.AI_PROVIDER ?? "deepseek";
-  const model = process.env.AI_CLASSIFY_MODEL ?? process.env.AI_MODEL ?? "deepseek-v4-flash";
-  const apiKey = process.env.AI_API_KEY;
-  if (!apiKey) {
-    console.warn("[interlude] narrate skipped: AI_API_KEY is not set.");
-    return "";
-  }
-  const system =
-    "你是克蘇魯風城市怪談 TRPG 的旁白。用繁體中文（口語可帶粵語色彩）寫一段 2-3 句的幕間小故事，描述角色離隊執行任務的經過與結果。只寫可觀察的事件，不要下結論、不要預示劇情、不要提遊戲機制或數值。";
-  const user = `角色：${characterName}\n任務：${missionName} — ${missionDesc}\n結果：${success ? "順利完成，頗有收穫" : "不太順利，收穫寥寥（但沒有受傷或損失）"}${growthLine ? `\n另外：${growthLine}` : ""}\n\n請直接輸出那段小故事，不要任何前綴。`;
-  try {
-    if (provider === "anthropic") {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model, system, messages: [{ role: "user", content: user }], max_tokens: 300 }),
-      });
-      if (!res.ok) { console.error(`[interlude] narrate HTTP ${res.status}`); return ""; }
-      const data = await res.json();
-      return data.content?.[0]?.text?.trim() ?? "";
-    }
-    const baseOverride = process.env.AI_BASE_URL?.trim().replace(/\/+$/, "").replace(/\/v1$/i, "");
-    const defaultBase = provider === "deepseek" ? "https://api.deepseek.com" : "https://api.openai.com";
-    const res = await fetch(`${baseOverride ?? defaultBase}/v1/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: "system", content: system }, { role: "user", content: user }],
-        max_tokens: 300,
-        temperature: 0.9,
-        ...(provider === "deepseek" ? { thinking: { type: "disabled" } } : {}),
-      }),
-    });
-    if (!res.ok) { console.error(`[interlude] narrate HTTP ${res.status}`); return ""; }
-    const data = await res.json();
-    return data.choices?.[0]?.message?.content?.trim() ?? "";
-  } catch (e) {
-    console.error("[interlude] narrate failed:", e instanceof Error ? e.message : e);
-    return "";
-  }
-}
 
 /**
  * Claim a finished interlude mission. The outcome is rolled ONCE here and
@@ -142,10 +88,8 @@ export async function POST(req: Request) {
     .from("character_cards").select("name").eq("id", row.card_id).single();
   const charName = cardName?.name ?? "調查員";
 
-  const growthLine = growth && growth.gain > 0 ? `${charName}的「${growth.skillName}」有所精進` : null;
-  const narration =
-    (await narrate(mission.name, mission.desc, charName, success, growthLine)) ||
-    fallbackNarration(mission, charName, success);
+  // Preset narration — no AI call.
+  const narration = pickMissionNarration(mission.key, charName, success);
 
   const outcome = { roll, success, points, growth, narration };
 
