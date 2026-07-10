@@ -29,6 +29,7 @@ export function NavbarLinks({ isAdmin, isLoggedIn }: Props) {
     <div className="flex items-center gap-4 sm:gap-7 text-sm">
       {link("/", "劇本")}
       {isLoggedIn && link("/characters", "調查員")}
+      {isLoggedIn && link("/interlude", "幕間")}
       {isLoggedIn && link("/dashboard", "後台")}
       {isAdmin && link("/admin", "管理")}
     </div>

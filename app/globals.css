@@ -107,7 +107,29 @@ body {
   50%  { content: "\2683"; } 66%  { content: "\2684"; } 83%  { content: "\2685"; }
 }
 
+/* ─── 幕間任務 idle scene ─────────────────────────────────────────────────
+   The background is one seamlessly-tiling strip; scrolling its position by
+   exactly the CSS var --il-tile (its own width) loops with no seam. The
+   character stays centered; only the world moves. Pixel art stays crisp. */
+.il-scene { position: relative; overflow: hidden; }
+.il-bg {
+  position: absolute; inset: 0;
+  background-image: var(--il-bg, none);
+  background-repeat: repeat-x;
+  background-size: auto 100%;
+  image-rendering: pixelated;
+  animation: il-scroll var(--il-speed, 24s) linear infinite;
+  will-change: background-position;
+}
+@keyframes il-scroll { to { background-position-x: calc(-1 * var(--il-tile, 512px)); } }
+/* Gentle up/down bob so the character reads as walking even from a single GIF. */
+.il-char { image-rendering: pixelated; animation: il-bob 0.9s ease-in-out infinite; will-change: transform; }
+@keyframes il-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+/* Paused states (no active mission / arrived) — the world holds still. */
+.il-bg.il-paused, .il-char.il-paused { animation: none; }
+
 /* Respect users who prefer no motion. */
 @media (prefers-reduced-motion: reduce) {
-  .fx-dread, .gm-dot, .gm-caret, .gm-thinking-line, .dice-roll, .dice-roll::after { animation: none; }
+  .fx-dread, .gm-dot, .gm-caret, .gm-thinking-line, .dice-roll, .dice-roll::after,
+  .il-bg, .il-char { animation: none; }
 }
