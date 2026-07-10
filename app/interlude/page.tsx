@@ -12,6 +12,7 @@ import {
   failPoints,
 } from "@/lib/game/interlude";
 import { GrowthRollReveal, type Growth } from "@/components/GrowthRollReveal";
+import { SKILL_ZH_BY_KEY, currentSkillValue } from "@/lib/game/skills";
 
 // Occupation portrait icons (mirrors select-card / CardRollReveal).
 const OCCUPATION_ICON: Record<string, string> = {
@@ -57,6 +58,7 @@ export default function InterludePage() {
   const [active, setActive] = useState<ActiveMission | null>(null);
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [featuredId, setFeaturedId] = useState<string>("");
+  const [selectedMission, setSelectedMission] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,7 +110,7 @@ export default function InterludePage() {
     try {
       const res = await fetch("/api/interlude/dispatch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cardId: featuredId, missionType: missionKey }) });
       const data = await res.json();
-      if (!res.ok) setError(data.error ?? "出發失敗。"); else { setResult(null); await load(); }
+      if (!res.ok) setError(data.error ?? "出發失敗。"); else { setResult(null); setSelectedMission(null); await load(); }
     } catch { setError("網路錯誤，請再試一次。"); }
     setWorking(false);
   }
@@ -233,14 +235,22 @@ export default function InterludePage() {
                   {INTERLUDE_MISSIONS.map((m) => {
                     const best = featured ? bestRelevantSkill({ skills: featured.skills, dex: featured.dex, app: featured.app }, m) : null;
                     const rate = best ? successRate(best.value) : null;
-                    const pts = best ? pointsFor(best.value) : null;
+                    const isSel = selectedMission === m.key;
                     return (
-                      <button key={m.key} type="button" disabled={!featured || working} onClick={() => dispatch(m.key)} className="text-left rounded-lg p-3 transition-all disabled:opacity-40 hover:brightness-110" style={{ background: "rgba(26,21,14,0.6)", border: "1px solid #2e2416" }}>
-                        <p className="text-sm text-zinc-200 mb-1">{m.emoji} {m.name}</p>
+                      <button
+                        key={m.key}
+                        type="button"
+                        disabled={!featured || working}
+                        onClick={() => setSelectedMission(isSel ? null : m.key)}
+                        className="text-left rounded-lg p-3 transition-all disabled:opacity-40 hover:brightness-110"
+                        style={{
+                          background: isSel ? "rgba(201,169,110,0.14)" : "rgba(26,21,14,0.6)",
+                          border: `1px solid ${isSel ? "rgba(201,169,110,0.6)" : "#2e2416"}`,
+                        }}
+                      >
+                        <p className="text-sm mb-1" style={{ color: isSel ? "#e4d8be" : "#d4d4d8" }}>{m.emoji} {m.name}</p>
                         <p className="text-[11px] text-zinc-600 leading-snug mb-2 min-h-[2.5em]">{m.desc}</p>
-                        {rate != null && pts != null ? (
-                          <><p className="text-[11px] text-gold">成功率 {rate}%</p><p className="text-[10px] text-zinc-500 mt-0.5">成功 {pts} 點 / 失敗 {failPoints(pts)} 點</p></>
-                        ) : <p className="text-[11px] text-zinc-700">選擇調查員查看</p>}
+                        {rate != null ? <p className="text-[11px] text-gold">成功率 {rate}%</p> : <p className="text-[11px] text-zinc-700">選擇調查員查看</p>}
                       </button>
                     );
                   })}
@@ -248,14 +258,76 @@ export default function InterludePage() {
               )}
             </div>
 
-            {/* Rules */}
+            {/* Selected-mission detail + confirm (replaces the static rules panel) */}
             <div className="rounded-xl p-4 text-xs" style={{ background: "rgba(22,19,16,0.8)", border: "1px solid #2a2418" }}>
-              <p className="text-gold mb-3">規則與獎勵</p>
-              <div className="space-y-3 text-zinc-400">
-                <div><p className="text-zinc-200">✦ 任務成功</p><p className="text-[11px] text-zinc-600 mt-0.5">獲得全部點數，並進行 1 次成長檢定。</p></div>
-                <div><p className="text-zinc-200">✧ 任務失敗</p><p className="text-[11px] text-zinc-600 mt-0.5">僅獲得 10% 點數，不進行成長檢定，但沒有任何損失。</p></div>
-                <div><p className="text-zinc-200">⚘ 每週成長上限</p><p className="text-[11px] text-zinc-600 mt-0.5">每名調查員每週最多獲得 2 次成長。</p></div>
-              </div>
+              {active ? (
+                <>
+                  <p className="text-gold mb-3">任務進行中</p>
+                  <p className="text-zinc-500 leading-relaxed">{activeCard?.name} 正在執行「{activeMission?.name}」，歸來後即可領取。</p>
+                </>
+              ) : !featured ? (
+                <p className="text-zinc-600 py-8 text-center">先選擇一位調查員。</p>
+              ) : !selectedMission ? (
+                <p className="text-zinc-600 py-8 text-center">從左側選擇一個任務，這裡會顯示預期的成功與失敗結果。</p>
+              ) : (() => {
+                const m = missionByKey(selectedMission)!;
+                const best = bestRelevantSkill({ skills: featured.skills, dex: featured.dex, app: featured.app }, m);
+                const rate = successRate(best.value);
+                const pts = pointsFor(best.value);
+                const attrs = { dex: featured.dex, app: featured.app };
+                return (
+                  <>
+                    <p className="text-gold mb-1">{m.emoji} {m.name}</p>
+                    <p className="text-[11px] text-zinc-600 leading-snug mb-3">{m.desc}</p>
+
+                    <p className="text-[10px] uppercase tracking-wider text-zinc-600 mb-1">相關技能（取最高者判定）</p>
+                    <div className="flex flex-col gap-0.5 mb-3">
+                      {m.skills.map((k) => {
+                        const v = currentSkillValue(k, featured.skills, attrs);
+                        const isBest = k === best.key;
+                        return (
+                          <div key={k} className="flex justify-between">
+                            <span className={isBest ? "text-gold" : "text-zinc-500"}>{SKILL_ZH_BY_KEY[k] ?? k}{isBest && " ★"}</span>
+                            <span className={isBest ? "text-gold font-semibold" : "text-zinc-500"}>{v}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-zinc-400">成功率</span>
+                      <span className="text-gold font-bold text-sm">{rate}%</span>
+                    </div>
+
+                    <div className="rounded-lg p-2.5 mb-2" style={{ background: "rgba(6,78,59,0.18)", border: "1px solid rgba(16,94,66,0.5)" }}>
+                      <p style={{ color: "#6ee7b7" }}>✦ 成功時</p>
+                      <ul className="text-[11px] text-zinc-400 mt-1 space-y-0.5">
+                        <li>· 獲得 <span className="text-gold">{pts}</span> 點數</li>
+                        <li>· 對「{SKILL_ZH_BY_KEY[best.key] ?? best.key}」進行 1 次成長檢定（擲高於 {best.value} 則 +1）</li>
+                        <li className="text-zinc-600">· 每名調查員每週最多成長 2 次</li>
+                      </ul>
+                    </div>
+                    <div className="rounded-lg p-2.5 mb-3" style={{ background: "rgba(127,29,29,0.15)", border: "1px solid rgba(153,27,27,0.45)" }}>
+                      <p style={{ color: "#fca5a5" }}>✧ 失敗時</p>
+                      <ul className="text-[11px] text-zinc-400 mt-1 space-y-0.5">
+                        <li>· 僅獲得 <span className="text-zinc-300">{failPoints(pts)}</span> 點數（10%）</li>
+                        <li>· 不進行成長檢定</li>
+                        <li className="text-zinc-600">· 沒有任何其他損失</li>
+                      </ul>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => dispatch(m.key)}
+                      disabled={working}
+                      className="w-full py-2.5 rounded-lg font-serif text-sm transition-all disabled:opacity-40 hover:brightness-110"
+                      style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07" }}
+                    >
+                      {working ? "派遣中…" : `派 ${featured.name} 出發 →`}
+                    </button>
+                  </>
+                );
+              })()}
             </div>
           </div>
 
