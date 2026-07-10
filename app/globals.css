@@ -24,10 +24,9 @@ body {
 }
 
 /* Thin scrollbar for dark theme */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #0c0a07; }
-::-webkit-scrollbar-thumb { background: #2a2418; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #3a3428; }
+/* Hide scrollbars everywhere (still scrollable). */
+::-webkit-scrollbar { width: 0; height: 0; display: none; }
+* { scrollbar-width: none; -ms-overflow-style: none; }
 
 /* ─── GM narration text effects (emitted by the GM as [[dread]] / [[whisper]] /
    [[chant]] spans, rendered by GmText). Curated, on-theme, used sparingly. ─── */
