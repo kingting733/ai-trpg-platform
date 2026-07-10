@@ -7,6 +7,7 @@ import {
   pointsFor,
   missionDurationMs,
 } from "@/lib/game/interlude";
+import { currentSkillValue } from "@/lib/game/skills";
 
 /**
  * Dispatch a character card on a 24h interlude mission.
@@ -20,7 +21,7 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { cardId, missionType } = (await req.json()) as { cardId?: string; missionType?: string };
+  const { cardId, missionType, growthSkill } = (await req.json()) as { cardId?: string; missionType?: string; growthSkill?: string };
   const mission = missionType ? missionByKey(missionType) : null;
   if (!cardId || !mission) return NextResponse.json({ error: "缺少調查員或任務類型。" }, { status: 400 });
 
@@ -42,9 +43,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "此調查員正在冒險中，無法出發幕間任務。" }, { status: 409 });
   }
 
-  const best = bestRelevantSkill({ skills: card.skills ?? null, dex: card.dex, app: card.app }, mission);
-  const rate = successRate(best.value);
-  const points = pointsFor(best.value);
+  // The player picks WHICH of the mission's relevant skills to train. That
+  // chosen skill drives success rate, points AND the growth check — so a weak
+  // skill means a riskier mission but a growth check that easily lands, while a
+  // strong skill is safe points but rarely grows (CoC checks pass over LOW
+  // values). Must be one of the mission's skills; default to the best.
+  const cardLike = { skills: card.skills ?? null, dex: card.dex, app: card.app };
+  const chosenKey = growthSkill && mission.skills.includes(growthSkill) ? growthSkill : bestRelevantSkill(cardLike, mission).key;
+  const chosenValue = currentSkillValue(chosenKey, card.skills ?? null, { dex: card.dex ?? 50, app: card.app ?? 50 });
+  const rate = successRate(chosenValue);
+  const points = pointsFor(chosenValue);
   const claimableAt = new Date(Date.now() + missionDurationMs()).toISOString();
 
   const { data: row, error } = await supabase
@@ -55,7 +63,7 @@ export async function POST(req: Request) {
       mission_type: mission.key,
       success_rate: rate,
       points_on_success: points,
-      growth_skill: best.key,
+      growth_skill: chosenKey,
       claimable_at: claimableAt,
     })
     .select("id, claimable_at")

@@ -59,6 +59,7 @@ export default function InterludePage() {
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [featuredId, setFeaturedId] = useState<string>("");
   const [selectedMission, setSelectedMission] = useState<string | null>(null);
+  const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,6 +99,15 @@ export default function InterludePage() {
     return () => clearInterval(t);
   }, [active]);
 
+  // Default the training skill to the card's best when a mission/card is chosen.
+  useEffect(() => {
+    if (!selectedMission) { setSelectedSkill(null); return; }
+    const m = missionByKey(selectedMission);
+    const card = cards.find((c) => c.id === featuredId);
+    if (!m || !card) return;
+    setSelectedSkill(bestRelevantSkill({ skills: card.skills, dex: card.dex, app: card.app }, m).key);
+  }, [selectedMission, featuredId, cards]);
+
   // Retry the character art when switching walk↔idle (one may exist, one not).
   useEffect(() => { setCharError(false); }, [
     // walking depends on active+claimable; recompute inline to avoid ordering issues
@@ -108,7 +118,7 @@ export default function InterludePage() {
     if (!featuredId || working) return;
     setWorking(true); setError(null);
     try {
-      const res = await fetch("/api/interlude/dispatch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cardId: featuredId, missionType: missionKey }) });
+      const res = await fetch("/api/interlude/dispatch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cardId: featuredId, missionType: missionKey, growthSkill: selectedSkill }) });
       const data = await res.json();
       if (!res.ok) setError(data.error ?? "出發失敗。"); else { setResult(null); setSelectedMission(null); await load(); }
     } catch { setError("網路錯誤，請再試一次。"); }
@@ -250,7 +260,7 @@ export default function InterludePage() {
                       >
                         <p className="text-sm mb-1" style={{ color: isSel ? "#e4d8be" : "#d4d4d8" }}>{m.emoji} {m.name}</p>
                         <p className="text-[11px] text-zinc-600 leading-snug mb-2 min-h-[2.5em]">{m.desc}</p>
-                        {rate != null ? <p className="text-[11px] text-gold">成功率 {rate}%</p> : <p className="text-[11px] text-zinc-700">選擇調查員查看</p>}
+                        {rate != null ? <p className="text-[11px] text-gold">最高成功率 {rate}%</p> : <p className="text-[11px] text-zinc-700">選擇調查員查看</p>}
                       </button>
                     );
                   })}
@@ -271,31 +281,46 @@ export default function InterludePage() {
                 <p className="text-zinc-600 py-8 text-center">從左側選擇一個任務，這裡會顯示預期的成功與失敗結果。</p>
               ) : (() => {
                 const m = missionByKey(selectedMission)!;
-                const best = bestRelevantSkill({ skills: featured.skills, dex: featured.dex, app: featured.app }, m);
-                const rate = successRate(best.value);
-                const pts = pointsFor(best.value);
                 const attrs = { dex: featured.dex, app: featured.app };
+                // The chosen training skill drives everything.
+                const chosenKey = selectedSkill && m.skills.includes(selectedSkill) ? selectedSkill : bestRelevantSkill({ skills: featured.skills, dex: featured.dex, app: featured.app }, m).key;
+                const chosenVal = currentSkillValue(chosenKey, featured.skills, attrs);
+                const rate = successRate(chosenVal);
+                const pts = pointsFor(chosenVal);
                 return (
                   <>
                     <p className="text-gold mb-1">{m.emoji} {m.name}</p>
                     <p className="text-[11px] text-zinc-600 leading-snug mb-3">{m.desc}</p>
 
-                    <p className="text-[10px] uppercase tracking-wider text-zinc-600 mb-1">相關技能（取最高者判定）</p>
-                    <div className="flex flex-col gap-0.5 mb-3">
+                    <p className="text-[10px] uppercase tracking-wider text-zinc-600 mb-1">選擇要鍛鍊的技能</p>
+                    <p className="text-[10px] text-zinc-600 mb-1.5">技能越高 → 成功率／點數越高，但成長越難；技能越低 → 風險高，但更容易成長。</p>
+                    <div className="flex flex-col gap-1 mb-3">
                       {m.skills.map((k) => {
                         const v = currentSkillValue(k, featured.skills, attrs);
-                        const isBest = k === best.key;
+                        const sel = k === chosenKey;
                         return (
-                          <div key={k} className="flex justify-between">
-                            <span className={isBest ? "text-gold" : "text-zinc-500"}>{SKILL_ZH_BY_KEY[k] ?? k}{isBest && " ★"}</span>
-                            <span className={isBest ? "text-gold font-semibold" : "text-zinc-500"}>{v}</span>
-                          </div>
+                          <button
+                            key={k}
+                            type="button"
+                            onClick={() => setSelectedSkill(k)}
+                            className="flex justify-between items-center px-2 py-1.5 rounded-lg text-left transition-colors"
+                            style={{
+                              background: sel ? "rgba(201,169,110,0.14)" : "rgba(14,12,8,0.5)",
+                              border: `1px solid ${sel ? "rgba(201,169,110,0.5)" : "#2e2416"}`,
+                            }}
+                          >
+                            <span className={sel ? "text-gold" : "text-zinc-400"}>{SKILL_ZH_BY_KEY[k] ?? k}</span>
+                            <span className="flex items-center gap-2">
+                              <span className={sel ? "text-gold font-semibold" : "text-zinc-500"}>{v}</span>
+                              <span className="text-[10px] text-zinc-600">成功 {successRate(v)}%</span>
+                            </span>
+                          </button>
                         );
                       })}
                     </div>
 
                     <div className="flex items-center justify-between mb-3">
-                      <span className="text-zinc-400">成功率</span>
+                      <span className="text-zinc-400">本次成功率</span>
                       <span className="text-gold font-bold text-sm">{rate}%</span>
                     </div>
 
@@ -303,7 +328,7 @@ export default function InterludePage() {
                       <p style={{ color: "#6ee7b7" }}>✦ 成功時</p>
                       <ul className="text-[11px] text-zinc-400 mt-1 space-y-0.5">
                         <li>· 獲得 <span className="text-gold">{pts}</span> 點數</li>
-                        <li>· 對「{SKILL_ZH_BY_KEY[best.key] ?? best.key}」進行 1 次成長檢定（擲高於 {best.value} 則 +1）</li>
+                        <li>· 對「{SKILL_ZH_BY_KEY[chosenKey] ?? chosenKey}」進行成長檢定（擲高於 {chosenVal} 則 +1）</li>
                         <li className="text-zinc-600">· 每名調查員每週最多成長 2 次</li>
                       </ul>
                     </div>
