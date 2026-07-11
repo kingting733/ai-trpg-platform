@@ -290,6 +290,11 @@ export default function InterludePage() {
                   ))}
                 </div>
               )}
+              {featured && (
+                <p className="text-[11px] mb-2" style={{ color: featured.equipped_item ? "#cbb890" : "#52525b" }}>
+                  🜏 {featured.equipped_item ? `裝備：${itemById(featured.equipped_item)?.name ?? "未知物品"}` : "未裝備任何物品"}
+                </p>
+              )}
               <button type="button" onClick={() => setSwitching((s) => !s)} disabled={!!active} className="w-full text-xs py-2 rounded-lg transition-colors disabled:opacity-40" style={{ border: "1px solid #2e2416", color: "#c9a96e" }}>
                 切換調查員 ⇄
               </button>
@@ -313,7 +318,9 @@ export default function InterludePage() {
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
                   {INTERLUDE_MISSIONS.map((m) => {
                     const best = featured ? bestRelevantSkill({ skills: featured.skills, dex: featured.dex, app: featured.app }, m) : null;
-                    const rate = best ? successRate(best.value) : null;
+                    // Include the equipped item's bonus — must match dispatch math.
+                    const gridMods = featured ? computeMissionModifiers(featured.equipped_item, m.key) : null;
+                    const rate = best && gridMods ? applyRateBonus(successRate(best.value), gridMods.rateBonus) : null;
                     const isSel = selectedMission === m.key;
                     return (
                       <button
@@ -329,7 +336,12 @@ export default function InterludePage() {
                       >
                         <p className="text-sm mb-1" style={{ color: isSel ? "#e4d8be" : "#d4d4d8" }}>{m.emoji} {m.name}</p>
                         <p className="text-[11px] text-zinc-600 leading-snug mb-2 min-h-[2.5em]">{m.desc}</p>
-                        {rate != null ? <p className="text-[11px] text-gold">最高成功率 {rate}%</p> : <p className="text-[11px] text-zinc-700">選擇調查員查看</p>}
+                        {rate != null ? (
+                          <p className="text-[11px] text-gold">
+                            最高成功率 {rate}%
+                            {gridMods && gridMods.rateBonus > 0 && <span className="text-emerald-400/80 ml-1">（🜏+{gridMods.rateBonus}%）</span>}
+                          </p>
+                        ) : <p className="text-[11px] text-zinc-700">選擇調查員查看</p>}
                       </button>
                     );
                   })}
