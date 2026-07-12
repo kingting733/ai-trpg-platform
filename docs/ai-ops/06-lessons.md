@@ -63,3 +63,11 @@
 - Fix: uniform 📦 物品 wording everywhere; count removed.
 - Rule: any new player-facing render of game state must be checked against "does this reveal importance/progress the GM hides?" — the same leak reappears on every new surface.
 - File updated: CLAUDE.md non-negotiables.
+
+### 2026-07-12 — GM prompt audit: rules drift into contradiction; enforce in code
+- Context: full review of the GM narration prompt stack (buildSystemPrompt / buildTurnMessage / criticalGuidance).
+- Symptoms found: (1) line ordering choices "in third person for <Name>" directly contradicted the later NO CHARACTER NAME rule — a fossil from before the no-name change; (2) the turn-message epilogue said "6-8 sentences, rich in atmosphere" while WRITING STYLE demands economical prose — the last-read instruction re-injected the banned purple style every turn; (3) social/occult crit guidance ("恐嚇 crit → 主動洩露資訊") was unscoped and could bulldoze NPC knowledge gates; (4) suggested choices were the only GM output with zero server validation.
+- Root cause: the prompt grew by accretion — every fixed bug added a block, and duplicated rules (choice spec stated in both system and turn message) drifted apart independently.
+- Fix: contradictions deleted, epilogue defers to the style blocks, crit reveals scoped to the NPC KNOWLEDGE list / module text, freelance stuck-hints subordinated to the server PACING NUDGE, and sanitizeChoices() now enforces name-strip / length-clamp / no-locked-or-hidden-location rules in code (anticipating move_to).
+- Rules: (a) never state the same rule in two prompt places — one canonical block, referenced elsewhere; (b) when a prompt rule is checkable server-side, enforce it in code and keep the prompt line as guidance only; (c) any crit/bonus guidance that says "reveal information" must name WHICH gate bounds it.
+- Files updated: lessons only.
