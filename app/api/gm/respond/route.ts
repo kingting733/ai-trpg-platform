@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateGMResponseStreaming, GMAIInput, ScenarioGMContext, LedgerEntry, NpcEntry } from "@/lib/ai/gm";
+import { generateGMResponseStreaming, sanitizeChoices, GMAIInput, ScenarioGMContext, LedgerEntry, NpcEntry } from "@/lib/ai/gm";
 import { createClient } from "@/lib/supabase/server";
 import {
   resolveAction, rollInjuryDamage, rollFirstAidHeal, InjurySeverity,
@@ -1078,6 +1078,25 @@ export async function POST(request: Request) {
     const gmResponse = await generateGMResponseStreaming(input, (deltaText) => {
       send({ type: "delta", text: deltaText });
     });
+
+    // Enforce the suggested-action rules in CODE (strip character names, clamp
+    // length, drop choices naming locked/hidden/unreachable places, backfill
+    // zh-TW defaults). Choices are for the NEXT turn's position — if the GM
+    // declared a move_to, validate against the anticipated destination so
+    // legitimate choices at the new location aren't dropped.
+    {
+      let choiceState = locState;
+      if (locationGraph && locState && typeof gmResponse.move_to === "string" && gmResponse.move_to.trim()) {
+        const dest = resolveMoveTarget(gmResponse.move_to, locationGraph, locState);
+        if (dest) choiceState = { ...locState, current: dest.id };
+      }
+      gmResponse.choices = sanitizeChoices(
+        gmResponse.choices,
+        partyForAI.map((c) => c.name),
+        locationGraph,
+        choiceState,
+      );
+    }
 
     await supabase.from("story_logs").insert({
       room_id: roomId,
