@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function PATCH(
   request: Request,
@@ -14,13 +15,14 @@ export async function PATCH(
   if (!trimmed) return NextResponse.json({ error: "Name cannot be empty." }, { status: 400 });
   if (trimmed.length > 40) return NextResponse.json({ error: "Name is too long (max 40 chars)." }, { status: 400 });
 
-  // Only update the name — stats remain locked.
-  // RLS ensures the card belongs to the authenticated user.
-  const { data: card, error } = await supabase
+  // Only update the name — stats remain locked. Service-role write (no client
+  // UPDATE policy on character_cards after hardening); the explicit user_id
+  // filter scopes it to the caller's own card.
+  const { data: card, error } = await createAdminClient()
     .from("character_cards")
     .update({ name: trimmed })
     .eq("id", params.id)
-    .eq("user_id", user.id)   // belt-and-suspenders on top of RLS
+    .eq("user_id", user.id)
     .select("id, name")
     .single();
 

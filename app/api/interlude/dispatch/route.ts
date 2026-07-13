@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   missionByKey,
   bestRelevantSkill,
@@ -59,7 +60,11 @@ export async function POST(req: Request) {
   const points = applyPointsMult(pointsFor(chosenValue), mods.pointsMult);
   const claimableAt = new Date(Date.now() + missionDurationMs()).toISOString();
 
-  const { data: row, error } = await supabase
+  // card_missions has no client INSERT policy after hardening (it stored
+  // authoritative snapshot values the client must not forge) — write via
+  // service-role. Ownership was checked above (card.user_id === user.id).
+  const admin = createAdminClient();
+  const { data: row, error } = await admin
     .from("card_missions")
     .insert({
       card_id: card.id,

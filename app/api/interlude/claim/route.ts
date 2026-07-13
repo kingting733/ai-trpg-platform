@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   missionByKey,
   interludeGrowth,
@@ -94,10 +95,14 @@ export async function POST(req: Request) {
   // === CLAIM THE ROW FIRST (CAS) — before ANY side effect ===
   // A concurrent double-claim loses this guarded update and returns the stored
   // outcome; crucially it never reaches the skill/points writes below.
-  const { data: updated } = await supabase
+  // card_missions / character_cards have no client write policy after hardening
+  // → service-role. Ownership (row.user_id === user.id) was checked above.
+  const admin = createAdminClient();
+  const { data: updated } = await admin
     .from("card_missions")
     .update({ claimed_at: new Date().toISOString(), outcome })
     .eq("id", row.id)
+    .eq("user_id", user.id)
     .is("claimed_at", null)
     .select("id");
   if (!updated || updated.length === 0) {
@@ -107,7 +112,7 @@ export async function POST(req: Request) {
 
   // === We won the claim — apply side effects EXACTLY ONCE ===
   if (skillApply) {
-    const { error: skillErr } = await supabase
+    const { error: skillErr } = await admin
       .from("character_cards")
       .update({ skills: skillApply.newSkills })
       .eq("id", skillApply.cardId);

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { generateGMResponseStreaming, sanitizeChoices, GMAIInput, ScenarioGMContext, LedgerEntry, NpcEntry } from "@/lib/ai/gm";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   resolveAction, rollInjuryDamage, rollFirstAidHeal, InjurySeverity,
   detectAttackType, resolveAttack, dodgeValueOf, NPC_DEFAULT_DODGE, AttackResult,
@@ -47,6 +48,11 @@ import {
 
 export async function POST(request: Request) {
   const supabase = createClient();
+  // Authoritative in-room state (character HP/SAN) is written server-side from
+  // resolved dice results. After hardening, `characters` has no client UPDATE
+  // policy, so those writes go through the service-role client. All values are
+  // computed here from server-owned rolls; the client never supplies them.
+  const admin = createAdminClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -230,7 +236,7 @@ export async function POST(request: Request) {
         });
       } else {
         const newHp = Math.max(0, targetChar.hp - attack.damage);
-        await supabase.from("characters").update({ hp: newHp }).eq("id", targetChar.id);
+        await admin.from("characters").update({ hp: newHp }).eq("id", targetChar.id);
         targetChar.hp = newHp; // keep roster in sync for turn-advance & all-dead checks
         attack.target_hp_after = newHp;
         attack.target_died = newHp <= 0;
@@ -252,7 +258,7 @@ export async function POST(request: Request) {
       const curHp = attackerRow ? attackerRow.hp : null;
       if (attackerRow && curHp != null && curHp > 0) {
         const newHp = Math.max(0, curHp - selfDmg);
-        await supabase.from("characters").update({ hp: newHp }).eq("id", attackerRow.id);
+        await admin.from("characters").update({ hp: newHp }).eq("id", attackerRow.id);
         attackerRow.hp = newHp; // keep roster in sync for turn-advance & all-dead checks
         if (newHp <= 0) actorDied = true;
         attackSystemLog = newHp > 0
@@ -322,7 +328,7 @@ export async function POST(request: Request) {
       const newSan = Math.max(0, resolvedActor.san + totalSanChange);
       actorDied = newHp <= 0;
       actorBroke = newSan <= 0;
-      await supabase.from("characters")
+      await admin.from("characters")
         .update({ hp: newHp, san: newSan })
         .eq("id", resolvedActor.id);
       resolvedActor.hp = newHp;
@@ -626,7 +632,7 @@ export async function POST(request: Request) {
         const healAmount = rollFirstAidHeal(roll.outcome);
         const maxHp = Math.floor((targetChar.con + targetChar.siz) / 10);
         const newHp = Math.min(maxHp, targetChar.hp + healAmount);
-        await supabase.from("characters").update({ hp: newHp }).eq("id", targetChar.id);
+        await admin.from("characters").update({ hp: newHp }).eq("id", targetChar.id);
         targetChar.hp = newHp;
 
         await supabase.from("rooms").update({
@@ -729,7 +735,7 @@ export async function POST(request: Request) {
       let logLine: string;
       if (result.damage > 0) {
         const newHp = Math.max(0, target.hp - result.damage);
-        await supabase.from("characters").update({ hp: newHp }).eq("id", target.id);
+        await admin.from("characters").update({ hp: newHp }).eq("id", target.id);
         target.hp = newHp; // keep roster in sync for turn-advance & all-dead checks
         logLine = newHp > 0
           ? `💢 ${target.name} 被 ${npcName} 的${result.skill_label}攻擊命中（−${result.damage} HP，剩餘 ${newHp}）`
@@ -1244,7 +1250,7 @@ export async function POST(request: Request) {
         const targetChar = sortedByDex.find((c: any) => c.name === injury.target);
         if (targetChar && targetChar.hp > 0) {
           const newHp = Math.max(0, targetChar.hp - dmg.amount);
-          await supabase.from("characters").update({ hp: newHp }).eq("id", targetChar.id);
+          await admin.from("characters").update({ hp: newHp }).eq("id", targetChar.id);
           targetChar.hp = newHp; // keep in sync for the all-dead check below
 
           await supabase.from("story_logs").insert({

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   SKILL_KEY_BY_ZH,
   SKILL_ZH_BY_KEY,
@@ -53,10 +54,13 @@ async function computeEligible(
   if (scenarioId) {
     const cleared: string[] = Array.isArray(card.cleared_scenarios) ? card.cleared_scenarios : [];
     if (!cleared.includes(scenarioId)) {
-      await supabase
+      // Service-role: character_cards has no client UPDATE policy after
+      // hardening. Ownership (card.user_id === userId) is checked above.
+      await createAdminClient()
         .from("character_cards")
         .update({ cleared_scenarios: [...cleared, scenarioId] })
-        .eq("id", card.id);
+        .eq("id", card.id)
+        .eq("user_id", userId);
       card.cleared_scenarios = [...cleared, scenarioId];
     }
   }
@@ -145,16 +149,20 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const newValue = Math.min(SKILL_CAP, oldValue + gain);
 
   // Persist the new skill value onto the card (store FULL value). The scenario
-  // was already marked cleared in computeEligible.
+  // was already marked cleared in computeEligible. Service-role writes:
+  // character_cards / card_growth have no client write policy after hardening;
+  // ownership (card.user_id === user.id) was verified in computeEligible.
+  const admin = createAdminClient();
   const newSkills = { ...(skills ?? {}), [skillKey]: newValue };
-  const { error: updErr } = await supabase
+  const { error: updErr } = await admin
     .from("character_cards")
     .update({ skills: newSkills })
-    .eq("id", card.id);
+    .eq("id", card.id)
+    .eq("user_id", user.id);
   if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
 
   // Record the claim (also enforces the once-per-scenario unique constraint).
-  const { error: insErr } = await supabase.from("card_growth").insert({
+  const { error: insErr } = await admin.from("card_growth").insert({
     card_id: card.id,
     room_id: params.id,
     scenario_id: scenarioId,

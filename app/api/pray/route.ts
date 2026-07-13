@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { PRAY_COST, pickPrayReward } from "@/lib/game/items";
 
 /**
@@ -42,8 +43,11 @@ export async function POST() {
 
   // Grant after charging. The unique(user,item) constraint is duplicate-proof;
   // if the grant somehow fails, REFUND the charge so the player never loses
-  // points for nothing.
-  const { error: grantErr } = await supabase
+  // points for nothing. Service-role write: user_items has no client INSERT
+  // policy (hardened), so the grant goes through the admin client — ownership
+  // was already established via getUser() above.
+  const admin = createAdminClient();
+  const { error: grantErr } = await admin
     .from("user_items")
     .insert({ user_id: user.id, item_id: reward.id });
   if (grantErr) {

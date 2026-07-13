@@ -1,9 +1,22 @@
-# Security Hardening Pass — SCHEDULED (do before ANY public / open test)
+# Security Hardening Pass
 
-Status: **scheduled, not yet executed.** Gate: run this as ONE dedicated pass
-before the platform is opened to players outside your trusted circle. It is
-safe to defer while only friends play (cheating in a co-op story hurts nobody);
-it becomes mandatory the moment a stranger can register.
+Status: **Phase 1 EXECUTED** (2026-07-13) — code shipped + `harden_rls.sql`
+written. **Phase 2 (INSERT-forge vectors) still open** — see the bottom of
+`harden_rls.sql`; do before a truly open/public launch.
+
+## Deploy order (IMPORTANT)
+1. `SUPABASE_SERVICE_ROLE_KEY` must be set in Vercel (it already is — the daily
+   cron `lib/server/daily-runner.ts` uses it). The hardened routes now REQUIRE
+   it: `createAdminClient()` throws without it and those routes would 500.
+2. Deploy the code (routes use the admin client for the sensitive writes).
+3. THEN run `supabase/migrations/harden_rls.sql` in the SQL editor to drop the
+   owner write policies. (Running it before the code deploys would break those
+   writes until the deploy lands.)
+4. Run the 7-case exploit-denial test plan below.
+
+Original framing (kept for context): safe to defer while only friends play
+(cheating in a co-op story hurts nobody); mandatory the moment a stranger can
+register.
 
 ## The core problem
 

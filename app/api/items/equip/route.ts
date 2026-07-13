@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { itemById } from "@/lib/game/items";
 
 /**
@@ -21,8 +22,12 @@ export async function POST(req: Request) {
     .from("user_items").select("id").eq("user_id", user.id).eq("item_id", item.id).maybeSingle();
   if (!ownedRow) return NextResponse.json({ error: "你未擁有此物品。" }, { status: 403 });
 
+  // character_cards writes go through service-role (no client UPDATE policy after
+  // hardening). Every mutation stays scoped to user.id, established above.
+  const admin = createAdminClient();
+
   // Take the item off whichever of the user's cards currently wears it.
-  await supabase
+  await admin
     .from("character_cards")
     .update({ equipped_item: null })
     .eq("user_id", user.id)
@@ -34,10 +39,11 @@ export async function POST(req: Request) {
     if (!card || card.user_id !== user.id) {
       return NextResponse.json({ error: "找不到你的調查員。" }, { status: 404 });
     }
-    const { error } = await supabase
+    const { error } = await admin
       .from("character_cards")
       .update({ equipped_item: item.id })
-      .eq("id", card.id);
+      .eq("id", card.id)
+      .eq("user_id", user.id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

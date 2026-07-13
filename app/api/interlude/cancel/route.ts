@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 /** Cancel an active interlude mission — the card comes home immediately, but
  *  ALL rewards are forfeited (no partial refund, so cancel-retry can't fish
@@ -12,7 +13,10 @@ export async function POST(req: Request) {
   const { missionId } = (await req.json()) as { missionId?: string };
   if (!missionId) return NextResponse.json({ error: "缺少任務。" }, { status: 400 });
 
-  const { data: updated, error } = await supabase
+  // Service-role write (card_missions has no client UPDATE policy after
+  // hardening); the .eq("user_id", user.id) filter scopes it to the caller.
+  const admin = createAdminClient();
+  const { data: updated, error } = await admin
     .from("card_missions")
     .update({ claimed_at: new Date().toISOString(), cancelled: true, outcome: null })
     .eq("id", missionId)

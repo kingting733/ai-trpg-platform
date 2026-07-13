@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 // Base skill values (mirrors CardRollReveal.tsx SKILLS list).
 const SKILL_BASES: Record<string, number | "dex2" | "app2" | "inv_app"> = {
@@ -75,10 +76,14 @@ export async function PATCH(
   // Preserve occupation buffs for any skill the client omitted from the payload.
   const merged: Record<string, number> = { ...seeded, ...skills };
 
-  const { data: updated, error } = await supabase
+  // Service-role write (no client UPDATE policy on character_cards after
+  // hardening). Ownership was verified above (card.user_id === user.id); the
+  // explicit user_id filter is required since admin bypasses RLS.
+  const { data: updated, error } = await createAdminClient()
     .from("character_cards")
     .update({ skills: merged, skills_allocated: true })
     .eq("id", params.id)
+    .eq("user_id", user.id)
     .select("*")
     .single();
 
