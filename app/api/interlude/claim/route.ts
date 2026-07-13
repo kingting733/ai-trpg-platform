@@ -51,9 +51,21 @@ export async function POST(req: Request) {
     ? row.points_on_success
     : Math.ceil(row.points_on_success * mods.failFloor);
 
-  // Growth check — success only, capped per card per rolling week.
+  // Growth DECISION — success only, capped per card per rolling week. This is
+  // READ-ONLY: it rolls the die and computes the new skill value but does NOT
+  // write it yet. The skill bump is applied only AFTER we win the claim CAS
+  // below, so two concurrent claims of the same mission can never both apply
+  // it (the old code wrote the +1 before the CAS → card got +2).
+  const { data: card } = await supabase
+    .from("character_cards")
+    .select("id, name, skills, dex, app")
+    .eq("id", row.card_id)
+    .single();
+  const charName = card?.name ?? "調查員";
+
   let growth: any = null;
-  if (success) {
+  let skillApply: { cardId: string; newSkills: Record<string, number> } | null = null;
+  if (success && card) {
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const { data: recent } = await supabase
       .from("card_missions")
@@ -64,44 +76,24 @@ export async function POST(req: Request) {
     if (gainsThisWeek >= INTERLUDE_WEEKLY_GROWTH_CAP) {
       growth = { capped: true };
     } else {
-      const { data: card } = await supabase
-        .from("character_cards")
-        .select("id, name, skills, dex, app")
-        .eq("id", row.card_id)
-        .single();
-      if (card) {
-        const { currentSkillValue } = await import("@/lib/game/skills");
-        const oldValue = currentSkillValue(row.growth_skill, card.skills ?? null, { dex: card.dex ?? 50, app: card.app ?? 50 });
-        // 舊神印 etc: the growth-die bonus is added to the d100 before the
-        // over-current comparison (shown to the player as the boosted roll).
-        growth = interludeGrowth(row.growth_skill, oldValue, d(100) + mods.growthBonus);
-        if (growth.gain > 0) {
-          const newSkills = { ...((card.skills as Record<string, number>) ?? {}), [row.growth_skill]: growth.new };
-          const { error: skillErr } = await supabase
-            .from("character_cards")
-            .update({ skills: newSkills })
-            .eq("id", card.id);
-          if (skillErr) {
-            console.error("[interlude] growth skill update failed:", skillErr.message);
-            growth = { ...growth, gain: 0, new: oldValue, apply_failed: true };
-          }
-        }
+      const { currentSkillValue } = await import("@/lib/game/skills");
+      const oldValue = currentSkillValue(row.growth_skill, card.skills ?? null, { dex: card.dex ?? 50, app: card.app ?? 50 });
+      // 舊神印 etc: the growth-die bonus is added to the d100 before the
+      // over-current comparison (shown to the player as the boosted roll).
+      growth = interludeGrowth(row.growth_skill, oldValue, d(100) + mods.growthBonus);
+      if (growth.gain > 0) {
+        skillApply = { cardId: card.id, newSkills: { ...((card.skills as Record<string, number>) ?? {}), [row.growth_skill]: growth.new } };
       }
     }
   }
 
-  // Character name for the story.
-  const { data: cardName } = await supabase
-    .from("character_cards").select("name").eq("id", row.card_id).single();
-  const charName = cardName?.name ?? "調查員";
-
   // Preset narration — no AI call.
   const narration = pickMissionNarration(mission.key, charName, success);
-
   const outcome = { roll, success, points, growth, narration };
 
-  // Mark claimed FIRST with a guard on unclaimed — a concurrent double-claim
-  // loses this update and takes the alreadyClaimed path on retry.
+  // === CLAIM THE ROW FIRST (CAS) — before ANY side effect ===
+  // A concurrent double-claim loses this guarded update and returns the stored
+  // outcome; crucially it never reaches the skill/points writes below.
   const { data: updated } = await supabase
     .from("card_missions")
     .update({ claimed_at: new Date().toISOString(), outcome })
@@ -113,12 +105,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ alreadyClaimed: true, outcome: again?.outcome ?? null });
   }
 
-  // Credit the wallet (after the claim is locked in).
-  const { data: u } = await supabase.from("users").select("points").eq("id", user.id).single();
-  const { error: ptsErr } = await supabase
-    .from("users")
-    .update({ points: (u?.points ?? 0) + points })
-    .eq("id", user.id);
+  // === We won the claim — apply side effects EXACTLY ONCE ===
+  if (skillApply) {
+    const { error: skillErr } = await supabase
+      .from("character_cards")
+      .update({ skills: skillApply.newSkills })
+      .eq("id", skillApply.cardId);
+    if (skillErr) console.error("[interlude] growth skill update failed after claim:", skillErr.message);
+  }
+  // Atomic credit (race-proof vs. concurrent prayer / other sinks).
+  const { error: ptsErr } = await supabase.rpc("adjust_points", { p_user: user.id, p_delta: points, p_min: 0 });
   if (ptsErr) console.error("[interlude] points credit failed:", ptsErr.message);
 
   return NextResponse.json({ outcome });

@@ -53,10 +53,20 @@ export function missionByKey(key: string): InterludeMission | null {
   return INTERLUDE_MISSIONS.find((m) => m.key === key) ?? null;
 }
 
-/** Mission duration. Overridable via env for playtesting (dev only). */
+/** Mission duration. The INTERLUDE_DURATION_MS override is honored ONLY outside
+ *  production, so a value left set after a playtest can never shrink real 24h
+ *  missions in prod (which would inflate the whole economy). */
 export function missionDurationMs(): number {
-  const override = Number(process.env.INTERLUDE_DURATION_MS);
-  return Number.isFinite(override) && override > 0 ? override : 24 * 60 * 60 * 1000;
+  // On Vercel, preview builds also set NODE_ENV=production, so VERCEL_ENV is the
+  // authoritative signal when present; fall back to NODE_ENV off-Vercel.
+  const isProd = process.env.VERCEL_ENV
+    ? process.env.VERCEL_ENV === "production"
+    : process.env.NODE_ENV === "production";
+  if (!isProd) {
+    const override = Number(process.env.INTERLUDE_DURATION_MS);
+    if (Number.isFinite(override) && override > 0) return override;
+  }
+  return 24 * 60 * 60 * 1000;
 }
 
 export interface CardSkillsLike {

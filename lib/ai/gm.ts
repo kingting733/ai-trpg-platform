@@ -923,6 +923,13 @@ export async function generateGMResponseStreaming(
   // retry runs silently — the client's live box is replaced by the DB copy
   // (fetchAll) right after the turn, so the corrected narration still shows.
   const MAX_ATTEMPTS = 2;
+  // A retry is only worth it for a FAST parse failure (malformed but complete
+  // output). If the first attempt ate most of the wall clock — i.e. it TIMED
+  // OUT — a second attempt cannot finish before Vercel kills the function
+  // (~60s), which would leave the turn half-applied. So only retry while a
+  // meaningful slice of the budget remains.
+  const RETRY_BUDGET_MS = Number(process.env.AI_TIMEOUT_MS) || 50000; // per-attempt cap
+  const turnStart = Date.now();
   const baseOverride = process.env.AI_BASE_URL?.trim().replace(/\/+$/, "").replace(/\/v1$/i, "");
   const defaultBase = provider === "deepseek" ? "https://api.deepseek.com" : "https://api.openai.com";
   const baseUrl = baseOverride ?? defaultBase;
@@ -944,7 +951,10 @@ export async function generateGMResponseStreaming(
       throw new Error("Invalid shape");
     } catch (e) {
       console.error(`[gm] streaming attempt ${attempt}/${MAX_ATTEMPTS} parse failed:`, e instanceof Error ? e.message : e);
-      if (attempt < MAX_ATTEMPTS) continue; // auto-regenerate
+      // Retry only if it failed FAST (well under one attempt's budget) — never
+      // after a timeout, which has already spent the wall clock.
+      const elapsed = Date.now() - turnStart;
+      if (attempt < MAX_ATTEMPTS && elapsed < RETRY_BUDGET_MS * 0.5) continue; // auto-regenerate
       const fallbackText = "[GM response could not be parsed. Please try again.]";
       // The player may already have seen partial narration stream in before the
       // failure; sending the fallback text as one more chunk keeps the visible

@@ -26,27 +26,37 @@ export async function POST() {
     return NextResponse.json({ error: `調查點不足（需要 ${PRAY_COST}，現有 ${points}）。` }, { status: 400 });
   }
 
-  // Grant first (unique constraint = duplicate-proof), then charge. If the
-  // charge failed we'd have gifted an item — acceptable failure direction;
-  // the reverse (charge then failed grant) would eat the player's points.
+  // CHARGE ATOMICALLY FIRST — the DB function decrements only if the balance is
+  // still >= PRAY_COST, so two concurrent prayers can't both pass on the same
+  // balance (the old read-check-write let a player get two items for one cost).
+  const { data: pointsLeft, error: chargeErr } = await supabase.rpc("adjust_points", {
+    p_user: user.id,
+    p_delta: -PRAY_COST,
+    p_min: PRAY_COST,
+  });
+  if (chargeErr) return NextResponse.json({ error: chargeErr.message }, { status: 500 });
+  if (pointsLeft === null) {
+    // Guard failed — a concurrent prayer spent the points first.
+    return NextResponse.json({ error: `調查點不足（需要 ${PRAY_COST}）。` }, { status: 400 });
+  }
+
+  // Grant after charging. The unique(user,item) constraint is duplicate-proof;
+  // if the grant somehow fails, REFUND the charge so the player never loses
+  // points for nothing.
   const { error: grantErr } = await supabase
     .from("user_items")
     .insert({ user_id: user.id, item_id: reward.id });
   if (grantErr) {
+    await supabase.rpc("adjust_points", { p_user: user.id, p_delta: PRAY_COST, p_min: 0 });
     const dup = grantErr.code === "23505";
     return NextResponse.json(
       { error: dup ? "祈願正在進行中，請稍候。" : grantErr.message },
       { status: dup ? 409 : 500 }
     );
   }
-  const { error: chargeErr } = await supabase
-    .from("users")
-    .update({ points: points - PRAY_COST })
-    .eq("id", user.id);
-  if (chargeErr) console.error("[pray] charge failed after grant:", chargeErr.message);
 
   return NextResponse.json({
     item: { id: reward.id, name: reward.name, rarity: reward.rarity, flavor: reward.flavor },
-    pointsLeft: points - PRAY_COST,
+    pointsLeft,
   });
 }
