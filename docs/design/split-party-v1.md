@@ -1,7 +1,10 @@
 # Split Party v1 — per-character positions (individual location system)
 
-Status: **approved design, not yet built.** Decisions locked with the author:
-**shared map knowledge ✓ · shared inventory ✓ · solo-combat rule ✓.**
+Status: **phases A–D BUILT** (TDD: 74 split-party cases + 68 legacy regression
+cases green; five-lens adversarial review passed). **Phase E — the two-player
+integration playtest below — is REQUIRED before announcing the feature.**
+Decisions locked with the author: **shared map knowledge ✓ · shared
+inventory ✓ · solo-combat rule ✓.**
 
 ## Why
 
