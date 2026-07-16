@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { currentSkillValue, SKILL_KEY_BY_ZH } from "@/lib/game/skills";
 import { endingAllowsGrowth } from "@/lib/game/endings";
-import { coerceLocationGraph, coerceLocationState, computeExits, type LocationGraph } from "@/lib/game/locations";
+import { coerceLocationGraph, coerceLocationState, computeExits, positionOf, type LocationGraph } from "@/lib/game/locations";
 import { ChatDrawer } from "@/components/ChatDrawer";
 
 interface Character {
@@ -565,13 +565,19 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   // the mobile per-button popups (地點 / 物品 / 隊伍), so the JSX never diverges.
   const shortLoc = (n: string) => n.split(/[：:，,。．\.\n——–\-（(【\[]/)[0].trim().slice(0, 30);
   const locationPanel = locGraph && room.location_state && (() => {
-    // Server-authoritative exits: in map (edges) mode 可前往 = places reachable
-    // via open paths from HERE; free mode = every unlocked place (v1). The same
-    // computeExits also drives the GM prompt, so panel and narration agree.
+    // Server-authoritative exits from MY character's own node (split-party:
+    // each character stands somewhere; positionOf falls back to the legacy
+    // party position for old rooms). Same math as the GM prompt.
     const ls = coerceLocationState(room.location_state, locGraph);
-    const exits = computeExits(locGraph, ls);
-    const current = locGraph.nodes.find((n) => n.id === ls.current);
+    const myNode = myCharacter ? positionOf(ls, myCharacter.id, locGraph) : ls.current;
+    const exits = computeExits(locGraph, ls, myNode);
+    const current = locGraph.nodes.find((n) => n.id === myNode);
     const region = current?.container ? locGraph.containers.find((c) => c.id === current.container) : null;
+    // Teammates elsewhere (shared party knowledge — everyone sees the map).
+    const teammates = characters
+      .filter((c) => c.id !== myCharacter?.id)
+      .map((c) => ({ name: c.name, node: positionOf(ls, c.id, locGraph) }))
+      .filter((tm) => tm.node && tm.node !== myNode);
     if (!current && exits.open.length === 0 && exits.locked.length === 0) {
       return <p className="text-zinc-600 text-xs">尚無已知地點</p>;
     }
@@ -586,6 +592,15 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                 {region && <span className="text-gold/60">{shortLoc(region.name)} › </span>}
                 {shortLoc(current.name)}
               </span>
+            </div>
+          )}
+          {teammates.length > 0 && (
+            <div className="text-[11px] text-zinc-600 mb-1">
+              {teammates.map((tm) => (
+                <span key={tm.name} className="mr-2">
+                  {tm.name} @ {shortLoc(locGraph.nodes.find((n) => n.id === tm.node)?.name ?? "")}
+                </span>
+              ))}
             </div>
           )}
           {exits.open.length > 0 && (

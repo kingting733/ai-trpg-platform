@@ -26,6 +26,10 @@ import {
   looksLikeTravel,
   matchEvidence,
   applyDiscovers,
+  positionOf,
+  applyActorMove,
+  eligibleCombatTargets,
+  type SceneContext,
   evaluateUnlocks,
   evaluateEncounters,
   evaluateNpcPlacements,
@@ -387,6 +391,10 @@ export async function POST(request: Request) {
     !room.location_state ||
     (typeof room.location_state === "object" && Object.keys(room.location_state).length === 0);
   if (locationGraph && locState && freshLocationState && locState.current) {
+    // Split-party: everyone spawns at the entry node (splitting is opt-in by
+    // walking away). positionOf falls back to `current` anyway, but explicit
+    // seeding keeps the player panel's teammates list accurate from turn 1.
+    for (const c of sortedByDex) locState.positions[c.id] = locState.current;
     // Reveal the starting scene's own media (image/text) — like arrival media,
     // but the start node is never "arrived at", so it must fire here or never.
     const startNode = locationGraph.nodes.find((n) => n.id === locState!.current);
@@ -449,15 +457,18 @@ export async function POST(request: Request) {
   const isSearchAction =
     SEARCH_RE.test(actionText) || SEARCH_SKILLS.has(roll?.stat_used ?? "");
 
+  // Split-party: everything below is relative to the ACTING character's node.
+  let actorNode: string | null = null;
   if (locationGraph && locState) {
-    // A search that NAMES another location should relocate the party there
+    actorNode = resolvedActor ? positionOf(locState, resolvedActor.id, locationGraph) : locState.current;
+    // A search that NAMES another location should relocate the ACTOR there
     // first, then search it — players expect "偵查 B" (while in A) to search B,
     // not A. Reuses the travel machinery below; if the named place is locked,
     // the normal soft-wall/unknown directives fire and nobody moves.
     const searchElsewhere =
       !looksLikeTravel(actionText) &&
       isSearchAction &&
-      resolveTravelIntent(actionText, locationGraph, locState) != null;
+      resolveTravelIntent(actionText, locationGraph, locState, actorNode) != null;
 
     // 1. TRAVEL — on an explicit movement verb, OR a search that names another
     //    location. Merely mentioning a place in passing does not teleport,
@@ -466,24 +477,33 @@ export async function POST(request: Request) {
     //    for destinations reachable via open paths, container names resolve to
     //    their entry node, and hidden places never match at all.
     if (looksLikeTravel(actionText) || searchElsewhere) {
-      const intent = resolveTravelIntent(actionText, locationGraph, locState);
+      const intent = resolveTravelIntent(actionText, locationGraph, locState, actorNode);
       if (intent) {
         if (intent.kind === "go") {
           const targetNode = intent.node;
-          const firstVisit = !locState.visited.includes(targetNode.id);
-          locState.current = targetNode.id;
-          if (firstVisit) {
-            locState.visited.push(targetNode.id);
-            locState.entered_round[targetNode.id] = room.current_round;
-            const discovered = applyDiscovers(locationGraph, locState, targetNode.id);
-            for (const d of discovered) {
-              await supabase.from("story_logs").insert({
-                room_id: roomId,
-                round_number: room.current_round,
-                entry_type: "system",
-                content: `🧭 得知新地點：${locationShortName(d.name)}`,
-              });
-            }
+          // Moves ONLY the actor; first visit BY ANYONE fires discovers and
+          // first-visit media (shared party knowledge).
+          const moved = resolvedActor
+            ? applyActorMove(locationGraph, locState, resolvedActor.id, targetNode.id, room.current_round)
+            : (() => { // no resolvable actor (legacy edge) — old party behavior
+                const fv = !locState.visited.includes(targetNode.id);
+                locState.current = targetNode.id;
+                if (fv) {
+                  locState.visited.push(targetNode.id);
+                  locState.entered_round[targetNode.id] = room.current_round;
+                  return { firstVisit: true, discovered: applyDiscovers(locationGraph, locState, targetNode.id) };
+                }
+                return { firstVisit: false, discovered: [] };
+              })();
+          actorNode = targetNode.id;
+          const firstVisit = moved.firstVisit;
+          for (const d of moved.discovered) {
+            await supabase.from("story_logs").insert({
+              room_id: roomId,
+              round_number: room.current_round,
+              entry_type: "system",
+              content: `🧭 得知新地點：${locationShortName(d.name)}`,
+            });
           }
           travelDirective = { kind: "arrived", node: targetNode, firstVisit };
           locationProgress = true;
@@ -491,7 +511,7 @@ export async function POST(request: Request) {
             room_id: roomId,
             round_number: room.current_round,
             entry_type: "system",
-            content: `📍 隊伍前往：${locationShortName(targetNode.name)}`,
+            content: `📍 ${resolvedActor?.name ?? "隊伍"} 前往：${locationShortName(targetNode.name)}`,
           });
           // First-visit node media: reveal the creator's image/text on arrival.
           if (firstVisit) {
@@ -533,7 +553,8 @@ export async function POST(request: Request) {
       !!roll?.requires_check &&
       (roll.outcome === "success" || roll.outcome === "critical_success");
     if (passedCheck) {
-      const found = matchEvidence(actionText, locationGraph, locState, isSearchAction);
+      // Evidence lives where the ACTOR now stands (after any travel this turn).
+      const found = matchEvidence(actionText, locationGraph, locState, isSearchAction, actorNode);
       for (const ev of found) {
         locState.evidence_found.push(ev.id);
         locationProgress = true;
@@ -693,10 +714,20 @@ export async function POST(request: Request) {
   // bonus, crit, fumble). The GM only narrates the outcomes computed here.
   const npcActionLines: string[] = [];
   if (resolvedActor) {
+    // Split-party: the narrated scene is the ACTOR's node. Placed NPCs count as
+    // present only if placed THERE; tracked-but-unplaced NPCs keep the legacy
+    // behavior (they follow the action). Placed hostiles elsewhere hold still —
+    // their scene isn't being narrated this turn.
     const placedNames = locationGraph && locState
-      ? evaluateNpcPlacements(locationGraph, locState, room.current_round, objProgress)
+      ? evaluateNpcPlacements(locationGraph, locState, room.current_round, objProgress, actorNode)
       : [];
-    const sceneRefs = Array.from(new Set([...placedNames, ...Object.keys(npcStateNow)]));
+    const placedKeys = new Set(placedNames.map((r) => npcStateKey(r, npcRoster)));
+    const hasPlacementFor = (key: string): boolean =>
+      !!locationGraph?.npc_placements.some((p) => npcStateKey(p.npc, npcRoster) === key);
+    const trackedRefs = Object.keys(npcStateNow).filter(
+      (k) => placedKeys.has(k) || !hasPlacementFor(k)
+    );
+    const sceneRefs = Array.from(new Set([...placedNames, ...trackedRefs]));
 
     const states: Record<string, any> = { ...npcStateNow };
     let statesChanged = false;
@@ -714,8 +745,13 @@ export async function POST(request: Request) {
       const lastRound = st?.last_attack_round ?? -1;
       if (!alive || !hostile || lastRound >= room.current_round) continue;
 
-      // Target: the acting player if alive, else a random living player.
-      const living = sortedByDex.filter((c: any) => c.hp > 0 && c.san > 0);
+      // Target: co-located characters only (solo-combat rule — being alone in
+      // the scene means facing it alone). Prefer the acting player.
+      let living = sortedByDex.filter((c: any) => c.hp > 0 && c.san > 0);
+      if (locationGraph && locState && actorNode) {
+        living = eligibleCombatTargets(living, locState, actorNode, locationGraph)
+          .filter((c: any) => c.san > 0);
+      }
       if (living.length === 0) break;
       const target =
         living.find((c: any) => c.id === resolvedActor.id) ??
@@ -939,6 +975,26 @@ export async function POST(request: Request) {
   }
 
   // Location directive — authoritative state + travel/stuck narration orders.
+  // Split-party scene context: the acting character's node (post-travel), the
+  // NEXT actor's node (their choices bind to THAT scene), and everyone's
+  // whereabouts so the GM never shows absent characters in the scene.
+  const nextActorNode =
+    locationGraph && locState && nextActor
+      ? positionOf(locState, nextActor.id, locationGraph)
+      : null;
+  const sceneCtx: SceneContext | null =
+    locationGraph && locState && resolvedActor
+      ? {
+          actorName: resolvedActor.name,
+          actorNode,
+          nextName: nextActor?.name ?? resolvedActor.name,
+          nextNode: nextActorNode ?? actorNode,
+          whereabouts: sortedByDex.map((c: any) => ({
+            name: c.name,
+            node: positionOf(locState!, c.id, locationGraph!),
+          })),
+        }
+      : null;
   const locationDirective =
     locationGraph && locState
       ? buildLocationBlock(
@@ -946,12 +1002,13 @@ export async function POST(request: Request) {
           locState,
           travelDirective,
           locState.stuck_counter >= 3
-            ? locationGraph.nodes.find((n) => n.id === locState!.current)?.stuck_hint || null
+            ? locationGraph.nodes.find((n) => n.id === (actorNode ?? locState!.current))?.stuck_hint || null
             : null,
           room.current_round,
           locationFiredEncounters,
           objProgress,
           npcRoster,
+          sceneCtx,
         )
       : null;
 
@@ -1091,16 +1148,21 @@ export async function POST(request: Request) {
     // declared a move_to, validate against the anticipated destination so
     // legitimate choices at the new location aren't dropped.
     {
-      let choiceState = locState;
-      if (locationGraph && locState && typeof gmResponse.move_to === "string" && gmResponse.move_to.trim()) {
-        const dest = resolveMoveTarget(gmResponse.move_to, locationGraph, locState);
-        if (dest) choiceState = { ...locState, current: dest.id };
+      // Choices belong to the NEXT actor — validate against THEIR node. The
+      // actor's own move (deterministic or GM move_to) only shifts the choice
+      // scene when the next actor IS the actor (single-player rooms).
+      let choicesNode: string | null = nextActorNode ?? actorNode;
+      const nextIsActor = !nextActor || !resolvedActor || nextActor.id === resolvedActor.id;
+      if (nextIsActor && locationGraph && locState && typeof gmResponse.move_to === "string" && gmResponse.move_to.trim()) {
+        const dest = resolveMoveTarget(gmResponse.move_to, locationGraph, locState, actorNode);
+        if (dest) choicesNode = dest.id;
       }
       gmResponse.choices = sanitizeChoices(
         gmResponse.choices,
         partyForAI.map((c) => c.name),
         locationGraph,
-        choiceState,
+        locState,
+        choicesNode,
       );
     }
 
@@ -1133,14 +1195,25 @@ export async function POST(request: Request) {
       travelDirective?.kind !== "arrived" &&
       typeof gmResponse.move_to === "string" && gmResponse.move_to.trim()
     ) {
-      const dest = resolveMoveTarget(gmResponse.move_to, locationGraph, locState);
+      const dest = resolveMoveTarget(gmResponse.move_to, locationGraph, locState, actorNode);
       if (dest) {
-        const firstVisit = !locState.visited.includes(dest.id);
-        locState.current = dest.id;
+        // Moves ONLY the acting character (mirrors legacy current inside).
+        const moved = resolvedActor
+          ? applyActorMove(locationGraph, locState, resolvedActor.id, dest.id, room.current_round)
+          : (() => {
+              const fv = !locState!.visited.includes(dest.id);
+              locState!.current = dest.id;
+              if (fv) {
+                locState!.visited.push(dest.id);
+                locState!.entered_round[dest.id] = room.current_round;
+                return { firstVisit: true, discovered: applyDiscovers(locationGraph!, locState!, dest.id) };
+              }
+              return { firstVisit: false, discovered: [] };
+            })();
+        actorNode = dest.id;
+        const firstVisit = moved.firstVisit;
         if (firstVisit) {
-          locState.visited.push(dest.id);
-          locState.entered_round[dest.id] = room.current_round;
-          const discovered = applyDiscovers(locationGraph, locState, dest.id);
+          const discovered = moved.discovered;
           for (const d of discovered) {
             await supabase.from("story_logs").insert({
               room_id: roomId,
@@ -1167,7 +1240,7 @@ export async function POST(request: Request) {
           room_id: roomId,
           round_number: room.current_round,
           entry_type: "system",
-          content: `📍 隊伍前往：${locationShortName(dest.name)}`,
+          content: `📍 ${resolvedActor?.name ?? "隊伍"} 前往：${locationShortName(dest.name)}`,
         });
         await supabase.from("rooms").update({ location_state: locState }).eq("id", roomId);
       }

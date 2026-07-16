@@ -241,6 +241,8 @@ export async function POST(request: Request) {
   if (locationGraph) {
     locationState = initLocationState(locationGraph);
     if (locationState.current) {
+      // Split-party: every character starts at the entry node.
+      for (const c of sortedChars) locationState.positions[c.id] = locationState.current;
       const startNode = locationGraph.nodes.find((n) => n.id === locationState!.current);
       // Starting scene media (image/text) — the start node is never "arrived
       // at", so reveal it here or it never shows.
