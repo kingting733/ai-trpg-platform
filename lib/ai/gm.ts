@@ -995,14 +995,18 @@ export function sanitizeChoices(
   rosterNames: string[],
   graph: LocationGraph | null,
   state: LocationState | null,
+  forNode?: string | null,
 ): [string, string, string] {
   const list = Array.isArray(raw) ? raw.filter((c): c is string => typeof c === "string") : [];
 
-  // Location names the GM may mention in a choice: current node + open exits.
+  // Location names the GM may mention in a choice: the NEXT actor's node +
+  // its open exits (split-party: choices belong to whoever acts next, wherever
+  // THEY stand — forNode; omitted = legacy party position).
   let forbidden: string[] = [];
   if (graph && state) {
-    const exits = computeExits(graph, state);
-    const okIds = new Set<string>([state.current ?? "", ...exits.open.map((n) => n.id)]);
+    const origin = forNode ?? state.current;
+    const exits = computeExits(graph, state, origin);
+    const okIds = new Set<string>([origin ?? "", ...exits.open.map((n) => n.id)]);
     const okNames = graph.nodes
       .filter((n) => okIds.has(n.id))
       .map((n) => locationShortName(n.name).trim().toLowerCase());

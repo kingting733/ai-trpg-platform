@@ -142,13 +142,19 @@ export interface LocationGraph {
 }
 
 export interface LocationState {
+  /** LEGACY MIRROR — kept in sync with the ACTING character's node after each
+   *  move so old readers keep working. New code reads positionOf() instead. */
   current: string | null;
+  /** Split-party v1: per-character positions, keyed by in-room characters.id.
+   *  Characters absent from the map fall back to `current` (positionOf). */
+  positions: Record<string, string>;
   status: Record<string, LocationStatus>;
+  /** SHARED party knowledge: first visit BY ANYONE counts. */
   visited: string[];
-  /** Round on which the party FIRST entered each node (for after: gates). */
+  /** Round on which ANYONE first entered each node (for after: gates). */
   entered_round: Record<string, number>;
   evidence_found: string[];
-  /** Consecutive turns with no travel/evidence/unlock progress. */
+  /** Consecutive turns with no travel/evidence/unlock progress (party-level). */
   stuck_counter: number;
   /** Keys of NpcEncounters already fired (format "enc:<index>"). */
   encounters_fired: string[];
@@ -441,6 +447,7 @@ export function initLocationState(graph: LocationGraph): LocationState {
   const first = graph.nodes.find((n) => n.initial === "unlocked");
   return {
     current: first?.id ?? null,
+    positions: {},
     status,
     visited: first ? [first.id] : [],
     entered_round: first ? { [first.id]: 1 } : {},
@@ -459,8 +466,16 @@ export function coerceLocationState(raw: any, graph: LocationGraph): LocationSta
       if (status[k] !== undefined && STATUSES.includes(v as LocationStatus)) status[k] = v as LocationStatus;
     }
   }
+  // Per-character positions: keep only entries pointing at known nodes.
+  const positions: Record<string, string> = {};
+  if (raw.positions && typeof raw.positions === "object") {
+    for (const [cid, nid] of Object.entries(raw.positions)) {
+      if (typeof nid === "string" && status[nid] !== undefined) positions[cid] = nid;
+    }
+  }
   return {
     current: typeof raw.current === "string" && status[raw.current] ? raw.current : base.current,
+    positions,
     status,
     visited: asStrArr(raw.visited).filter((id) => status[id] !== undefined),
     entered_round:
@@ -530,7 +545,7 @@ function condSatisfied(
 // simply return false against these empties, which is the safe "still locked"
 // default for a scenario that gates on evidence it has no location system for.
 const EMPTY_LOCATION_STATE: LocationState = {
-  current: null, status: {}, visited: [], entered_round: {}, evidence_found: [],
+  current: null, positions: {}, status: {}, visited: [], entered_round: {}, evidence_found: [],
   stuck_counter: 0, encounters_fired: [],
 };
 const EMPTY_LOCATION_GRAPH: LocationGraph = {
@@ -622,9 +637,11 @@ export function evaluateNpcPlacements(
   graph: LocationGraph,
   state: LocationState,
   currentRound: number,
-  objectiveProgress: ObjectiveProgressLike = {}
+  objectiveProgress: ObjectiveProgressLike = {},
+  atNode?: string | null
 ): string[] {
-  if (!state.current || graph.npc_placements.length === 0) return [];
+  const scene = atNode ?? state.current;
+  if (!scene || graph.npc_placements.length === 0) return [];
 
   // Group placements by NPC, preserving insertion order.
   const byNpc = new Map<string, NpcPlacement[]>();
@@ -639,7 +656,7 @@ export function evaluateNpcPlacements(
     for (const p of placements) {
       if (condSatisfied(p.when, state, graph, currentRound, objectiveProgress)) lastSatisfied = p;
     }
-    if (lastSatisfied && lastSatisfied.at === state.current) present.push(npc);
+    if (lastSatisfied && lastSatisfied.at === scene) present.push(npc);
   });
   return present;
 }
@@ -670,6 +687,51 @@ export function evaluateEncounters(
     }
   }
   return fired;
+}
+
+// ── Split-party v1: per-character positions ───────────────────────────────────
+
+/** Where a character stands. Fallback chain keeps every legacy room working:
+ *  positions[id] → the party's legacy `current` → the first unlocked node. */
+export function positionOf(state: LocationState, characterId: string, graph: LocationGraph): string | null {
+  const pos = state.positions?.[characterId];
+  if (pos && state.status[pos] !== undefined) return pos;
+  if (state.current && state.status[state.current] !== undefined) return state.current;
+  const firstOpen = graph.nodes.find((n) => state.status[n.id] === "unlocked");
+  return firstOpen?.id ?? null;
+}
+
+/** Move ONE character. Mutates state: sets their position, mirrors the legacy
+ *  `current` (old readers keep working), and — on the first visit BY ANYONE —
+ *  marks visited/entered_round and fires the node's discovers (shared party
+ *  knowledge ✓). Returns what changed for the caller's logging. */
+export function applyActorMove(
+  graph: LocationGraph,
+  state: LocationState,
+  characterId: string,
+  nodeId: string,
+  currentRound: number,
+): { firstVisit: boolean; discovered: LocationNode[] } {
+  if (!state.positions) state.positions = {};
+  state.positions[characterId] = nodeId;
+  state.current = nodeId; // legacy mirror
+  if (state.visited.includes(nodeId)) return { firstVisit: false, discovered: [] };
+  state.visited.push(nodeId);
+  state.entered_round[nodeId] = currentRound;
+  const discovered = applyDiscovers(graph, state, nodeId);
+  return { firstVisit: true, discovered };
+}
+
+/** Solo-combat rule: a hostile NPC attacks only characters located at ITS node
+ *  (and still standing). Characters without a position entry fall back through
+ *  positionOf, so legacy rooms behave as before (everyone at `current`). */
+export function eligibleCombatTargets<T extends { id: string; hp: number }>(
+  characters: T[],
+  state: LocationState,
+  npcNode: string,
+  graph: LocationGraph,
+): T[] {
+  return characters.filter((c) => c.hp > 0 && positionOf(state, c.id, graph) === npcNode);
 }
 
 // ── v2 runtime: adjacency, exits, reachability ────────────────────────────────
@@ -741,19 +803,22 @@ function openReachable(graph: LocationGraph, adj: Map<string, Set<string>>, from
 }
 
 /** The authoritative per-turn exit computation used by the GM directive, the
- *  travel matcher, GM move_to validation and the player panel. */
-export function computeExits(graph: LocationGraph, state: LocationState): ComputedExits {
+ *  travel matcher, GM move_to validation and the player panel.
+ *  `fromNode` (split-party): the character's own node; omitted/null falls back
+ *  to the legacy party position. */
+export function computeExits(graph: LocationGraph, state: LocationState, fromNode?: string | null): ComputedExits {
+  const origin = fromNode ?? state.current;
   if (graph.travel_mode !== "edges") {
     return {
-      open: graph.nodes.filter((n) => n.id !== state.current && state.status[n.id] === "unlocked"),
+      open: graph.nodes.filter((n) => n.id !== origin && state.status[n.id] === "unlocked"),
       locked: graph.nodes.filter((n) => state.status[n.id] === "discovered"),
     };
   }
-  if (!state.current) return { open: [], locked: [] };
+  if (!origin) return { open: [], locked: [] };
   const adj = buildAdjacency(graph);
   // Walk only THROUGH unlocked nodes; locked ones end the walk (frontier).
-  const reached = new Set<string>([state.current]);
-  const queue = [state.current];
+  const reached = new Set<string>([origin]);
+  const queue = [origin];
   const frontierLocked = new Set<string>();
   while (queue.length) {
     const cur = queue.shift()!;
@@ -767,7 +832,7 @@ export function computeExits(graph: LocationGraph, state: LocationState): Comput
       }
     }
   }
-  const open = graph.nodes.filter((n) => n.id !== state.current && reached.has(n.id));
+  const open = graph.nodes.filter((n) => n.id !== origin && reached.has(n.id));
 
   const lockedIds = new Set<string>();
   // Globally known-but-locked places (the system announced them).
@@ -778,14 +843,14 @@ export function computeExits(graph: LocationGraph, state: LocationState): Comput
   }
   // Standing inside a container that shows its locked children reveals them
   // (walking into the flat, you can see the bedroom door) — any status.
-  const curNode = graph.nodes.find((n) => n.id === state.current);
+  const curNode = graph.nodes.find((n) => n.id === origin);
   const curContainer = curNode?.container ? graph.containers.find((c) => c.id === curNode.container) : null;
   if (curContainer?.show_locked_children) {
     for (const n of graph.nodes) {
       if (n.container === curContainer.id && state.status[n.id] !== "unlocked") lockedIds.add(n.id);
     }
   }
-  const locked = graph.nodes.filter((n) => lockedIds.has(n.id) && !reached.has(n.id) && n.id !== state.current);
+  const locked = graph.nodes.filter((n) => lockedIds.has(n.id) && !reached.has(n.id) && n.id !== origin);
   return { open, locked };
 }
 
@@ -795,13 +860,15 @@ export function computeExits(graph: LocationGraph, state: LocationState): Comput
 export function findPathBlocker(
   graph: LocationGraph,
   state: LocationState,
-  targetId: string
+  targetId: string,
+  fromNode?: string | null
 ): { hasPath: boolean; blocker: LocationNode | null } {
-  if (!state.current) return { hasPath: false, blocker: null };
+  const origin = fromNode ?? state.current;
+  if (!origin) return { hasPath: false, blocker: null };
   const adj = buildAdjacency(graph);
   const parent = new Map<string, string>();
-  const queue = [state.current];
-  const seen = new Set<string>([state.current]);
+  const queue = [origin];
+  const seen = new Set<string>([origin]);
   while (queue.length) {
     const cur = queue.shift()!;
     if (cur === targetId) break;
@@ -813,9 +880,9 @@ export function findPathBlocker(
     }
   }
   if (!seen.has(targetId)) return { hasPath: false, blocker: null };
-  // Reconstruct current → target and report the first non-unlocked hop.
+  // Reconstruct origin → target and report the first non-unlocked hop.
   const path: string[] = [];
-  for (let cur: string | undefined = targetId; cur && cur !== state.current; cur = parent.get(cur)) path.unshift(cur);
+  for (let cur: string | undefined = targetId; cur && cur !== origin; cur = parent.get(cur)) path.unshift(cur);
   for (const id of path) {
     if (state.status[id] !== "unlocked") {
       return { hasPath: true, blocker: graph.nodes.find((n) => n.id === id) ?? null };
@@ -951,16 +1018,19 @@ export type TravelIntent =
 export function resolveTravelIntent(
   actionText: string,
   graph: LocationGraph,
-  state: LocationState
+  state: LocationState,
+  actorNode?: string | null
 ): TravelIntent | null {
+  // Split-party: everything is relative to the ACTING character's node.
+  const origin = actorNode ?? state.current;
   const edgesMode = graph.travel_mode === "edges";
-  const exits = edgesMode ? computeExits(graph, state) : null;
+  const exits = edgesMode ? computeExits(graph, state, origin) : null;
 
   const candidates: TravelCandidate[] = [];
   if (edgesMode) {
     const visible = new Set([...exits!.open, ...exits!.locked].map((n) => n.id));
     for (const n of graph.nodes) {
-      if (n.id === state.current) continue;
+      if (n.id === origin) continue;
       // Known places: current exits + anything unlocked/discovered before
       // (announced to the players when it opened, even if now cut off).
       if (visible.has(n.id) || state.status[n.id] === "unlocked" || state.status[n.id] === "discovered") {
@@ -969,13 +1039,13 @@ export function resolveTravelIntent(
     }
   } else {
     for (const n of graph.nodes) {
-      if (n.id !== state.current) candidates.push({ name: n.name, node: n });
+      if (n.id !== origin) candidates.push({ name: n.name, node: n });
     }
   }
-  // Containers are addressable by name; the party lands on the entry node.
+  // Containers are addressable by name; the character lands on the entry node.
   for (const c of graph.containers) {
     const entry = entryNodeOf(graph, c.id);
-    if (!entry || entry.id === state.current) continue;
+    if (!entry || entry.id === origin) continue;
     if (edgesMode && state.status[entry.id] === "hidden") continue; // unknown region
     candidates.push({ name: c.name, node: entry });
   }
@@ -991,7 +1061,7 @@ export function resolveTravelIntent(
   }
   if (status !== "unlocked") return { kind: "locked", node };
   if (exits!.open.some((n) => n.id === node.id)) return { kind: "go", node };
-  const { hasPath, blocker } = findPathBlocker(graph, state, node.id);
+  const { hasPath, blocker } = findPathBlocker(graph, state, node.id, origin);
   return { kind: "blocked", node, blocker: hasPath ? blocker : null };
 }
 
@@ -1005,14 +1075,15 @@ export function resolveTravelIntent(
 export function resolveMoveTarget(
   name: string,
   graph: LocationGraph,
-  state: LocationState
+  state: LocationState,
+  actorNode?: string | null
 ): LocationNode | null {
   const q = name.trim().toLowerCase();
   if (!q) return null;
-  // The pool is the server-computed OPEN exits — in edges mode that already
-  // means "reachable via a path of open nodes", so the GM can never move the
-  // party across a locked door or to a disconnected place.
-  const pool: TravelCandidate[] = computeExits(graph, state).open.map((n) => ({ name: n.name, node: n }));
+  // The pool is the server-computed OPEN exits from the ACTOR's node — in edges
+  // mode that already means "reachable via a path of open nodes", so the GM can
+  // never move a character across a locked door or to a disconnected place.
+  const pool: TravelCandidate[] = computeExits(graph, state, actorNode ?? state.current).open.map((n) => ({ name: n.name, node: n }));
   for (const c of graph.containers) {
     const entry = entryNodeOf(graph, c.id);
     if (entry && pool.some((p) => p.node.id === entry.id)) pool.push({ name: c.name, node: entry });
@@ -1065,10 +1136,12 @@ export function matchEvidence(
   actionText: string,
   graph: LocationGraph,
   state: LocationState,
-  isSearch: boolean
+  isSearch: boolean,
+  atNode?: string | null
 ): EvidenceDef[] {
-  if (!state.current) return [];
-  const node = graph.nodes.find((n) => n.id === state.current);
+  const scene = atNode ?? state.current;
+  if (!scene) return [];
+  const node = graph.nodes.find((n) => n.id === scene);
   if (!node) return [];
   const unfound = node.evidence.filter((e) => !state.evidence_found.includes(e.id));
   if (unfound.length === 0) return [];
@@ -1103,9 +1176,22 @@ export type TravelDirective =
   | { kind: "unknown_place"; node: LocationNode }
   | { kind: "off_graph" };
 
+/** Split-party scene context: who acts this turn and where everyone stands.
+ *  Provided by the route; when present the block narrates ONE character's
+ *  scene instead of a single party position. */
+export interface SceneContext {
+  actorName: string;
+  actorNode: string | null;
+  nextName: string;
+  nextNode: string | null;
+  whereabouts: Array<{ name: string; node: string | null }>;
+}
+
 /** Compact per-turn block telling the GM the authoritative location state.
  *  `currentRound` is needed to evaluate NPC placement conditions.
- *  `firedEncounters` are NPC encounter events that fired this turn. */
+ *  `firedEncounters` are NPC encounter events that fired this turn.
+ *  `scene` (split-party): per-character scene framing; omitted = legacy
+ *  single-party-position output. */
 export function buildLocationBlock(
   graph: LocationGraph,
   state: LocationState,
@@ -1115,14 +1201,25 @@ export function buildLocationBlock(
   firedEncounters: NpcEncounter[] = [],
   objectiveProgress: ObjectiveProgressLike = {},
   npcRoster: NpcRef[] = [],
+  scene?: SceneContext | null,
 ): string {
-  const current = graph.nodes.find((n) => n.id === state.current);
-  const lines: string[] = ["LOCATION SYSTEM (server-authoritative — you MUST follow this; you cannot reveal hidden places yourself, and the party's position only changes via the move_to field below or a TRAVEL notice from the system):"];
+  const sceneNode = scene?.actorNode ?? state.current;
+  const current = graph.nodes.find((n) => n.id === sceneNode);
+  const nodeName = (id: string | null | undefined): string => {
+    if (!id) return "（未知）";
+    return shortName(graph.nodes.find((n) => n.id === id)?.name ?? id);
+  };
+  const lines: string[] = ["LOCATION SYSTEM (server-authoritative — you MUST follow this; you cannot reveal hidden places yourself, and a character's position only changes via the move_to field below or a TRAVEL notice from the system):"];
 
   if (current) {
     // Region breadcrumb (1404室 › 1404神位) so the GM narrates the right scale.
     const region = current.container ? graph.containers.find((c) => c.id === current.container) : null;
-    lines.push(`CURRENT LOCATION: ${region ? `${region.name} › ` : ""}${current.name}${current.desc ? ` — ${current.desc}` : ""}`);
+    const crumb = `${region ? `${region.name} › ` : ""}${current.name}`;
+    if (scene) {
+      lines.push(`SCENE THIS TURN: ${scene.actorName} is at ${crumb}${current.desc ? ` — ${current.desc}` : ""}. Narrate ONLY this location this turn.`);
+    } else {
+      lines.push(`CURRENT LOCATION: ${crumb}${current.desc ? ` — ${current.desc}` : ""}`);
+    }
     const unfound = current.evidence.filter((e) => !state.evidence_found.includes(e.id));
     if (unfound.length) {
       lines.push(
@@ -1133,8 +1230,16 @@ export function buildLocationBlock(
     }
   }
 
+  if (scene) {
+    // Where every character stands. Characters elsewhere are NOT in this scene.
+    lines.push(
+      `PARTY WHEREABOUTS: ${scene.whereabouts.map((w) => `${w.name} @ ${nodeName(w.node)}`).join(" · ")}. ` +
+      `Characters whose location differs from this scene's are NOT present here — do not show them acting, speaking, or perceiving in this scene, and do not tell ${scene.actorName} what happened in scenes they did not witness (players can read everything; the CHARACTERS cannot).`
+    );
+  }
+
   // NPC presence — server-computed, GM must not add or remove NPCs from the scene.
-  const npcsHere = evaluateNpcPlacements(graph, state, currentRound, objectiveProgress);
+  const npcsHere = evaluateNpcPlacements(graph, state, currentRound, objectiveProgress, sceneNode);
   if (graph.npc_placements.length > 0) {
     if (npcsHere.length > 0) {
       lines.push(`NPCS PRESENT HERE: ${npcsHere.map((ref) => npcDisplayName(ref, npcRoster)).join("、")}`);
@@ -1146,8 +1251,8 @@ export function buildLocationBlock(
   if (found.length) lines.push(`EVIDENCE THE PARTY HOLDS: ${found.map((e) => e.name).join("、")}`);
 
   // Server-computed exits: in edges mode 可前往 = reachable via open paths from
-  // HERE (not every unlocked node); free mode = v1 lists unchanged.
-  const exits = computeExits(graph, state);
+  // the scene's node (not every unlocked node); free mode = v1 lists unchanged.
+  const exits = computeExits(graph, state, sceneNode);
   const unlockedOthers = exits.open;
   const discoveredLocked = exits.locked;
   const exitsParts: string[] = [];
@@ -1155,30 +1260,31 @@ export function buildLocationBlock(
   if (discoveredLocked.length) exitsParts.push(`已知但尚未能進入：${discoveredLocked.map((n) => shortName(n.name)).join("、")}`);
   if (exitsParts.length) lines.push(`KNOWN LOCATIONS — ${exitsParts.join(" | ")}`);
   lines.push("Locations not listed above are UNKNOWN to the players — never name, confirm, or hint at their existence until the system announces them.");
+  const mover = scene ? scene.actorName : "the party";
   lines.push(
-    `MOVING: if the acting player's action means going to one of the 可前往 locations (however they phrase it — partial name, "回去那裡", a typo), narrate the party moving there and set "move_to" in your JSON to that location's EXACT name from the list. If they try somewhere locked or unknown, the party STAYS at CURRENT LOCATION — narrate why entry fails and set move_to to null. If the system already announced "TRAVEL THIS TURN" below, the move is done: set move_to to null. Never narrate the party being anywhere except CURRENT LOCATION or a move_to/TRAVEL destination.`
+    `MOVING: if the acting player's action means going to one of the 可前往 locations (however they phrase it — partial name, "回去那裡", a typo), narrate ${mover} moving there and set "move_to" in your JSON to that location's EXACT name from the list. If they try somewhere locked or unknown, ${mover} STAYS at the scene's location — narrate why entry fails and set move_to to null. If the system already announced "TRAVEL THIS TURN" below, the move is done: set move_to to null. Never narrate ${mover} being anywhere except this scene's location or a move_to/TRAVEL destination.${scene ? ` move_to moves ONLY ${scene.actorName} — other characters stay where they are.` : ""}`
   );
 
   if (travel) {
     if (travel.kind === "arrived") {
       lines.push(
-        `TRAVEL THIS TURN: the party has MOVED to ${travel.node.name}. Narrate the transition and the new scene.${
+        `TRAVEL THIS TURN: ${mover} has MOVED to ${travel.node.name}. Narrate the transition and the new scene.${
           travel.firstVisit && travel.node.on_enter ? ` FIRST-VISIT BEAT: ${travel.node.on_enter}` : ""
         }`
       );
     } else if (travel.kind === "soft_wall") {
       lines.push(
-        `TRAVEL BLOCKED: the actor tried to go to ${travel.node.name}, which is NOT yet accessible. Narrate an in-world reason entry fails${
+        `TRAVEL BLOCKED: ${mover} tried to go to ${travel.node.name}, which is NOT yet accessible. Narrate an in-world reason entry fails${
           travel.node.locked_narration ? `（建議：${travel.node.locked_narration}）` : ""
-        }. You may hint at what might open the way, but do NOT let them in. The party stays where it is.`
+        }. You may hint at what might open the way, but do NOT let them in. ${mover} stays where they are.`
       );
     } else if (travel.kind === "blocked_path") {
       lines.push(
         travel.blocker
-          ? `TRAVEL BLOCKED EN ROUTE: the actor tried to reach ${travel.node.name}, but the way there passes through ${travel.blocker.name}, which is not yet passable${
+          ? `TRAVEL BLOCKED EN ROUTE: ${mover} tried to reach ${travel.node.name}, but the way there passes through ${travel.blocker.name}, which is not yet passable${
               travel.blocker.locked_narration ? `（建議：${travel.blocker.locked_narration}）` : ""
-            }. Narrate that the route is cut off at ${travel.blocker.name} — do NOT teleport them past it. The party stays where it is; set move_to to null.`
-          : `TRAVEL IMPOSSIBLE: the actor tried to reach ${travel.node.name}, but no route leads there from the party's position. Narrate in-world that there is simply no way through from here. The party stays where it is; set move_to to null.`
+            }. Narrate that the route is cut off at ${travel.blocker.name} — do NOT teleport them past it. ${mover} stays where they are; set move_to to null.`
+          : `TRAVEL IMPOSSIBLE: ${mover} tried to reach ${travel.node.name}, but no route leads there from their position. Narrate in-world that there is simply no way through from here. ${mover} stays where they are; set move_to to null.`
       );
     } else if (travel.kind === "unknown_place") {
       lines.push(
@@ -1188,12 +1294,27 @@ export function buildLocationBlock(
       lines.push(
         [
           `OFF-GRAPH MOVEMENT (STRICT — this scenario's map is FIXED to the KNOWN LOCATIONS listed above; there is nothing beyond it):`,
-          `the actor tried to leave to a place that is NOT on the map (e.g. "go outside", "leave this room", a street, a shop, "anywhere else"). Do NOT invent a new area, side-scene, exterior, or destination, and do NOT let the party leave the map. Keep them at CURRENT LOCATION.`,
+          `the actor tried to leave to a place that is NOT on the map (e.g. "go outside", "leave this room", a street, a shop, "anywhere else"). Do NOT invent a new area, side-scene, exterior, or destination, and do NOT let anyone leave the map. Keep ${mover} at this scene's location.`,
           `Narrate briefly and in-world why they can't simply wander off that way (the exit is blocked/leads nowhere useful/there is no reason to leave), then point them at the real routes: name the 可前往 locations as the only ways onward.${discoveredLocked.length ? " Locked-but-known places exist too, but stay closed until their conditions are met." : ""}`,
           `Set "move_to" to null. Award no evidence, confirm no hidden place, advance no unlock condition.`,
         ].join(" ")
       );
     }
+  }
+
+  // Split-party: the 3 suggested choices are for the NEXT character, who may be
+  // standing somewhere else entirely — bind them to THAT scene, not this one.
+  if (scene && scene.nextNode) {
+    const nextNodeDef = graph.nodes.find((n) => n.id === scene.nextNode);
+    const nextExits = computeExits(graph, state, scene.nextNode);
+    const nextParts: string[] = [];
+    if (nextExits.open.length) nextParts.push(`可前往：${nextExits.open.map((n) => shortName(n.name)).join("、")}`);
+    if (nextExits.locked.length) nextParts.push(`看得到但進不去：${nextExits.locked.map((n) => shortName(n.name)).join("、")}`);
+    lines.push(
+      `NEXT TURN'S SCENE (for the 3 suggested choices ONLY): ${scene.nextName} is at ${shortName(nextNodeDef?.name ?? scene.nextNode)}. ` +
+      `The choices MUST be actions ${scene.nextName} can take THERE — at that location, or moving to one of ITS exits${nextParts.length ? `（${nextParts.join(" | ")}）` : ""}. ` +
+      `Do NOT write choices set at ${scene.actorName}'s location unless it is the same place.`
+    );
   }
 
   // Triggered NPC encounters this turn.
