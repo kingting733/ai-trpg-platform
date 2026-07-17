@@ -1185,6 +1185,9 @@ export interface SceneContext {
   nextName: string;
   nextNode: string | null;
   whereabouts: Array<{ name: string; node: string | null }>;
+  /** Ledger facts that happened AT the actor's node (scene memory) — keeps
+   *  physical continuity when turns from other locations interleave. */
+  sceneFacts?: string[];
 }
 
 /** Compact per-turn block telling the GM the authoritative location state.
@@ -1231,6 +1234,13 @@ export function buildLocationBlock(
   }
 
   if (scene) {
+    // Scene memory: what already physically happened AT this location — the
+    // drawer someone opened stays open even if other rooms' turns interleaved.
+    if (scene.sceneFacts && scene.sceneFacts.length) {
+      lines.push(
+        `SCENE HISTORY (things that already happened AT THIS LOCATION — keep physical continuity with them; do not reset, undo, or re-describe them as new): ${scene.sceneFacts.join("；")}`
+      );
+    }
     // Where every character stands. Characters elsewhere are NOT in this scene.
     lines.push(
       `PARTY WHEREABOUTS: ${scene.whereabouts.map((w) => `${w.name} @ ${nodeName(w.node)}`).join(" · ")}. ` +

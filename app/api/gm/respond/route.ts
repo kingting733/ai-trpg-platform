@@ -587,6 +587,7 @@ export async function POST(request: Request) {
           type: "clue",
           character: resolvedActor?.name ?? "Unknown",
           fact: `取得證物「${ev.name}」`,
+          node: actorNode ?? undefined,
         });
       }
     }
@@ -859,14 +860,35 @@ export async function POST(request: Request) {
     .order("created_at", { ascending: false })
     .limit(40);
 
-  const storyLogSoFar = (logs ?? [])
+  const narrativeLogs = (logs ?? [])
     .reverse()
-    .filter((l: any) => l.entry_type === "action" || l.entry_type === "gm_response")
-    .slice(-16)
-    .map((l: any) => {
-      if (l.entry_type === "action") return `[${l.characters?.name ?? "Player"}]: ${l.content}`;
-      return `[GM]: ${l.content}`;
-    });
+    .filter((l: any) => l.entry_type === "action" || l.entry_type === "gm_response");
+  const fmtLog = (l: any) =>
+    l.entry_type === "action" ? `[${l.characters?.name ?? "Player"}]: ${l.content}` : `[GM]: ${l.content}`;
+  const storyLogSoFar = narrativeLogs.slice(-16).map(fmtLog);
+
+  // Split-party continuity guarantee: with 5+ players (or long narrations) the
+  // acting character's own previous turn can slide out of the prompt's RECENT
+  // TURNS window while OTHER scenes fill it. If so, pass their last
+  // action+narration pair separately so the GM always remembers what THIS
+  // character was doing. (The very last narrative entry is THIS turn's action —
+  // search starts before it.)
+  let actorLastScene: string | null = null;
+  if (resolvedActor) {
+    const windowStart = Math.max(0, narrativeLogs.length - 10); // buildTurnMessage sends last 10
+    for (let i = narrativeLogs.length - 2; i >= 0; i--) {
+      const l: any = narrativeLogs[i];
+      if (l.entry_type === "action" && l.characters?.name === resolvedActor.name) {
+        if (i < windowStart) {
+          const pair = [fmtLog(l)];
+          const next: any = narrativeLogs[i + 1];
+          if (next?.entry_type === "gm_response") pair.push(fmtLog(next));
+          actorLastScene = pair.join("\n");
+        }
+        break;
+      }
+    }
+  }
 
   // Load the room's persistent memory (summary + ledger)
   const { data: roomMemory } = await supabase
@@ -949,6 +971,15 @@ export async function POST(request: Request) {
     }
   }
 
+  // Scene-tag this turn's scene-local facts with the actor's node (combat,
+  // investigation, clue pickups all happened where the actor stands). Global
+  // facts (unlocks, encounters) keep node undefined and never enter a scene
+  // recap. Existing tags (set at the push site) are preserved.
+  if (actorNode) {
+    for (const e of [...newLedgerEntries, ...attackLedgerEntries]) {
+      if (!e.node) e.node = actorNode;
+    }
+  }
   const updatedLedger = [...storyLedger, ...newLedgerEntries, ...attackLedgerEntries, ...locationLedgerEntries];
 
   // === OBJECTIVE STATUS (GM-only) ===
@@ -993,6 +1024,15 @@ export async function POST(request: Request) {
             name: c.name,
             node: positionOf(locState!, c.id, locationGraph!),
           })),
+          // Scene memory: the last few ledger facts that happened AT this node,
+          // so returning to a room keeps its physical state (the opened drawer
+          // stays open even after other rooms' turns interleaved).
+          sceneFacts: actorNode
+            ? updatedLedger
+                .filter((e) => e.node === actorNode)
+                .slice(-5)
+                .map((e) => `[T${e.turn}] ${e.character}: ${e.fact}`)
+            : [],
         }
       : null;
   const locationDirective =
@@ -1072,6 +1112,7 @@ export async function POST(request: Request) {
       ? `NPC ACTIONS THIS TURN (the system already resolved these hostile-NPC attacks — narrate them AS THEY HAPPENED; do NOT invent different outcomes, extra attacks, or attacks that were not listed):\n${npcActionLines.map((l) => `- ${l}`).join("\n")}`
       : null,
     npcKnowledgeDirective,
+    actorLastScene,
     itemsAwardedDirective: evidenceAwardedThisTurn.length
       ? `ITEMS AWARDED THIS TURN (the system already granted these to the party as a result of this action — the character now physically has them; you MUST work each pickup naturally into your narration, describing them noticing/finding/taking the item. Do NOT omit any, and do NOT invent items that are not listed):\n${evidenceAwardedThisTurn
           .map((e) => `- ${e.name}`)
@@ -1349,6 +1390,13 @@ export async function POST(request: Request) {
       .slice(0, 2)
       .map((fact) => ({ turn: turnLabel, type: "event", character: actorName, fact: fact.trim() }));
 
+    // Injuries and GM memory facts are scene-local too — tag with the actor's
+    // node so returning to this room recalls them (scene memory).
+    if (actorNode) {
+      for (const e of [...injuryLedgerEntries, ...aiMemoryEntries]) {
+        if (!e.node) e.node = actorNode;
+      }
+    }
     const finalLedger = [...updatedLedger, ...injuryLedgerEntries, ...aiMemoryEntries];
 
     // === INVENTORY UPDATE (party-wide soft layer) ===
