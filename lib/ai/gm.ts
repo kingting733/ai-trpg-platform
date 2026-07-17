@@ -1041,6 +1041,9 @@ export function sanitizeChoices(
       }
     }
     if (!body) continue;
+    // A choice that still mentions ANY roster character is about someone else's
+    // scene ("檢查阿明找到的紅紙") — choices belong to the next actor alone.
+    if (rosterNames.some((name) => name && body.includes(name))) continue;
     // Choices must never point at locked/hidden/unreachable places.
     if (forbidden.some((f) => body.includes(f))) continue;
     if (body.length > 22) body = body.slice(0, 20) + "…";

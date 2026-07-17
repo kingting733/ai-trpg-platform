@@ -261,25 +261,16 @@ export async function POST(request: Request) {
         });
       }
       // Reveal neighbours the start node discovers, and unlock any node whose
-      // conditions are already met (e.g. visit:<start>).
-      const discovered = applyDiscovers(locationGraph, locationState, locationState.current);
+      // conditions are already met (e.g. visit:<start>). Only unlocks announce
+      // (one merged line); discovered-but-locked places just show 🔒 on the map.
+      applyDiscovers(locationGraph, locationState, locationState.current);
       const unlocks = evaluateUnlocks(locationGraph, locationState, 1, {});
-      const unlockedIds = new Set(unlocks.unlocked.map((n) => n.id));
-      for (const n of discovered) {
-        if (unlockedIds.has(n.id)) continue;
+      if (unlocks.unlocked.length) {
         await supabase.from("story_logs").insert({
           room_id: roomId,
           round_number: 1,
           entry_type: "system",
-          content: `🧭 得知新地點：${locationShortName(n.name)}`,
-        });
-      }
-      for (const n of unlocks.unlocked) {
-        await supabase.from("story_logs").insert({
-          room_id: roomId,
-          round_number: 1,
-          entry_type: "system",
-          content: `🗺 新地點解鎖：${locationShortName(n.name)}`,
+          content: `🗺 新地點解鎖：${unlocks.unlocked.map((n) => locationShortName(n.name)).join("、")}`,
         });
       }
     }

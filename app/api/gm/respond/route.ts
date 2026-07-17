@@ -414,25 +414,16 @@ export async function POST(request: Request) {
     }
     const seededDiscovers = applyDiscovers(locationGraph, locState, locState.current);
     const seededUnlocks = evaluateUnlocks(locationGraph, locState, room.current_round, objProgress);
-    // A node revealed by both this turn should only log as the stronger state.
-    const unlockedIds = new Set(seededUnlocks.unlocked.map((n) => n.id));
-    for (const n of seededDiscovers) {
-      if (unlockedIds.has(n.id)) continue;
+    // Only UNLOCKS announce (one merged line); discovered-but-locked places
+    // just appear on the map panel as 🔒.
+    if (seededDiscovers.length) locationProgress = true;
+    if (seededUnlocks.unlocked.length) {
       locationProgress = true;
       await supabase.from("story_logs").insert({
         room_id: roomId,
         round_number: room.current_round,
         entry_type: "system",
-        content: `🧭 得知新地點：${locationShortName(n.name)}`,
-      });
-    }
-    for (const n of seededUnlocks.unlocked) {
-      locationProgress = true;
-      await supabase.from("story_logs").insert({
-        room_id: roomId,
-        round_number: room.current_round,
-        entry_type: "system",
-        content: `🗺 新地點解鎖：${locationShortName(n.name)}`,
+        content: `🗺 新地點解鎖：${seededUnlocks.unlocked.map((n) => locationShortName(n.name)).join("、")}`,
       });
     }
   }
@@ -470,13 +461,45 @@ export async function POST(request: Request) {
       isSearchAction &&
       resolveTravelIntent(actionText, locationGraph, locState, actorNode) != null;
 
-    // 1. TRAVEL — on an explicit movement verb, OR a search that names another
-    //    location. Merely mentioning a place in passing does not teleport,
-    //    because resolveTravelIntent only matches a real location name/segment.
-    //    In map (edges) mode it also enforces adjacency: "go" only comes back
-    //    for destinations reachable via open paths, container names resolve to
-    //    their entry node, and hidden places never match at all.
-    if (looksLikeTravel(actionText) || searchElsewhere) {
+    // BARE-NAME TRAVEL: typing just a location's name ("1404門口" — what the
+    // click-to-fill panel produces) has no travel verb, so it used to depend on
+    // the GM's probabilistic move_to (sometimes narrated a move the server
+    // never made). If the action is essentially NOTHING BUT a matched location
+    // name, treat it as deterministic travel. Guard: after stripping the
+    // matched node's name (and any container name resolving to it) plus
+    // punctuation, at most 4 chars may remain — mentioning a place mid-sentence
+    // still never teleports.
+    let bareNameTravel = false;
+    if (!looksLikeTravel(actionText) && !searchElsewhere) {
+      const probe = resolveTravelIntent(actionText, locationGraph, locState, actorNode);
+      if (probe) {
+        let residue = actionText;
+        // Strip the matched node's name, and any container name that resolves
+        // to it (typing "1404室" matches the entry node 1404門口 — both names
+        // count as "just the location").
+        const stripNames = [
+          locationShortName(probe.node.name),
+          ...locationGraph.containers
+            .filter((c) => probe.node.container === c.id)
+            .map((c) => locationShortName(c.name)),
+        ];
+        for (const nm of stripNames) {
+          if (nm) residue = residue.split(nm).join("");
+        }
+        residue = residue.replace(/[\s，,。．.!！?？、:：;；「」『』()（）]/g, "");
+        bareNameTravel = residue.length <= 4;
+      }
+    }
+
+    // 1. TRAVEL — on an explicit movement verb, a search that names another
+    //    location, OR a bare location name. Merely mentioning a place in
+    //    passing does not teleport, because resolveTravelIntent only matches a
+    //    real location name/segment (and bare-name mode requires the text to
+    //    be almost nothing but the name). In map (edges) mode it also enforces
+    //    adjacency: "go" only comes back for destinations reachable via open
+    //    paths, container names resolve to their entry node, and hidden places
+    //    never match at all.
+    if (looksLikeTravel(actionText) || searchElsewhere || bareNameTravel) {
       const intent = resolveTravelIntent(actionText, locationGraph, locState, actorNode);
       if (intent) {
         if (intent.kind === "go") {
@@ -497,14 +520,9 @@ export async function POST(request: Request) {
               })();
           actorNode = targetNode.id;
           const firstVisit = moved.firstVisit;
-          for (const d of moved.discovered) {
-            await supabase.from("story_logs").insert({
-              room_id: roomId,
-              round_number: room.current_round,
-              entry_type: "system",
-              content: `🧭 得知新地點：${locationShortName(d.name)}`,
-            });
-          }
+          // Discovered-but-locked places surface on the map panel (🔒) without
+          // a log message; only real unlocks announce (see the UNLOCKS pass —
+          // a discover whose conditions already hold unlocks there this turn).
           travelDirective = { kind: "arrived", node: targetNode, firstVisit };
           locationProgress = true;
           await supabase.from("story_logs").insert({
@@ -592,22 +610,25 @@ export async function POST(request: Request) {
       }
     }
 
-    // 3. UNLOCKS — pure-code re-evaluation of every gated node.
+    // 3. UNLOCKS — pure-code re-evaluation of every gated node. One merged
+    //    player-visible line; the GM ledger keeps per-node facts.
     const changes = evaluateUnlocks(locationGraph, locState, room.current_round, objProgress);
-    for (const n of changes.unlocked) {
+    if (changes.unlocked.length) {
       locationProgress = true;
       await supabase.from("story_logs").insert({
         room_id: roomId,
         round_number: room.current_round,
         entry_type: "system",
-        content: `🗺 新地點解鎖：${locationShortName(n.name)}`,
+        content: `🗺 新地點解鎖：${changes.unlocked.map((n) => locationShortName(n.name)).join("、")}`,
       });
-      locationLedgerEntries.push({
-        turn: room.current_round,
-        type: "event",
-        character: resolvedActor?.name ?? "Unknown",
-        fact: `解鎖新地點「${locationShortName(n.name)}」`,
-      });
+      for (const n of changes.unlocked) {
+        locationLedgerEntries.push({
+          turn: room.current_round,
+          type: "event",
+          character: resolvedActor?.name ?? "Unknown",
+          fact: `解鎖新地點「${locationShortName(n.name)}」`,
+        });
+      }
     }
 
     // 4. NPC ENCOUNTERS — one-shot triggers that fire when conditions are met.
@@ -1254,15 +1275,7 @@ export async function POST(request: Request) {
         actorNode = dest.id;
         const firstVisit = moved.firstVisit;
         if (firstVisit) {
-          const discovered = moved.discovered;
-          for (const d of discovered) {
-            await supabase.from("story_logs").insert({
-              room_id: roomId,
-              round_number: room.current_round,
-              entry_type: "system",
-              content: `🧭 得知新地點：${locationShortName(d.name)}`,
-            });
-          }
+          // Discovered-but-locked places surface silently on the map panel.
           const nodeImage = dest.node_image?.trim();
           const nodeText = dest.node_text?.trim();
           if (nodeImage || nodeText) {

@@ -1323,7 +1323,7 @@ export function buildLocationBlock(
     lines.push(
       `NEXT TURN'S SCENE (for the 3 suggested choices ONLY): ${scene.nextName} is at ${shortName(nextNodeDef?.name ?? scene.nextNode)}. ` +
       `The choices MUST be actions ${scene.nextName} can take THERE — at that location, or moving to one of ITS exits${nextParts.length ? `（${nextParts.join(" | ")}）` : ""}. ` +
-      `Do NOT write choices set at ${scene.actorName}'s location unless it is the same place.`
+      `Do NOT write choices set at ${scene.actorName}'s location unless it is the same place, and do NOT reference other characters, their discoveries, or what is happening in their scenes — ${scene.nextName} may not even know about those.`
     );
   }
 
