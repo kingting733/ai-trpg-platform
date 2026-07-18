@@ -37,6 +37,49 @@ export function mythosSpellByKey(key: string | null | undefined): MythosSpell | 
 export const MYTHOS_ZH_BY_KEY: Record<string, string> =
   Object.fromEntries(MYTHOS_SPELLS.map((s) => [s.key, s.zh]));
 
+export const MYTHOS_KEY_BY_ZH: Record<string, string> =
+  Object.fromEntries(MYTHOS_SPELLS.map((s) => [s.zh, s.key]));
+
+const CAST_VERB_RE = /(施展|施放|發動|使用|吟唱|唸出|念出|唸誦|念誦|詠唱|唱誦)/;
+// Negated intent (「不要使用萎縮術」「不敢施展」) must NOT cast.
+const CAST_NEGATION_RE = /(不|別|莫|勿|沒|未)(要|敢|能|可|想|會|再)?\s*(施展|施放|發動|使用|吟唱|唸|念|詠唱|唱誦)/;
+
+/**
+ * Deterministic free-text cast detection. The picker sends the key directly,
+ * but players also legitimately TYPE the spell (「對屍鬼施展萎縮術」) or a
+ * tagged form (「[萎縮術] 對準它」). Without this, a typed cast would fall
+ * through to plain narration — no cost, no server effect — and the GM would
+ * narrate magic that mechanically never happened ("server decides" violated).
+ *
+ * Conservative on purpose (repo rule: prefer declining over guessing): fires
+ * only when the actor OWNS the spell AND the text (a) pairs its zh name with a
+ * cast verb, (b) IS essentially just the name, or (c) leads with a [名] tag.
+ * A mere mention (「我想起萎縮術，但不敢用」) has a verb... so note: (a) also
+ * requires the verb — a no-verb mention never casts; a verbed sentence is
+ * accepted as intent, matching how players actually phrase casts.
+ */
+export function detectMythosCastIntent(
+  actionText: string,
+  ownedKeys: string[] | null | undefined,
+): string | null {
+  if (!actionText || !Array.isArray(ownedKeys) || ownedKeys.length === 0) return null;
+  const text = actionText.trim();
+  for (const key of ownedKeys) {
+    const zh = MYTHOS_ZH_BY_KEY[key];
+    if (!zh || !text.includes(zh)) continue;
+    const bare = text.replace(/[\s。！？!?，,、~～]/g, "");
+    if (
+      (CAST_VERB_RE.test(text) && !CAST_NEGATION_RE.test(text)) ||
+      bare === zh ||
+      text.startsWith(`[${zh}]`) ||
+      text.startsWith(`【${zh}】`)
+    ) {
+      return key;
+    }
+  }
+  return null;
+}
+
 /** Every cast burns this much 魔力. No MP → the cast is blocked outright. */
 export const MYTHOS_MP_COST = 3;
 

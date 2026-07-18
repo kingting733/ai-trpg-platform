@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   resolveAction, rollInjuryDamage, rollFirstAidHeal, InjurySeverity,
   detectAttackType, resolveAttack, dodgeValueOf, NPC_DEFAULT_DODGE, AttackResult,
-  resolveFuzzyNpcTarget,
+  resolveFuzzyNpcTarget, resolveSanCheck,
 } from "@/lib/game/resolution";
 import { refreshStorySummary } from "@/lib/ai/summarize";
 import { coerceEndings, evaluateEndings, type ScenarioEnding } from "@/lib/game/endings";
@@ -41,7 +41,7 @@ import {
   type NpcEncounter,
 } from "@/lib/game/locations";
 import { type NpcRef, resolveNpc, npcStateKey, npcStateEntry, npcDisplayName } from "@/lib/game/npc";
-import { mythosSpellByKey, resolveMythosCast, rollShrivellingDamage, MYTHOS_MP_COST } from "@/lib/game/mythos";
+import { mythosSpellByKey, resolveMythosCast, rollShrivellingDamage, detectMythosCastIntent, MYTHOS_MP_COST } from "@/lib/game/mythos";
 import { npcAsAttacker, npcAttackType, coerceDisposition, isNpcHostile } from "@/lib/game/npc-combat";
 import {
   coerceInventory,
@@ -146,7 +146,12 @@ export async function POST(request: Request) {
   // paid even on failure, d100 vs 30+克蘇魯知識, server-applied effects. All
   // refusals happen BEFORE any cost or write, returning a plain 400 the client
   // shows to the player (the turn is not consumed).
-  const mythosSpell = forcedSkill ? mythosSpellByKey(forcedSkill) : null;
+  // Picker key wins; otherwise detect a typed cast (「對屍鬼施展萎縮術」/
+  // bare name / [tag]) among the spells this actor actually owns — without
+  // this, free-text casts would fall through to costless pure narration.
+  const mythosSpell =
+    (forcedSkill ? mythosSpellByKey(forcedSkill) : null) ??
+    mythosSpellByKey(detectMythosCastIntent(actionText, resolvedActor?.mythos_skills));
   let mythosCast: Extract<ReturnType<typeof resolveMythosCast>, { ok: true }> | null = null;
   let mythosTargetName: string | null = null;
   let mythosDirective: string | null = null;
@@ -164,9 +169,19 @@ export async function POST(request: Request) {
           mythosSpell.effect !== "calm" ||
           isNpcHostile(npcStateNow[k], coerceDisposition((resolveNpc(npcDisplayName(k, npcRoster), scenarioNpcs) as any)?.disposition)))
         .map((k) => npcDisplayName(k, npcRoster));
-      const rosterNames = mythosSpell.effect === "calm"
-        ? [] // an untracked roster NPC has never acted hostile — nothing to repel
-        : scenarioNpcs.map((n) => n.name).filter((name) => npcStateEntry(name, npcRoster, npcStateNow)?.alive !== false);
+      // Roster NPCs count too — including UNTRACKED disposition-hostiles for
+      // 遠古印記: the aggression pass attacks from disposition alone (no state
+      // entry needed), so the sign must be able to repel the same creatures
+      // BEFORE their first strike, not only after they're tracked.
+      const rosterNames = scenarioNpcs
+        .map((n) => n.name)
+        .filter((name) => {
+          const st = npcStateEntry(name, npcRoster, npcStateNow);
+          if (st?.alive === false) return false;
+          if (mythosSpell.effect !== "calm") return true;
+          const decl: any = resolveNpc(name, scenarioNpcs);
+          return isNpcHostile(st, coerceDisposition(decl?.disposition));
+        });
       const candidates = Array.from(new Set([...trackedNames, ...rosterNames]));
       mythosTargetName =
         candidates.find((name) => actionText.includes(name)) ??
@@ -372,8 +387,13 @@ export async function POST(request: Request) {
     };
   } else if (mythosCast && mythosSpell && resolvedActor) {
     // ── Mythos cast — costs already rolled; apply them, then the effect ──
+    // The horror SAN check stacks on top of the cast price, exactly like every
+    // other action (casting must not be a way to DODGE the scene's SAN roll).
+    const mythosSanCheck = resolveSanCheck(`${actionText}\n${sceneContext}`, resolvedActor);
+    const horrorLoss = mythosSanCheck?.san_loss ?? 0;
+    const totalSanLoss = Math.min(resolvedActor.san, mythosCast.sanLoss + horrorLoss);
     const newMp = Math.max(0, (resolvedActor.mp ?? 0) - mythosCast.mpCost);
-    const newSan = Math.max(0, resolvedActor.san - mythosCast.sanLoss);
+    const newSan = Math.max(0, resolvedActor.san - totalSanLoss);
     actorBroke = newSan <= 0;
     await admin.from("characters").update({ mp: newMp, san: newSan }).eq("id", resolvedActor.id);
     resolvedActor.mp = newMp;
@@ -447,7 +467,7 @@ export async function POST(request: Request) {
       hp_change: 0,
       san_change: -mythosCast.sanLoss, // informational — already applied above
       consequence_summary: summary,
-      san_check: null,
+      san_check: mythosSanCheck, // separate dice box, same as normal actions
     };
   } else {
     // ── Normal solo action check ──

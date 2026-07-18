@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { currentSkillValue, SKILL_KEY_BY_ZH } from "@/lib/game/skills";
 import { endingAllowsGrowth } from "@/lib/game/endings";
-import { MYTHOS_SPELLS, MYTHOS_ZH_BY_KEY, MYTHOS_MP_COST, mythosSuccessRate } from "@/lib/game/mythos";
+import { MYTHOS_SPELLS, MYTHOS_ZH_BY_KEY, MYTHOS_KEY_BY_ZH, MYTHOS_MP_COST, mythosSuccessRate } from "@/lib/game/mythos";
 import { coerceLocationGraph, coerceLocationState, computeExits, positionOf, type LocationGraph } from "@/lib/game/locations";
 import { ChatDrawer } from "@/components/ChatDrawer";
 
@@ -584,7 +584,11 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     if (typeof choice !== "string" || !choice.trim()) return;
     const m = choice.match(/^\s*[\[【]\s*([^\]】]+?)\s*[\]】]\s*([\s\S]*)$/);
     if (m) {
-      const key = SKILL_KEY_BY_ZH[m[1].trim()] ?? null;
+      // Mythos tags map too — otherwise a clicked 「[萎縮術]」 choice would
+      // submit as free text and cast nothing (the server double-checks
+      // ownership/MP and refuses harmlessly if this actor can't cast it).
+      const tag = m[1].trim();
+      const key = SKILL_KEY_BY_ZH[tag] ?? MYTHOS_KEY_BY_ZH[tag] ?? null;
       submitAction(m[2].trim() || choice, key);
     } else {
       submitAction(choice, null);
