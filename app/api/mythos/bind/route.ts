@@ -8,7 +8,9 @@ import { mythosSpellByKey } from "@/lib/game/mythos";
  * 銘刻 — bind an owned Mythos tome's spell to ONE of the player's cards.
  * IRREVERSIBLE by design (docs/design/mythos-skills-v1.md): there is no
  * unbind route, and since the gacha never duplicates, one tome = one spell =
- * at most one card per account. The spell dies with the card.
+ * at most one card per account. The spell is PERMANENT on the card — cards
+ * persist across rooms and survive in-story death (only the in-room
+ * `characters` instance dies), so the spell stays forever once inscribed.
  */
 export async function POST(req: Request) {
   const supabase = createClient();

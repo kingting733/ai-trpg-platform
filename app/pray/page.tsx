@@ -96,7 +96,7 @@ export default function PrayPage() {
   // 銘刻 a Mythos tome's spell to one card — IRREVERSIBLE (no unbind exists).
   async function bindSpell(itemId: string, cardId: string, cardName: string, spellZh: string) {
     if (working) return;
-    if (!window.confirm(`將禁咒「${spellZh}」銘刻至 ${cardName}？\n\n此舉不可更改——禁咒將永遠跟隨這名調查員，並隨其消亡而失傳。`)) return;
+    if (!window.confirm(`將禁咒「${spellZh}」銘刻至 ${cardName}？\n\n此舉不可更改——禁咒將永久屬於這名調查員（即使在故事中身亡，卡片與禁咒依然保留）。`)) return;
     setWorking(true); setError(null);
     try {
       const res = await fetch("/api/mythos/bind", {
