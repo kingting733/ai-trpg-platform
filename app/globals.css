@@ -105,6 +105,20 @@ body {
    shown in the action's dice-result box). */
 .dice-roll { display: inline-block; font-size: 1.05em; animation: dice-shake 0.55s ease-in-out infinite; }
 .dice-roll::after { content: "\2680"; animation: dice-cycle 0.66s steps(1) infinite; }
+
+/* "你的上一幕" orientation aid — when it becomes your turn we scroll your own
+   previous scene into view and flash it, so with 3 other players between your
+   turns you don't have to hunt for where you left off. The persistent accent
+   (.my-scene) marks your own messages at all times; .scene-flash is the
+   one-shot glow fired on your turn. */
+.my-scene { border-left: 2px solid rgba(201,169,110,0.32); padding-left: 8px; margin-left: -10px; }
+.scene-flash { animation: scene-flash 2.4s ease-out 1; border-radius: 6px; }
+@keyframes scene-flash {
+  0%   { background: rgba(201,169,110,0.00); box-shadow: 0 0 0 0 rgba(201,169,110,0.0); }
+  12%  { background: rgba(201,169,110,0.16); box-shadow: 0 0 0 3px rgba(201,169,110,0.22); }
+  100% { background: rgba(201,169,110,0.00); box-shadow: 0 0 0 0 rgba(201,169,110,0.0); }
+}
+@media (prefers-reduced-motion: reduce) { .scene-flash { animation-duration: 0.01s; } }
 @keyframes dice-shake { 0%, 100% { transform: rotate(-14deg); } 50% { transform: rotate(14deg) translateY(-1px); } }
 @keyframes dice-cycle {
   0%   { content: "\2680"; } 16%  { content: "\2681"; } 33%  { content: "\2682"; }

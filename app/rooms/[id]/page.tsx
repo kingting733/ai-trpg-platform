@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback, useRef, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo, type CSSProperties, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { currentSkillValue, SKILL_KEY_BY_ZH } from "@/lib/game/skills";
@@ -288,6 +288,11 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   const logEndRef = useRef<HTMLDivElement>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const [atBottom, setAtBottom] = useState(true);
+  // "你的上一幕" orientation aid (option 2): DOM nodes of each log entry, so we
+  // can scroll MY last scene into view when it becomes my turn.
+  const sceneRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const prevMyTurnRef = useRef(false);
+  const [flashScene, setFlashScene] = useState(false);
   // Mobile: the suggested-action list can be collapsed to free up the short
   // story window; it re-shows automatically on a new turn.
   const [choicesHidden, setChoicesHidden] = useState(false);
@@ -393,6 +398,43 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     if (atBottom) logEndRef.current?.scrollIntoView({ behavior: "auto" });
   }, [storyLog, streamingText, gmThinking, atBottom]);
+
+  // The ids that make up MY last scene: my most-recent action + the GM
+  // response(s) that answered it (up to my next action). Marked with a
+  // persistent left accent, and flashed on my turn (see below).
+  const myLastSceneIds = useMemo(() => {
+    const set = new Set<string>();
+    const myId = myCharacter?.id;
+    if (!myId) return set;
+    let start = -1;
+    for (let i = storyLog.length - 1; i >= 0; i--) {
+      if (storyLog[i].entry_type === "action" && storyLog[i].character_id === myId) { start = i; break; }
+    }
+    if (start < 0) return set;
+    for (let i = start; i < storyLog.length; i++) {
+      if (i > start && storyLog[i].entry_type === "action") break; // next player's turn begins
+      set.add(storyLog[i].id);
+    }
+    return set;
+  }, [storyLog, myCharacter?.id]);
+
+  // Option 2: when the turn swings back to me (with 3 other players between my
+  // turns my last scene is buried far up the log), scroll it into view and
+  // flash it once so I don't have to hunt. Pure client render aid — no state.
+  const myTurnActive = !!room && room.current_turn_player_id === currentUserId;
+  useEffect(() => {
+    const was = prevMyTurnRef.current;
+    prevMyTurnRef.current = myTurnActive;
+    if (!myTurnActive || was || myLastSceneIds.size === 0) return;
+    const firstId = myLastSceneIds.values().next().value as string | undefined;
+    const el = firstId ? sceneRefs.current.get(firstId) : null;
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    setAtBottom(false); // don't let the follow-the-bottom effect yank me back down
+    setFlashScene(true);
+    const t = setTimeout(() => setFlashScene(false), 2600);
+    return () => clearTimeout(t);
+  }, [myTurnActive, myLastSceneIds, currentUserId, room]);
 
   // Re-show the collapsed suggested actions when a new turn begins.
   useEffect(() => {
@@ -892,8 +934,15 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
               {needsInit ? "準備就緒 — 點擊下方「開始冒險」！" : "等待所有玩家選擇調查員..."}
             </p>
           )}
-          {storyLog.map((entry) => (
-            <div key={entry.id}>
+          {storyLog.map((entry) => {
+            const mine = myLastSceneIds.has(entry.id);
+            const cls = `${mine ? "my-scene" : ""} ${mine && flashScene ? "scene-flash" : ""}`.trim();
+            return (
+            <div
+              key={entry.id}
+              ref={(el) => { if (el) sceneRefs.current.set(entry.id, el); else sceneRefs.current.delete(entry.id); }}
+              className={cls || undefined}
+            >
               {entry.entry_type === "system" && (
                 <p className="text-zinc-600 italic text-xs text-center">{entry.content}</p>
               )}
@@ -931,7 +980,8 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
           {gmThinking && (
             <div className="rounded-lg p-3.5" style={{ background: "rgba(20,16,11,0.5)", border: "1px solid rgba(201,169,110,0.10)" }}>
               <span className="text-xs text-gold/60 font-medium uppercase tracking-wider block mb-1">GM</span>
