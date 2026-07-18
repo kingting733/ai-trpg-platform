@@ -23,7 +23,10 @@ export type ItemEffect =
   /** +N to the growth-check d100 roll. */
   | { type: "interlude_growth_bonus"; value: number }
   /** 禁物 placeholder — no effect yet（效果尚未覺醒）. */
-  | { type: "dormant" };
+  | { type: "dormant" }
+  /** Mythos tome: owning it lets the player 銘刻 (bind) its spell to ONE card,
+   *  irreversibly. No interlude effect — the power lives in the main game. */
+  | { type: "mythos_spell"; spell: string };
 
 export interface ItemDef {
   id: string;
@@ -84,6 +87,18 @@ export const ITEM_POOL: ItemDef[] = [
   { id: "omen_smelling", name: "聞兆", rarity: "epic",
     flavor: "禁術。壞事發生之前，空氣會先變甜。（效果尚未覺醒）",
     effect: { type: "dormant" } },
+
+  // ── Epic / 禁物 — Mythos tomes（禁咒書頁）. Owning one lets the player 銘刻
+  //    its spell to ONE card, irreversibly (docs/design/mythos-skills-v1.md) ──
+  { id: "tome_necronomicon", name: "《死靈之書》斷章", rarity: "epic",
+    flavor: "阿拉伯狂人的手稿殘頁。讀懂那一行的人，指尖從此帶著凋萎的溫度。",
+    effect: { type: "mythos_spell", spell: "shrivelling" } },
+  { id: "tome_de_vermis", name: "《蠕蟲之秘》抄頁", rarity: "epic",
+    flavor: "抄寫者在頁緣畫了一枚五芒星印，墨跡至今未乾。",
+    effect: { type: "mythos_spell", spell: "elder_sign" } },
+  { id: "tome_nameless_cults", name: "《無名祭祀書》殘卷", rarity: "epic",
+    flavor: "記載著向亡者叩問的儀式。回答的聲音，未必來自你呼喚的那一位。",
+    effect: { type: "mythos_spell", spell: "contact_dead" } },
 
   // ── Legendary / 舊神契約 ──
   { id: "floor14_nameplate", name: "第十四層的名牌", rarity: "legendary",
@@ -172,6 +187,7 @@ export function computeMissionModifiers(itemId: string | null | undefined, missi
       mods.growthBonus = e.value;
       break;
     case "dormant":
+    case "mythos_spell": // main-game power; interlude numbers untouched
       break;
   }
   return mods;
@@ -204,5 +220,9 @@ export function effectText(item: ItemDef): string {
       return `幕間成長檢定骰 +${e.value}`;
     case "dormant":
       return "效果尚未覺醒";
+    case "mythos_spell": {
+      const zh: Record<string, string> = { shrivelling: "萎縮術", elder_sign: "遠古印記", contact_dead: "死者絮語" };
+      return `研讀後可將禁咒「${zh[e.spell] ?? e.spell}」銘刻至一名調查員（不可更改）`;
+    }
   }
 }

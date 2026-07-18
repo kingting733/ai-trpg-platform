@@ -63,6 +63,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
   const [failureTurnLimit, setFailureTurnLimit] = useState("");
   const [endingConditions, setEndingConditions] = useState("");
   const [gmNotes, setGmNotes] = useState("");
+  const [mythosKnowledgeReward, setMythosKnowledgeReward] = useState("");
   const [coverImageUrl, setCoverImageUrl] = useState("");
   const [npcs, setNpcs] = useState<NpcEntry[]>([]);
   const [locNodes, setLocNodes] = useState<LocationNode[]>([]);
@@ -121,6 +122,9 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
       setFailureTurnLimit(data.failure_turn_limit != null ? String(data.failure_turn_limit) : "");
       setEndingConditions(data.ending_conditions ?? "");
       setGmNotes(data.gm_notes ?? "");
+      setMythosKnowledgeReward(
+        (data.mythos_reward as any)?.knowledge ? String((data.mythos_reward as any).knowledge) : ""
+      );
       const loadedGraph = coerceLocationGraph(data.location_graph);
       // Retire the legacy free-text `locations`: when this scenario has none of
       // the new graph nodes but does have legacy locations, fold them into
@@ -194,6 +198,11 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
         failure_turn_limit: failureTurnLimit ? parseInt(failureTurnLimit) : null,
         ending_conditions: endingConditions.trim() || null,
         gm_notes: gmNotes.trim() || null,
+        // 克蘇魯知識 ending reward — official-story only; granted server-side on
+        // first clear (docs/design/mythos-skills-v1.md).
+        mythos_reward: Number(mythosKnowledgeReward) > 0
+          ? { knowledge: Math.min(40, Math.floor(Number(mythosKnowledgeReward))) }
+          : null,
         source_document: sourceDocument.trim() || null,
         cover_image_url: coverImageUrl.trim() || null,
         location_graph: locNodes.length
@@ -370,6 +379,16 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
             {gmBanner}
             <Field label="補充主持人備注">
               <textarea value={gmNotes} onChange={(e) => setGmNotes(e.target.value)} rows={4} className={taCls} />
+            </Field>
+
+            <Field label="克蘇魯知識獎勵（官方劇本用；勝利結局首次通關時發給該調查員卡，上限 40；留空 = 不發）">
+              <input
+                type="number" min={0} max={40}
+                value={mythosKnowledgeReward}
+                onChange={(e) => setMythosKnowledgeReward(e.target.value)}
+                placeholder="例：10"
+                className={taCls}
+              />
             </Field>
 
             {/* NPCs */}

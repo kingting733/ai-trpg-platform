@@ -14,6 +14,8 @@ interface CharacterCard {
   rarity: "Common" | "Rare" | "Epic" | "Legendary";
   skills: Record<string, number> | null;
   occupation: string | null;
+  cthulhu_knowledge?: number | null;
+  mythos_skills?: string[] | null;
 }
 
 const OCCUPATION_ICON: Record<string, string> = {
@@ -105,6 +107,7 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
         str: card.str, con: card.con, siz: card.siz, dex: card.dex,
         app: card.app, int: card.int, pow: card.pow, edu: card.edu,
         luck: card.luck, skills: card.skills ?? {}, occupation: card.occupation ?? null,
+        cthulhu_knowledge: card.cthulhu_knowledge ?? 0, mythos_skills: card.mythos_skills ?? [],
       })
       .select("id").single();
 

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { currentSkillValue, SKILL_KEY_BY_ZH } from "@/lib/game/skills";
 import { endingAllowsGrowth } from "@/lib/game/endings";
+import { MYTHOS_SPELLS, MYTHOS_ZH_BY_KEY, MYTHOS_MP_COST, mythosSuccessRate } from "@/lib/game/mythos";
 import { coerceLocationGraph, coerceLocationState, computeExits, positionOf, type LocationGraph } from "@/lib/game/locations";
 import { ChatDrawer } from "@/components/ChatDrawer";
 
@@ -16,6 +17,8 @@ interface Character {
   int: number; pow: number; edu: number; luck: number;
   skills: Record<string, number> | null;
   occupation: string | null;
+  cthulhu_knowledge?: number | null;
+  mythos_skills?: string[] | null;
 }
 
 interface RollResult {
@@ -520,6 +523,20 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           forcedSkill: forcedSkill ?? null,
         }),
       });
+      // A refusal (e.g. a Mythos cast blocked: no MP / no target) is a plain
+      // JSON error BEFORE any game write — the turn was NOT consumed. Restore
+      // the input so the player can adjust and resend.
+      if (!res.ok) {
+        const j = await res.json().catch(() => null);
+        if (j?.error) window.alert(j.error);
+        setActionText(finalText);
+        setSelectedSkill(forcedSkill ?? null);
+        setGmThinking(false);
+        setStreamingText(null);
+        setSubmitting(false);
+        streamingRef.current = false;
+        return;
+      }
       const reader = res.body?.getReader();
       if (reader) {
         const decoder = new TextDecoder();
@@ -1093,7 +1110,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                 title="選擇要使用的技能（可選）"
               >
                 <span>🎲</span>
-                <span className="whitespace-nowrap">{selectedSkill ? (SKILL_ZH[selectedSkill] ?? selectedSkill) : "技能"}</span>
+                <span className="whitespace-nowrap">{selectedSkill ? (SKILL_ZH[selectedSkill] ?? MYTHOS_ZH_BY_KEY[selectedSkill] ?? selectedSkill) : "技能"}</span>
                 <span className="text-[10px] opacity-70">▾</span>
               </button>
 
@@ -1108,6 +1125,32 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                   >
                     自動偵測（依行動文字判斷）
                   </button>
+                  {/* 禁咒 — shown ONLY when this card has Mythos spells bound.
+                      Success = 30 + 克蘇魯知識; every cast costs 1d4 SAN + 3 MP. */}
+                  {(myCharacter?.mythos_skills?.length ?? 0) > 0 && (
+                    <div className="mt-1.5">
+                      <p className="text-[10px] uppercase tracking-wider px-2 py-1" style={{ color: "rgba(155,120,190,0.75)" }}>禁咒 · 神話法術</p>
+                      {MYTHOS_SPELLS.filter((s) => myCharacter!.mythos_skills!.includes(s.key)).map((s) => {
+                        const rate = mythosSuccessRate(myCharacter?.cthulhu_knowledge);
+                        const active = selectedSkill === s.key;
+                        const noMp = (myCharacter?.mp ?? 0) < MYTHOS_MP_COST;
+                        return (
+                          <button
+                            key={s.key}
+                            type="button"
+                            disabled={noMp}
+                            title={noMp ? `魔力不足（需要 ${MYTHOS_MP_COST}）` : s.desc}
+                            onClick={() => { setSelectedSkill(s.key); setSkillMenuOpen(false); }}
+                            className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-sm hover:brightness-125 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                            style={{ background: active ? "rgba(155,120,190,0.16)" : "transparent", color: active ? "#d9c8ec" : "#b3a1c6" }}
+                          >
+                            <span>🜏 {s.zh}</span>
+                            <span className="tabular-nums text-[11px]" style={{ color: "#9b78be" }}>{rate}%＋代價</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                   {SKILL_PICKER.map((group) => (
                     <div key={group.label} className="mt-1.5">
                       <p className="text-[10px] uppercase tracking-wider px-2 py-1" style={{ color: "rgba(201,169,110,0.5)" }}>{group.label}</p>
@@ -1155,7 +1198,11 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           </div>
           {selectedSkill && (
             <p className="text-[11px] text-zinc-500 pl-1">
-              將以 <span className="text-gold">{SKILL_ZH[selectedSkill] ?? selectedSkill}</span> 進行檢定 ——
+              {MYTHOS_ZH_BY_KEY[selectedSkill] ? (
+                <>將施展禁咒 <span style={{ color: "#b18cd4" }}>{MYTHOS_ZH_BY_KEY[selectedSkill]}</span>（消耗 1d4 理智＋{MYTHOS_MP_COST} 魔力，失敗亦然）——</>
+              ) : (
+                <>將以 <span className="text-gold">{SKILL_ZH[selectedSkill] ?? selectedSkill}</span> 進行檢定 ——</>
+              )}
               <button type="button" onClick={() => setSelectedSkill(null)} className="ml-1 underline hover:text-zinc-300">改回自動</button>
             </p>
           )}

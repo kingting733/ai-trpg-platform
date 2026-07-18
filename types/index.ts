@@ -85,6 +85,9 @@ export interface Character {
   luck: number;
   // Skill allocations (set once during card rolling)
   skills: Record<string, number> | null;
+  // Mythos (docs/design/mythos-skills-v1.md) — mirrored from the source card.
+  cthulhu_knowledge?: number | null;
+  mythos_skills?: string[] | null;
   created_at: string;
 }
 

@@ -41,6 +41,7 @@ import {
   type NpcEncounter,
 } from "@/lib/game/locations";
 import { type NpcRef, resolveNpc, npcStateKey, npcStateEntry, npcDisplayName } from "@/lib/game/npc";
+import { mythosSpellByKey, resolveMythosCast, rollShrivellingDamage, MYTHOS_MP_COST } from "@/lib/game/mythos";
 import { npcAsAttacker, npcAttackType, coerceDisposition, isNpcHostile } from "@/lib/game/npc-combat";
 import {
   coerceInventory,
@@ -140,7 +141,56 @@ export async function POST(request: Request) {
   let attackSystemLog: string | null = null;
   const attackLedgerEntries: LedgerEntry[] = [];
 
-  const attackType = resolvedActor ? detectAttackType(actionText) : null;
+  // === MYTHOS CAST (禁咒) — docs/design/mythos-skills-v1.md ===
+  // A mythos key in forcedSkill takes over the whole resolution: 1d4 SAN + 3 MP
+  // paid even on failure, d100 vs 30+克蘇魯知識, server-applied effects. All
+  // refusals happen BEFORE any cost or write, returning a plain 400 the client
+  // shows to the player (the turn is not consumed).
+  const mythosSpell = forcedSkill ? mythosSpellByKey(forcedSkill) : null;
+  let mythosCast: Extract<ReturnType<typeof resolveMythosCast>, { ok: true }> | null = null;
+  let mythosTargetName: string | null = null;
+  let mythosDirective: string | null = null;
+  if (mythosSpell && resolvedActor) {
+    const knownSpells: string[] = Array.isArray(resolvedActor.mythos_skills) ? resolvedActor.mythos_skills : [];
+    if (!knownSpells.includes(mythosSpell.key)) {
+      return NextResponse.json({ error: `${resolvedActor.name} 未曾銘刻「${mythosSpell.zh}」。` }, { status: 400 });
+    }
+    if (mythosSpell.needsTarget) {
+      // Same conservative chain as attacks: exact name → fuzzy → sole candidate.
+      // 遠古印記 only ever targets a hostile; 萎縮術 targets any living NPC.
+      const trackedNames = Object.keys(npcStateNow)
+        .filter((k) => npcStateNow[k]?.alive !== false)
+        .filter((k) =>
+          mythosSpell.effect !== "calm" ||
+          isNpcHostile(npcStateNow[k], coerceDisposition((resolveNpc(npcDisplayName(k, npcRoster), scenarioNpcs) as any)?.disposition)))
+        .map((k) => npcDisplayName(k, npcRoster));
+      const rosterNames = mythosSpell.effect === "calm"
+        ? [] // an untracked roster NPC has never acted hostile — nothing to repel
+        : scenarioNpcs.map((n) => n.name).filter((name) => npcStateEntry(name, npcRoster, npcStateNow)?.alive !== false);
+      const candidates = Array.from(new Set([...trackedNames, ...rosterNames]));
+      mythosTargetName =
+        candidates.find((name) => actionText.includes(name)) ??
+        resolveFuzzyNpcTarget(actionText, candidates) ??
+        (candidates.length === 1 ? candidates[0] : null);
+      if (!mythosTargetName) {
+        return NextResponse.json({
+          error: mythosSpell.effect === "calm"
+            ? `「${mythosSpell.zh}」需要一個敵對的目標——此刻無物可退。`
+            : `「${mythosSpell.zh}」需要指明一個目標（在行動中寫出對象名字）。`,
+        }, { status: 400 });
+      }
+    }
+    if ((resolvedActor.mp ?? 0) < MYTHOS_MP_COST) {
+      return NextResponse.json({ error: `魔力不足——施展「${mythosSpell.zh}」需要 ${MYTHOS_MP_COST} 點魔力。` }, { status: 400 });
+    }
+    const cast = resolveMythosCast(mythosSpell, resolvedActor);
+    if (!cast.ok) {
+      return NextResponse.json({ error: `魔力不足——施展「${mythosSpell.zh}」需要 ${MYTHOS_MP_COST} 點魔力。` }, { status: 400 });
+    }
+    mythosCast = cast;
+  }
+
+  const attackType = resolvedActor && !mythosCast ? detectAttackType(actionText) : null;
 
   // Find an attack target named in the action: a living roster character (not self)
   // first, otherwise a known living NPC.
@@ -319,6 +369,85 @@ export async function POST(request: Request) {
       consequence_summary: hitLabel,
       san_check: null,
       attack,
+    };
+  } else if (mythosCast && mythosSpell && resolvedActor) {
+    // ── Mythos cast — costs already rolled; apply them, then the effect ──
+    const newMp = Math.max(0, (resolvedActor.mp ?? 0) - mythosCast.mpCost);
+    const newSan = Math.max(0, resolvedActor.san - mythosCast.sanLoss);
+    actorBroke = newSan <= 0;
+    await admin.from("characters").update({ mp: newMp, san: newSan }).eq("id", resolvedActor.id);
+    resolvedActor.mp = newMp;
+    resolvedActor.san = newSan;
+
+    const succeeded = mythosCast.outcome === "success" || mythosCast.outcome === "critical_success";
+    const costNote = `理智 −${mythosCast.sanLoss}，魔力 −${mythosCast.mpCost}`;
+
+    if (succeeded && mythosSpell.effect === "damage" && mythosTargetName) {
+      // Shrivelling damage — same NPC-hp authority path as attacks, no dodge.
+      const damage = rollShrivellingDamage(mythosCast.outcome);
+      const npcStates = { ...npcStateNow };
+      const stateKey = npcStateKey(mythosTargetName, npcRoster);
+      let npc = npcStateEntry(mythosTargetName, npcRoster, npcStates);
+      if (!npc) {
+        const declared = resolveNpc(mythosTargetName, scenarioNpcs);
+        const maxHp = declared && typeof declared.hp === "number" ? declared.hp : 10;
+        npc = { hp: maxHp, max_hp: maxHp, alive: true };
+      }
+      npc = { ...npc, hp: Math.max(0, npc.hp - damage) };
+      if (npc.hp <= 0) npc.alive = false;
+      // Surviving victims of forbidden magic turn hostile (same as being attacked).
+      if (npc.alive) (npc as any).stance = "hostile";
+      npcStates[stateKey] = npc;
+      await supabase.from("rooms").update({ npc_states: npcStates }).eq("id", roomId);
+      npcStateNow = npcStates;
+      attackSystemLog = npc.alive
+        ? `🜏 ${mythosTargetName} 被 ${resolvedActor.name} 的「${mythosSpell.zh}」灼傷（−${damage} HP，剩餘 ${npc.hp}/${npc.max_hp}）`
+        : `☠ ${mythosTargetName} 在「${mythosSpell.zh}」下凋萎而亡。`;
+      attackLedgerEntries.push({
+        turn: room.current_round, type: npc.alive ? "event" : "death", character: mythosTargetName,
+        fact: npc.alive
+          ? `被 ${resolvedActor.name} 的禁咒「${mythosSpell.zh}」灼傷（−${damage} HP）`
+          : `被 ${resolvedActor.name} 的禁咒「${mythosSpell.zh}」殺死`,
+      });
+      mythosDirective = `MYTHOS SPELL (authoritative): ${resolvedActor.name} 成功施展禁咒「${mythosSpell.zh}」，${mythosTargetName} 受到 ${damage} 點傷害${npc.alive ? "" : "並已死亡"}. Narrate unnatural, withering harm — flesh desiccating, warmth draining. The mechanical outcome above is final.`;
+    } else if (succeeded && mythosSpell.effect === "calm" && mythosTargetName) {
+      // Elder Sign — repels even the social_immune; stance → neutral.
+      const key = npcStateKey(mythosTargetName, npcRoster);
+      const cur: any = npcStateNow[key] ?? npcStateEntry(mythosTargetName, npcRoster, npcStateNow) ?? { hp: 10, max_hp: 10, alive: true };
+      npcStateNow = { ...npcStateNow, [key]: { ...cur, stance: "neutral" } };
+      await supabase.from("rooms").update({ npc_states: npcStateNow }).eq("id", roomId);
+      attackSystemLog = `🜏 ${resolvedActor.name} 舉起「${mythosSpell.zh}」，${mythosTargetName} 退避了，不再敵對。`;
+      attackLedgerEntries.push({
+        turn: room.current_round, type: "event", character: mythosTargetName,
+        fact: `被 ${resolvedActor.name} 的「${mythosSpell.zh}」逼退，不再敵對`,
+      });
+      mythosDirective = `MYTHOS SPELL (authoritative): ${resolvedActor.name} 成功以「${mythosSpell.zh}」逼退 ${mythosTargetName} — it recoils from the sign and ceases hostility. Narrate its unwilling, unnatural retreat.`;
+    } else if (succeeded && mythosSpell.effect === "reveal") {
+      mythosDirective = `MYTHOS REVEAL (authoritative): ${resolvedActor.name} 成功施展「${mythosSpell.zh}」— the dead answer. Reveal exactly ONE true, GM-internal piece of information relevant to the CURRENT scene (a hidden truth of this place, an entry from NPC KNOWLEDGE, or the meaning of a clue already found), delivered as whispers of the dead. Do NOT invent new mechanical facts, locations, or items — only surface a truth that already exists in your briefing.`;
+    } else if (mythosCast.outcome === "fumble") {
+      mythosDirective = `MYTHOS BACKLASH (authoritative): ${resolvedActor.name} 施展「${mythosSpell.zh}」大失敗，禁咒反噬（額外理智損失已由系統扣除，共 −${mythosCast.sanLoss} SAN）. Narrate an EXTREME, terrifying manifestation — the magic twists back on the caster: visions, wrongness, something noticing them. Do NOT apply further mechanical harm; the system already has.`;
+    } else {
+      mythosDirective = `MYTHOS SPELL: ${resolvedActor.name} 施展「${mythosSpell.zh}」失敗——咒文散逸，代價仍已付出（${costNote}）. Narrate the fizzle: the words falter, the power slips away, the toll on mind and body remains.`;
+    }
+
+    const summary =
+      mythosCast.outcome === "fumble"
+        ? `大失敗 — 禁咒反噬！（${costNote}）`
+        : succeeded
+        ? mythosCast.outcome === "critical_success"
+          ? `大成功 — 禁咒完美生效（${costNote}）`
+          : `成功 — 禁咒生效（${costNote}）`
+        : `失敗 — 咒文散逸，代價已付（${costNote}）`;
+    roll = {
+      requires_check: true,
+      stat_used: mythosSpell.zh,
+      target: mythosCast.target,
+      d100_roll: mythosCast.roll,
+      outcome: mythosCast.outcome === "fumble" ? "critical_failure" : mythosCast.outcome,
+      hp_change: 0,
+      san_change: -mythosCast.sanLoss, // informational — already applied above
+      consequence_summary: summary,
+      san_check: null,
     };
   } else {
     // ── Normal solo action check ──
@@ -1134,6 +1263,7 @@ export async function POST(request: Request) {
       : null,
     npcKnowledgeDirective,
     actorLastScene,
+    mythosDirective,
     itemsAwardedDirective: evidenceAwardedThisTurn.length
       ? `ITEMS AWARDED THIS TURN (the system already granted these to the party as a result of this action — the character now physically has them; you MUST work each pickup naturally into your narration, describing them noticing/finding/taking the item. Do NOT omit any, and do NOT invent items that are not listed):\n${evidenceAwardedThisTurn
           .map((e) => `- ${e.name}`)

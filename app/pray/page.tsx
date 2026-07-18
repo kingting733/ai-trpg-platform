@@ -25,7 +25,7 @@ const RARITY_STYLE: Record<ItemRarity, { color: string; glow: string; chip: stri
 };
 const RARITY_ORDER: ItemRarity[] = ["legendary", "epic", "rare", "common"];
 
-interface CardLite { id: string; name: string; equipped_item: string | null }
+interface CardLite { id: string; name: string; equipped_item: string | null; mythos_skills: string[] | null }
 
 export default function PrayPage() {
   const router = useRouter();
@@ -46,7 +46,7 @@ export default function PrayPage() {
     const [{ data: u }, { data: items }, { data: cardRows }] = await Promise.all([
       supabase.from("users").select("points").eq("id", user.id).single(),
       supabase.from("user_items").select("item_id").eq("user_id", user.id),
-      supabase.from("character_cards").select("id,name,equipped_item").eq("user_id", user.id).order("created_at", { ascending: false }),
+      supabase.from("character_cards").select("id,name,equipped_item,mythos_skills").eq("user_id", user.id).order("created_at", { ascending: false }),
     ]);
     setPoints(u?.points ?? 0);
     setOwned(new Set((items ?? []).map((r: any) => r.item_id as string)));
@@ -93,9 +93,28 @@ export default function PrayPage() {
     setWorking(false);
   }
 
+  // 銘刻 a Mythos tome's spell to one card — IRREVERSIBLE (no unbind exists).
+  async function bindSpell(itemId: string, cardId: string, cardName: string, spellZh: string) {
+    if (working) return;
+    if (!window.confirm(`將禁咒「${spellZh}」銘刻至 ${cardName}？\n\n此舉不可更改——禁咒將永遠跟隨這名調查員，並隨其消亡而失傳。`)) return;
+    setWorking(true); setError(null);
+    try {
+      const res = await fetch("/api/mythos/bind", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId, cardId }),
+      });
+      if (!res.ok) setError((await res.json()).error ?? "銘刻失敗。");
+      else await load();
+    } catch { setError("網路錯誤，請再試一次。"); }
+    setWorking(false);
+  }
+
   if (loading) return <div className="text-center text-zinc-600 py-24">香爐正在點燃…</div>;
 
   const wearerOf = (itemId: string) => cards.find((c) => c.equipped_item === itemId) ?? null;
+  const spellBearerOf = (spellKey: string) =>
+    cards.find((c) => Array.isArray(c.mythos_skills) && c.mythos_skills.includes(spellKey)) ?? null;
 
   return (
     <div className="max-w-5xl mx-auto pb-16">
@@ -209,6 +228,29 @@ export default function PrayPage() {
                         <>
                           <p className="text-[11px] text-zinc-600 italic leading-snug mb-1.5">{item.flavor}</p>
                           <p className="text-[11px] mb-2" style={{ color: "#cbb890" }}>{effectText(item)}</p>
+                          {item.effect.type === "mythos_spell" ? (() => {
+                            const spellKey = item.effect.spell;
+                            const zh = { shrivelling: "萎縮術", elder_sign: "遠古印記", contact_dead: "死者絮語" }[spellKey] ?? spellKey;
+                            const bearer = spellBearerOf(spellKey);
+                            return bearer ? (
+                              <p className="text-[11px]" style={{ color: "#b18cd4" }}>🜏 已銘刻於 {bearer.name}（不可更改）</p>
+                            ) : (
+                              <select
+                                value=""
+                                onChange={(e) => {
+                                  const c = cards.find((x) => x.id === e.target.value);
+                                  if (c) bindSpell(item.id, c.id, c.name, zh);
+                                }}
+                                disabled={working}
+                                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none disabled:opacity-50"
+                              >
+                                <option value="">銘刻至調查員…（不可更改）</option>
+                                {cards.map((c) => (
+                                  <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                              </select>
+                            );
+                          })() : (
                           <select
                             value={wearer?.id ?? ""}
                             onChange={(e) => equip(item.id, e.target.value || null)}
@@ -222,6 +264,7 @@ export default function PrayPage() {
                               </option>
                             ))}
                           </select>
+                          )}
                         </>
                       ) : (
                         <p className="text-[11px] text-zinc-700 italic">尚未從煙霧中歸來。</p>

@@ -8,6 +8,7 @@ import {
   currentSkillValue,
 } from "@/lib/game/skills";
 import { endingAllowsGrowth } from "@/lib/game/endings";
+import { KNOWLEDGE_CAP } from "@/lib/game/mythos";
 
 const d = (sides: number) => Math.floor(Math.random() * sides) + 1;
 
@@ -43,7 +44,7 @@ async function computeEligible(
 
   const { data: card } = await supabase
     .from("character_cards")
-    .select("id, user_id, skills, dex, app, cleared_scenarios")
+    .select("id, user_id, skills, dex, app, cleared_scenarios, cthulhu_knowledge")
     .eq("id", character.source_card_id)
     .single();
   if (!card) return { error: "找不到來源調查員。", status: 404 as const };
@@ -51,17 +52,41 @@ async function computeEligible(
 
   // Winning the story marks the scenario as cleared on the card — independent of
   // whether any skill is eligible for growth. Idempotent (dedup the array).
+  let knowledgeGained = 0;
   if (scenarioId) {
     const cleared: string[] = Array.isArray(card.cleared_scenarios) ? card.cleared_scenarios : [];
     if (!cleared.includes(scenarioId)) {
+      // Official-story Mythos reward: 克蘇魯知識 grows ONLY here — on the FIRST
+      // clear of a scenario that declares mythos_reward (author-only field).
+      // Capped at KNOWLEDGE_CAP; replays grant nothing (first-clear gate).
+      const { data: scen } = await supabase
+        .from("scenarios").select("mythos_reward, creator_id").eq("id", scenarioId).single();
+      // OFFICIAL STORIES ONLY: any creator can type a reward into the editor,
+      // but the server pays out only when the scenario's creator is listed in
+      // MYTHOS_OFFICIAL_CREATORS (comma-separated user ids). Unset → nobody.
+      const officialCreators = (process.env.MYTHOS_OFFICIAL_CREATORS ?? "")
+        .split(",").map((s) => s.trim()).filter(Boolean);
+      const isOfficial = !!scen?.creator_id && officialCreators.includes(scen.creator_id);
+      const declaredK = Number((scen?.mythos_reward as any)?.knowledge) || 0;
+      if (declaredK > 0 && !isOfficial) {
+        console.warn(`[mythos:reward] scenario ${scenarioId} declares knowledge=${declaredK} but creator ${scen?.creator_id} is not in MYTHOS_OFFICIAL_CREATORS — not granted`);
+      }
+      const rewardK = isOfficial ? declaredK : 0;
+      const curK = typeof card.cthulhu_knowledge === "number" ? card.cthulhu_knowledge : 0;
+      const newK = Math.min(KNOWLEDGE_CAP, curK + Math.max(0, rewardK));
+      knowledgeGained = newK - curK;
       // Service-role: character_cards has no client UPDATE policy after
       // hardening. Ownership (card.user_id === userId) is checked above.
       await createAdminClient()
         .from("character_cards")
-        .update({ cleared_scenarios: [...cleared, scenarioId] })
+        .update({
+          cleared_scenarios: [...cleared, scenarioId],
+          ...(knowledgeGained > 0 ? { cthulhu_knowledge: newK } : {}),
+        })
         .eq("id", card.id)
         .eq("user_id", userId);
       card.cleared_scenarios = [...cleared, scenarioId];
+      card.cthulhu_knowledge = newK;
     }
   }
 
@@ -103,7 +128,7 @@ async function computeEligible(
     .filter((s) => s.current < SKILL_CAP) // already maxed → nothing to gain
     .sort((a, b) => a.current - b.current);
 
-  return { card, character, eligible, claim: claim ?? null, attrs, skills, scenarioId };
+  return { card, character, eligible, claim: claim ?? null, attrs, skills, scenarioId, knowledgeGained };
 }
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
@@ -118,6 +143,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     eligible: result.eligible,
     claim: result.claim,
     alreadyClaimed: result.claim !== null,
+    // 克蘇魯知識 granted just now (first clear of a mythos_reward story); 0 otherwise.
+    knowledgeGained: result.knowledgeGained,
   });
 }
 
