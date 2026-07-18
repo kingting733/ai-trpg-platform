@@ -94,31 +94,25 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
   async function confirmCard() {
     if (!selectedId) return;
     setConfirming(true); setError(null);
-    const card = cards.find((c) => c.id === selectedId)!;
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push("/login"); return; }
 
-    const { data: newChar, error: insertErr } = await supabase
-      .from("characters")
-      .insert({
-        user_id: user.id, room_id: params.id, source_card_id: card.id,
-        name: card.name, hp: card.hp, san: card.san, mp: card.mp,
-        str: card.str, con: card.con, siz: card.siz, dex: card.dex,
-        app: card.app, int: card.int, pow: card.pow, edu: card.edu,
-        luck: card.luck, skills: card.skills ?? {}, occupation: card.occupation ?? null,
-        cthulhu_knowledge: card.cthulhu_knowledge ?? 0, mythos_skills: card.mythos_skills ?? [],
-      })
-      .select("id").single();
-
-    if (insertErr || !newChar) {
-      setError(insertErr?.message ?? "Failed to select card.");
+    // SECURITY: the server derives every stat from the card row itself — the
+    // client only names WHICH card (phase-2 hardening; direct `characters`
+    // inserts are policy-blocked).
+    try {
+      const res = await fetch(`/api/rooms/${params.id}/select-card`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cardId: selectedId }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => null);
+        setError(j?.error ?? "Failed to select card.");
+        setConfirming(false); return;
+      }
+    } catch {
+      setError("網路錯誤，請再試一次。");
       setConfirming(false); return;
     }
-
-    await supabase.from("room_players")
-      .update({ character_id: newChar.id })
-      .eq("room_id", params.id).eq("user_id", user.id);
 
     router.push(`/rooms/${params.id}`);
   }

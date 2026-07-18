@@ -1,8 +1,14 @@
 # Security Hardening Pass
 
 Status: **Phase 1 EXECUTED** (2026-07-13) — code shipped + `harden_rls.sql`
-written. **Phase 2 (INSERT-forge vectors) still open** — see the bottom of
-`harden_rls.sql`; do before a truly open/public launch.
+written. **Phase 2 EXECUTED in code** (2026-07-18) — character creation moved
+server-side (`/api/rooms/[id]/select-card` + `/api/rooms/[id]/create-character`
+derive every stat server-side; the client only names the card / the name), and
+`harden_rls_phase2.sql` drops all client INSERT policies on `characters` plus
+any INSERT/UPDATE on `character_cards`. **Run `harden_rls_phase2.sql` AFTER the
+code deploy** — running it first breaks character creation. Motivating urgency:
+with Mythos v1, the old client-side insert could forge `cthulhu_knowledge` /
+`mythos_skills` (free spells at 70% cast rate), not just hp/skills.
 
 ## Deploy order (IMPORTANT)
 1. `SUPABASE_SERVICE_ROLE_KEY` must be set in Vercel (it already is — the daily

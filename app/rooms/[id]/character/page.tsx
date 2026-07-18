@@ -37,47 +37,25 @@ export default function CharacterCreationPage({ params }: { params: { id: string
     setLoading(true);
     setError(null);
 
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push("/login"); return; }
-
-    // Default stats: all core stats at 50, derived values calculated.
-    const defaults = {
-      str: 50, con: 50, siz: 65, dex: 50, app: 50,
-      int: 65, pow: 50, edu: 65, luck: 50,
-      hp: 11,  // floor((50+65)/10)
-      san: 50, // = pow
-      mp: 10,  // floor(50/5)
-      skills: {},
-    };
-
-    const { error: insertError } = await supabase.from("characters").insert({
-      user_id: user.id,
-      room_id: params.id,
-      name: charName.trim(),
-      background: background.trim() || null,
-      ...defaults,
-    });
-
-    if (insertError) {
-      setError(insertError.message);
+    // SECURITY: the default statline is applied server-side — the client sends
+    // only name + background (phase-2 hardening; direct `characters` inserts
+    // are policy-blocked).
+    try {
+      const res = await fetch(`/api/rooms/${params.id}/create-character`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: charName.trim(), background: background.trim() }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => null);
+        setError(j?.error ?? "建立角色失敗。");
+        setLoading(false);
+        return;
+      }
+    } catch {
+      setError("網路錯誤，請再試一次。");
       setLoading(false);
       return;
-    }
-
-    const { data: char } = await supabase
-      .from("characters")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("room_id", params.id)
-      .single();
-
-    if (char) {
-      await supabase
-        .from("room_players")
-        .update({ character_id: char.id })
-        .eq("room_id", params.id)
-        .eq("user_id", user.id);
     }
 
     router.push(`/rooms/${params.id}`);
