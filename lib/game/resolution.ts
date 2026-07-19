@@ -281,20 +281,27 @@ const RANGED_ATTACK_KEYWORDS = [
 
 // Trained-fighting verbs → roll 搏鬥 (higher damage). Includes the generic
 // "attack" verbs. NOTE: bare "打" is intentionally EXCLUDED — it false-positives
-// on 打開/打掃/打字/打電話/打聽 — so only unambiguous compounds are listed.
+// on 打開/打掃/打字/打電話/打聽. Risky single chars are likewise excluded in
+// favour of unambiguous compounds: bare 殺 (殺價 = haggle), 刺 (諷刺), 砍
+// (砍價), 咬 (咬緊牙關), 踢 (踢到鐵板), 捅 (捅婁子) all false-positive on
+// ordinary sentences.
 const FIGHTING_ATTACK_KEYWORDS = [
   "attack", "kill",
   "punch", "brawl", "fight", "grapple", "wrestle", "strike", "melee",
   "knife", "stab", "swing at", "tackle", "beat up", "slash", "kick",
-  "搏鬥", "打鬥", "肉搏", "毆打", "揮拳", "出拳", "扭打", "近身", "刺", "捅", "打架",
-  "攻擊", "攻打", "襲擊", "撲向", "砍", "斬", "劈", "踢", "揍", "咬", "痛打",
-  "打死", "打傷", "殺",
+  "搏鬥", "打鬥", "肉搏", "毆打", "揮拳", "出拳", "扭打", "打架",
+  "攻擊", "攻打", "襲擊", "撲向", "揍", "痛打", "打死", "打傷",
+  "殺死", "殺掉", "殺了", "殺害", "追殺", "格殺", "砍殺", "刺殺",
+  "刺向", "猛刺", "捅向", "捅死", "砍向", "砍死", "斬向", "劈向", "揮刀",
+  "踢向", "飛踢", "踹", "咬向", "咬住", "咬死", "撕咬",
 ];
 
-// Raw brute-force verbs → roll STR (lower damage).
+// Raw brute-force verbs → roll STR (lower damage). Bare 勒 (勒索 = extortion)
+// and 撕 (撕開信封) are excluded for the same reason as above.
 const STR_ATTACK_KEYWORDS = [
   "smash", "bash", "slam", "crush", "choke", "strangle", "throw at", "headbutt",
-  "砸", "撞擊", "掐", "扼", "勒", "摔", "猛力", "撕", "壓制", "扳斷",
+  "砸向", "砸死", "撞擊", "掐住", "掐死", "扼住", "勒住", "勒緊", "勒斃",
+  "摔向", "猛力", "撕裂", "壓制", "扳斷",
 ];
 
 /**
@@ -308,6 +315,22 @@ export function detectAttackType(text: string): AttackType | null {
   if (FIGHTING_ATTACK_KEYWORDS.some((k) => t.includes(k))) return "fighting";
   if (STR_ATTACK_KEYWORDS.some((k) => t.includes(k))) return "str";
   return null;
+}
+
+/**
+ * Attack detection for scenes with named combatants. A combatant NAME that
+ * contains an attack keyword (殺人犯, 刺青師傅) must not turn every mention of
+ * that person into an attack — so all known names are stripped from the text
+ * BEFORE the keyword scan. Target resolution still runs on the ORIGINAL text
+ * (the name is how the target is found); only detection ignores it.
+ */
+export function detectAttackTypeForTargets(text: string, combatantNames: string[]): AttackType | null {
+  let t = text;
+  // Longest first, so 「殺人犯阿強」-style overlapping names strip cleanly.
+  for (const name of [...combatantNames].filter(Boolean).sort((a, b) => b.length - a.length)) {
+    t = t.split(name).join("");
+  }
+  return detectAttackType(t);
 }
 
 function attackSkillValue(type: AttackType, char: CheckCharacter): number {

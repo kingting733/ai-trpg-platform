@@ -164,6 +164,18 @@ export interface LocationState {
 
 const STATUSES: LocationStatus[] = ["hidden", "discovered", "unlocked"];
 
+/** Hard size caps applied during coercion. Anything beyond a cap is silently
+ *  dropped by the slice — so the validator warns when a graph SITS AT a cap
+ *  (the author may have lost content without any error). */
+export const GRAPH_CAPS = {
+  nodes: 40,
+  containers: 12,
+  edges: 120,
+  npc_placements: 100,
+  npc_encounters: 50,
+  evidence_per_node: 20,
+} as const;
+
 function asStr(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
 }
@@ -191,7 +203,7 @@ function coerceEvidence(v: unknown): EvidenceDef[] {
       reveal_image: asStr(e.reveal_image) || undefined,
       reveal_text: asStr(e.reveal_text) || undefined,
     }))
-    .slice(0, 20);
+    .slice(0, GRAPH_CAPS.evidence_per_node);
 }
 
 function coerceNpcPlacements(v: unknown): NpcPlacement[] {
@@ -203,7 +215,7 @@ function coerceNpcPlacements(v: unknown): NpcPlacement[] {
       at: asStr(p.at),
       when: coerceUnlock(p.when),
     }))
-    .slice(0, 100);
+    .slice(0, GRAPH_CAPS.npc_placements);
 }
 
 function coerceNpcEncounters(v: unknown): NpcEncounter[] {
@@ -215,7 +227,7 @@ function coerceNpcEncounters(v: unknown): NpcEncounter[] {
       when: coerceUnlock(e.when),
       beat: asStr(e.beat),
     }))
-    .slice(0, 50);
+    .slice(0, GRAPH_CAPS.npc_encounters);
 }
 
 function coercePos(v: any): { x: number; y: number } | undefined {
@@ -237,7 +249,7 @@ function coerceContainers(v: unknown): ContainerDef[] {
       show_locked_children: c.show_locked_children !== false,     // default ON
       pos: coercePos(c.pos),
     }))
-    .slice(0, 12);
+    .slice(0, GRAPH_CAPS.containers);
   const seen = new Set<string>();
   return out.filter((c) => (seen.has(c.id) ? false : (seen.add(c.id), true)));
 }
@@ -252,7 +264,7 @@ function coerceEdges(v: unknown): EdgeDef[] {
       two_way: e.two_way !== false, // default 雙向
     }))
     .filter((e) => e.from !== e.to)
-    .slice(0, 120);
+    .slice(0, GRAPH_CAPS.edges);
   // Dedupe identical pairs (a→b twice, or a↔b duplicated in both directions).
   const seen = new Set<string>();
   return out.filter((e) => {
@@ -289,7 +301,7 @@ export function coerceLocationGraph(raw: any): LocationGraph | null {
       container: asStr(n.container) || undefined,
       pos: coercePos(n.pos),
     }))
-    .slice(0, 40);
+    .slice(0, GRAPH_CAPS.nodes);
   // Dedupe ids — first definition wins.
   const seen = new Set<string>();
   const deduped = nodes.filter((n) => (seen.has(n.id) ? false : (seen.add(n.id), true)));
@@ -333,6 +345,26 @@ export function validateLocationGraph(
   objectiveIds?: Set<string>
 ): string[] {
   const warnings: string[] = [];
+
+  // Truncation-cap warnings: coercion silently slices anything beyond these
+  // caps, so a graph SITTING AT a cap may have lost authored content with no
+  // error anywhere (the no-silent-caps rule).
+  const capChecks: Array<[number, number, string]> = [
+    [graph.nodes.length, GRAPH_CAPS.nodes, "地點"],
+    [graph.containers.length, GRAPH_CAPS.containers, "區域"],
+    [graph.edges.length, GRAPH_CAPS.edges, "路徑"],
+    [graph.npc_placements.length, GRAPH_CAPS.npc_placements, "NPC 位置設定"],
+    [graph.npc_encounters.length, GRAPH_CAPS.npc_encounters, "NPC 觸發事件"],
+  ];
+  for (const [len, cap, label] of capChecks) {
+    if (len >= cap) warnings.push(`${label}數量已達上限 ${cap} — 超出上限的${label}會被系統直接忽略（不會報錯）。`);
+  }
+  for (const n of graph.nodes) {
+    if (n.evidence.length >= GRAPH_CAPS.evidence_per_node) {
+      warnings.push(`地點「${n.name}」的證物數量已達上限 ${GRAPH_CAPS.evidence_per_node} — 超出的證物會被忽略。`);
+    }
+  }
+
   const ids = new Set(graph.nodes.map((n) => n.id));
   const evidenceIds = new Set(graph.nodes.flatMap((n) => n.evidence.map((e) => e.id)));
   const evidenceTags = new Set(graph.nodes.flatMap((n) => n.evidence.flatMap((e) => e.tags)));
@@ -783,25 +815,6 @@ export interface ComputedExits {
   locked: LocationNode[];
 }
 
-/** BFS over open (unlocked) nodes only, starting at `fromId` (inclusive). */
-function openReachable(graph: LocationGraph, adj: Map<string, Set<string>>, fromId: string): Set<string> {
-  const reached = new Set<string>([fromId]);
-  const queue = [fromId];
-  while (queue.length) {
-    const cur = queue.shift()!;
-    for (const nxt of Array.from(adj.get(cur) ?? [])) {
-      if (reached.has(nxt)) continue;
-      const node = graph.nodes.find((n) => n.id === nxt);
-      if (!node) continue;
-      reached.add(nxt);
-      // Note: reached-but-locked nodes are recorded (they're the frontier) but
-      // never traversed further.
-      queue.push(nxt);
-    }
-  }
-  return reached;
-}
-
 /** The authoritative per-turn exit computation used by the GM directive, the
  *  travel matcher, GM move_to validation and the player panel.
  *  `fromNode` (split-party): the character's own node; omitted/null falls back
@@ -1110,7 +1123,7 @@ export function resolveMoveTarget(
  *  here is harmless because travel only actually happens when the text ALSO
  *  names a real, unlocked location (detectTravelTarget + the status gate). "go"
  *  uses a word boundary so it does not match good/gold/going; 去 needs none. */
-const TRAVEL_RE = /前往|出發|移動|趕往|回到|返回|走向|走到|搭車|坐車|乘車|去|go to|travel to|head to|return to|move to|head back|travel back|\bgo\b/i;
+const TRAVEL_RE = /前往|出發|移動|趕往|回到|返回|走向|走到|進入|走進|踏入|潛入|闖入|搭車|坐車|乘車|去|go to|travel to|head to|return to|move to|head back|travel back|enter\b|\bgo\b/i;
 export function looksLikeTravel(actionText: string): boolean {
   return TRAVEL_RE.test(actionText);
 }

@@ -4,8 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   resolveAction, rollInjuryDamage, rollFirstAidHeal, InjurySeverity,
-  detectAttackType, resolveAttack, dodgeValueOf, NPC_DEFAULT_DODGE, AttackResult,
-  resolveFuzzyNpcTarget, resolveSanCheck,
+  resolveAttack, dodgeValueOf, NPC_DEFAULT_DODGE, AttackResult,
+  detectAttackTypeForTargets, resolveFuzzyNpcTarget, resolveSanCheck,
 } from "@/lib/game/resolution";
 import { refreshStorySummary } from "@/lib/ai/summarize";
 import { coerceEndings, evaluateEndings, type ScenarioEnding } from "@/lib/game/endings";
@@ -141,6 +141,39 @@ export async function POST(request: Request) {
   let attackSystemLog: string | null = null;
   const attackLedgerEntries: LedgerEntry[] = [];
 
+  // === COMBAT SCENE SNAPSHOT (split-party) ===
+  // Player-initiated combat/casting must be as location-aware as the NPC
+  // aggression pass: you can only target what is present at YOUR node — no
+  // sniping an NPC (or teammate) standing in another room. Read-only snapshot
+  // taken BEFORE this turn's travel; the location system below re-coerces and
+  // mutates its own copy.
+  const combatObjProgress: Record<string, { done?: boolean }> =
+    room.objective_progress && typeof room.objective_progress === "object" ? room.objective_progress : {};
+  const combatGraph = coerceLocationGraph((room as any).scenarios?.location_graph);
+  const combatLocState = combatGraph ? coerceLocationState(room.location_state, combatGraph) : null;
+  const combatActorNode = combatGraph && combatLocState && resolvedActor
+    ? positionOf(combatLocState, resolvedActor.id, combatGraph)
+    : null;
+  const combatPlacedKeys = new Set(
+    combatGraph && combatLocState && combatActorNode
+      ? evaluateNpcPlacements(combatGraph, combatLocState, room.current_round, combatObjProgress, combatActorNode)
+          .map((r) => npcStateKey(r, npcRoster))
+      : []
+  );
+  const npcHasPlacement = (key: string): boolean =>
+    !!combatGraph?.npc_placements.some((p) => npcStateKey(p.npc, npcRoster) === key);
+  // Same presence rule as the aggression pass: placed HERE, or unplaced
+  // (legacy follow-the-action NPCs). No location system → everyone is present.
+  const npcPresentInScene = (ref: string): boolean => {
+    if (!combatGraph || !combatLocState || !combatActorNode) return true;
+    const key = npcStateKey(ref, npcRoster);
+    return combatPlacedKeys.has(key) || !npcHasPlacement(key);
+  };
+  const charPresentInScene = (c: { id: string }): boolean => {
+    if (!combatGraph || !combatLocState || !combatActorNode) return true;
+    return positionOf(combatLocState, c.id, combatGraph) === combatActorNode;
+  };
+
   // === MYTHOS CAST (禁咒) — docs/design/mythos-skills-v1.md ===
   // A mythos key in forcedSkill takes over the whole resolution: 1d4 SAN + 3 MP
   // paid even on failure, d100 vs 30+克蘇魯知識, server-applied effects. All
@@ -165,6 +198,7 @@ export async function POST(request: Request) {
       // 遠古印記 only ever targets a hostile; 萎縮術 targets any living NPC.
       const trackedNames = Object.keys(npcStateNow)
         .filter((k) => npcStateNow[k]?.alive !== false)
+        .filter((k) => npcPresentInScene(k)) // spells reach only the actor's scene
         .filter((k) =>
           mythosSpell.effect !== "calm" ||
           isNpcHostile(npcStateNow[k], coerceDisposition((resolveNpc(npcDisplayName(k, npcRoster), scenarioNpcs) as any)?.disposition)))
@@ -175,6 +209,7 @@ export async function POST(request: Request) {
       // BEFORE their first strike, not only after they're tracked.
       const rosterNames = scenarioNpcs
         .map((n) => n.name)
+        .filter((name) => npcPresentInScene(name)) // spells reach only the actor's scene
         .filter((name) => {
           const st = npcStateEntry(name, npcRoster, npcStateNow);
           if (st?.alive === false) return false;
@@ -205,23 +240,39 @@ export async function POST(request: Request) {
     mythosCast = cast;
   }
 
-  const attackType = resolvedActor && !mythosCast ? detectAttackType(actionText) : null;
+  // Attack detection strips known combatant names first — an NPC called 殺人犯
+  // or 刺青師傅 must not turn every mention of them into an attack (the name
+  // still matters for TARGETING, which runs on the original text below).
+  const combatantNames = [
+    ...scenarioNpcs.map((n) => n.name),
+    ...Object.keys(npcStateNow).map((k) => npcDisplayName(k, npcRoster)),
+    ...sortedByDex.map((c: any) => c.name),
+  ];
+  const attackType = resolvedActor && !mythosCast
+    ? detectAttackTypeForTargets(actionText, combatantNames)
+    : null;
 
   // Find an attack target named in the action: a living roster character (not self)
   // first, otherwise a known living NPC.
   let targetChar: any = null;
   let targetNpcName: string | null = null;
   if (attackType && resolvedActor) {
+    // Split-party: you can only strike someone standing in YOUR scene.
     targetChar = sortedByDex.find(
-      (c: any) => c.id !== resolvedActor.id && c.hp > 0 && c.san > 0 && actionText.includes(c.name)
+      (c: any) => c.id !== resolvedActor.id && c.hp > 0 && c.san > 0 &&
+        actionText.includes(c.name) && charPresentInScene(c)
     ) ?? null;
     if (!targetChar) {
       // Match against roster display names; also any NPC already tracked in
-      // state (covers GM-invented NPCs not in the roster).
-      const trackedNames = Object.keys(npcStateNow).map((k) => npcDisplayName(k, npcRoster));
+      // state (covers GM-invented NPCs not in the roster). Split-party: only
+      // NPCs present at the actor's node are attackable (same presence rule
+      // as the aggression pass).
+      const trackedNames = Object.keys(npcStateNow)
+        .filter((k) => npcPresentInScene(k))
+        .map((k) => npcDisplayName(k, npcRoster));
       const knownNpcNames = Array.from(new Set([
         ...trackedNames,
-        ...scenarioNpcs.map((n) => n.name),
+        ...scenarioNpcs.map((n) => n.name).filter((name) => npcPresentInScene(name)),
       ]));
       const livingKnown = knownNpcNames.filter(
         (name) => npcStateEntry(name, npcRoster, npcStateNow)?.alive !== false
@@ -245,12 +296,14 @@ export async function POST(request: Request) {
     if (!targetChar && !targetNpcName) {
       const livingTracked = Object.keys(npcStateNow)
         .filter((k) => npcStateNow[k]?.alive !== false)
+        .filter((k) => npcPresentInScene(k)) // never auto-target an unseen remote NPC
         .map((k) => npcDisplayName(k, npcRoster));
       let candidates = Array.from(new Set(livingTracked));
       if (candidates.length === 0) {
         candidates = Array.from(new Set(
           scenarioNpcs
             .map((n) => n.name)
+            .filter((name) => npcPresentInScene(name))
             .filter((name) => npcStateEntry(name, npcRoster, npcStateNow)?.alive !== false)
         ));
       }
@@ -364,6 +417,17 @@ export async function POST(request: Request) {
       await supabase.from("rooms").update({ npc_states: npcStateNow }).eq("id", roomId);
     }
 
+    // The horror SAN check stacks on top of the attack, exactly like every
+    // other action — charging the monster must not be a way to DODGE the
+    // scene's SAN roll.
+    const attackSanCheck = resolveSanCheck(`${actionText}\n${sceneContext}`, resolvedActor);
+    if (attackSanCheck && attackSanCheck.san_loss > 0) {
+      const newSan = Math.max(0, resolvedActor.san - attackSanCheck.san_loss);
+      actorBroke = newSan <= 0;
+      await admin.from("characters").update({ san: newSan }).eq("id", resolvedActor.id);
+      resolvedActor.san = newSan;
+    }
+
     // Build a RollResult so the existing dice UI shows the attacker's to-hit roll,
     // with the dodge + damage detail attached under `attack`.
     const hitLabel = !attack.hit
@@ -380,9 +444,9 @@ export async function POST(request: Request) {
       d100_roll: attack.attack_roll,
       outcome: attack.attack_outcome,
       hp_change: 0,
-      san_change: 0,
+      san_change: 0, // attack itself costs no SAN; the horror check is separate
       consequence_summary: hitLabel,
-      san_check: null,
+      san_check: attackSanCheck, // rendered as its own dice box, as usual
       attack,
     };
   } else if (mythosCast && mythosSpell && resolvedActor) {
@@ -854,10 +918,22 @@ export async function POST(request: Request) {
     (roll.outcome === "success" || roll.outcome === "critical_success") &&
     PACIFY_SKILLS.includes(roll.stat_used ?? "")
   ) {
-    const hostileRefs = Object.keys(npcStateNow).filter((k) => {
+    // Candidates: tracked hostiles PLUS untracked roster NPCs whose effective
+    // stance is hostile — a disposition-hostile NPC that hasn't struck yet (no
+    // state entry) must still be talk-down-able, or a PASSED 說服 silently does
+    // nothing while the GM narrates success (state/narration divergence).
+    // Scene-filtered: you can only talk down what is present at your node.
+    const hostileRefSet = new Map<string, string>(); // canonical key → ref
+    for (const ref of [...Object.keys(npcStateNow), ...scenarioNpcs.map((n) => n.name)]) {
+      const key = npcStateKey(ref, npcRoster);
+      if (!hostileRefSet.has(key)) hostileRefSet.set(key, ref);
+    }
+    const hostileRefs = Array.from(hostileRefSet.values()).filter((k) => {
+      if (!npcPresentInScene(k)) return false;
       const decl: any = resolveNpc(k, scenarioNpcs);
       if (decl?.social_immune) return false; // mindless/immune: cannot be talked down
-      return isNpcHostile(npcStateNow[k], coerceDisposition(decl?.disposition)) && npcStateNow[k]?.alive !== false;
+      const st = npcStateEntry(k, npcRoster, npcStateNow);
+      return isNpcHostile(st, coerceDisposition(decl?.disposition)) && st?.alive !== false;
     });
     // Calm a hostile NPC named in the action (exact/fuzzy), else the sole one.
     let calmRef: string | null =
@@ -1467,8 +1543,13 @@ export async function POST(request: Request) {
           ?? Object.keys(calmStates).find((k) => name.includes(npcDisplayName(k, npcRoster)));
         if (!ref) continue;
         const key = npcStateKey(ref, npcRoster);
-        const cur: any = calmStates[key] ?? npcStateEntry(ref, npcRoster, calmStates);
         const decl: any = resolveNpc(ref, scenarioNpcs);
+        // Untracked disposition-hostile NPCs (no state entry yet) must be
+        // calmable too — seed a state row from the declared sheet.
+        const cur: any = calmStates[key] ?? npcStateEntry(ref, npcRoster, calmStates) ?? (() => {
+          const maxHp = decl && typeof decl.hp === "number" ? decl.hp : 10;
+          return { hp: maxHp, max_hp: maxHp, alive: true };
+        })();
         if (cur && isNpcHostile(cur, coerceDisposition(decl?.disposition))) {
           calmStates[key] = { ...cur, stance: "neutral" };
           calmChanged = true;
