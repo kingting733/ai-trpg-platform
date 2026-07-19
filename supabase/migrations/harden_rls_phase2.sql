@@ -13,16 +13,22 @@
 -- we defensively drop any client INSERT/UPDATE on character_cards too in
 -- case the base schema declared one.
 
--- 1) characters: drop ALL client INSERT policies (server routes own creation).
+-- 1) characters: drop ALL client INSERT *and* UPDATE policies. Server routes
+--    own creation; every in-game write is service-role (GM route, admin
+--    client) and bypasses RLS. A surviving UPDATE policy — even one gated to
+--    "room is waiting" — is a forge vector: it has no WITH CHECK, so a player
+--    can set their own hp/san/skills/cthulhu_knowledge/mythos_skills in the
+--    lobby and start the game with forged values.
 do $$
 declare pol record;
 begin
   for pol in
-    select policyname from pg_policies
-    where schemaname = 'public' and tablename = 'characters' and cmd = 'INSERT'
+    select policyname, cmd from pg_policies
+    where schemaname = 'public' and tablename = 'characters'
+      and cmd in ('INSERT', 'UPDATE')
   loop
     execute format('drop policy %I on public.characters', pol.policyname);
-    raise notice 'dropped characters INSERT policy: %', pol.policyname;
+    raise notice 'dropped characters % policy: %', pol.cmd, pol.policyname;
   end loop;
 end $$;
 
@@ -41,8 +47,8 @@ begin
   end loop;
 end $$;
 
--- Verify: expect NO rows for (characters,INSERT) or (character_cards,INSERT/UPDATE);
--- SELECT policies must remain untouched.
+-- Verify: expect NO rows for (characters,INSERT/UPDATE) or
+-- (character_cards,INSERT/UPDATE); only the two SELECT policies remain.
 select tablename, policyname, cmd from pg_policies
 where schemaname = 'public'
   and tablename in ('characters', 'character_cards')
