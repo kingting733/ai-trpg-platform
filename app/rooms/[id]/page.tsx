@@ -553,7 +553,22 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
             if (!line) continue;
             try {
               const evt = JSON.parse(line);
-              if (evt.type === "delta" && typeof evt.text === "string") {
+              if (evt.type === "prelude" && Array.isArray(evt.rows)) {
+                // Variant B: the mechanics (action + dice, 📍 travel, 📦 items,
+                // SAN, unlocks) arrive BEFORE the narration. Render them now so
+                // the player sees the move + 檢定 first, then the GM prose
+                // streams in below. Supabase returns the characters join as an
+                // array for the typed relation — normalize to { name }.
+                const rows: StoryLogEntry[] = evt.rows.map((r: any) => ({
+                  ...r,
+                  characters: Array.isArray(r.characters) ? (r.characters[0] ?? null) : (r.characters ?? null),
+                }));
+                setStoryLog((prev) => {
+                  const have = new Set(prev.map((e) => e.id));
+                  const fresh = rows.filter((r) => !have.has(r.id));
+                  return fresh.length ? [...prev, ...fresh] : prev;
+                });
+              } else if (evt.type === "delta" && typeof evt.text === "string") {
                 live += evt.text;
                 setStreamingText(live);
               }

@@ -554,7 +554,11 @@ export async function POST(request: Request) {
   }
 
   // Save action to story_logs, with the dice result attached to the action entry.
-  await supabase.from("story_logs").insert({
+  // Capture its created_at: it is the FIRST story_log of this turn, so every
+  // mechanical row that follows (travel, items, SAN media, unlocks) has
+  // created_at >= this — the prelude query below uses it to stream the
+  // mechanics to the client BEFORE the GM narration (variant B).
+  const { data: actionRow } = await supabase.from("story_logs").insert({
     room_id: roomId,
     round_number: room.current_round,
     entry_type: "action",
@@ -562,7 +566,8 @@ export async function POST(request: Request) {
     character_id: characterId,
     content: actionText,
     roll_result: roll,
-  });
+  }).select("created_at").single();
+  const turnStartedAt: string | null = actionRow?.created_at ?? null;
 
   // Contested-attack damage feedback (written after the action so it reads in order).
   if (attackSystemLog) {
@@ -1426,6 +1431,25 @@ export async function POST(request: Request) {
         controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
       }
   try {
+    // === PRELUDE (variant B) — show the mechanics BEFORE the narration ===
+    // Every mechanical row this turn (the action + its dice, 📍 travel, 📦
+    // items, SAN media, unlock notices) is already persisted at this point.
+    // Stream them now so the player sees the move + 檢定 first, then watches
+    // the GM narration arrive as the payoff — instead of prose first and the
+    // mechanics popping in at the end. The client renders these immediately
+    // (deduped by id against the final fetchAll).
+    if (turnStartedAt) {
+      const { data: preludeRows } = await supabase
+        .from("story_logs")
+        .select("id, entry_type, content, character_id, player_id, created_at, roll_result, media_url, characters(name)")
+        .eq("room_id", roomId)
+        .gte("created_at", turnStartedAt)
+        .order("created_at", { ascending: true });
+      if (preludeRows && preludeRows.length) {
+        send({ type: "prelude", rows: preludeRows });
+      }
+    }
+
     const gmResponse = await generateGMResponseStreaming(input, (deltaText) => {
       send({ type: "delta", text: deltaText });
     });
