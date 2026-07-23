@@ -28,6 +28,7 @@ import {
   applyDiscovers,
   positionOf,
   applyActorMove,
+  composeSceneChoices,
   eligibleCombatTargets,
   type SceneContext,
   evaluateUnlocks,
@@ -1469,13 +1470,27 @@ export async function POST(request: Request) {
         const dest = resolveMoveTarget(gmResponse.move_to, locationGraph, locState, actorNode);
         if (dest) choicesNode = dest.id;
       }
-      gmResponse.choices = sanitizeChoices(
-        gmResponse.choices,
-        partyForAI.map((c) => c.name),
-        locationGraph,
-        locState,
-        choicesNode,
-      );
+      // HYBRID: the GM writes choices only for the scene it just narrated.
+      // When the NEXT actor stands in a DIFFERENT scene, the GM never saw it —
+      // the server composes their choices from that node's own creator data
+      // instead (no A-scene bleed by construction).
+      const nextIsElsewhere =
+        !nextIsActor && locationGraph && locState &&
+        nextActorNode && nextActorNode !== actorNode;
+      if (nextIsElsewhere) {
+        gmResponse.choices = composeSceneChoices(
+          locationGraph, locState, nextActorNode, room.current_round, objProgress, npcRoster,
+          (ref) => npcStateEntry(ref, npcRoster, npcStateNow)?.alive !== false,
+        );
+      } else {
+        gmResponse.choices = sanitizeChoices(
+          gmResponse.choices,
+          partyForAI.map((c) => c.name),
+          locationGraph,
+          locState,
+          choicesNode,
+        );
+      }
     }
 
     await supabase.from("story_logs").insert({

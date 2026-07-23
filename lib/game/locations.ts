@@ -1178,6 +1178,53 @@ export function matchEvidence(
   return out;
 }
 
+// ── Server-composed choices (split-party) ─────────────────────────────────────
+// When the NEXT actor stands in a DIFFERENT scene than the one just narrated,
+// the GM is a bad choice-writer for it (it never saw that scene, and feeding it
+// the scene's secrets would leak them into the wrong narration). So the SERVER
+// composes that actor's 3 suggested choices from their own node's data —
+// creator-authored words only, never generated: an investigation (the first
+// unfound clue's 取得方式 when present), a placed NPC to engage, an open exit
+// to move to, backfilled with the same generic trio sanitizeChoices uses.
+
+const COMPOSE_FALLBACKS = ["[偵查] 檢查四周", "[聆聽] 留神細聽", "[潛行] 小心前進"];
+
+export function composeSceneChoices(
+  graph: LocationGraph,
+  state: LocationState,
+  nodeId: string,
+  currentRound: number,
+  objectiveProgress: ObjectiveProgressLike = {},
+  npcRoster: NpcRef[] = [],
+  npcAlive?: (ref: string) => boolean,
+): [string, string, string] {
+  const node = graph.nodes.find((n) => n.id === nodeId);
+  const out: string[] = [];
+
+  // 1. Investigate — the creator's own 取得方式 for a clue still hidden here.
+  const unfoundHow = node?.evidence
+    .filter((e) => !state.evidence_found.includes(e.id))
+    .map((e) => e.how.trim())
+    .find(Boolean);
+  out.push(unfoundHow ? `[偵查] ${unfoundHow.length > 20 ? unfoundHow.slice(0, 20) + "…" : unfoundHow}` : COMPOSE_FALLBACKS[0]);
+
+  // 2. Engage — an NPC actually placed at this node (and still alive).
+  const npcHere = evaluateNpcPlacements(graph, state, currentRound, objectiveProgress, nodeId)
+    .filter((ref) => (npcAlive ? npcAlive(ref) : true));
+  if (npcHere.length) out.push(`與${npcDisplayName(npcHere[0], npcRoster)}交談`);
+
+  // 3. Move — the first open exit (computeExits already enforces locks/paths,
+  //    so this can never name a hidden or unreachable place).
+  const exits = computeExits(graph, state, nodeId);
+  if (out.length < 3 && exits.open.length) out.push(`前往${shortName(exits.open[0].name)}`);
+
+  for (const f of COMPOSE_FALLBACKS) {
+    if (out.length >= 3) break;
+    if (!out.includes(f)) out.push(f);
+  }
+  return [out[0], out[1], out[2]];
+}
+
 // ── GM directive block ────────────────────────────────────────────────────────
 
 export type TravelDirective =
@@ -1325,19 +1372,24 @@ export function buildLocationBlock(
     }
   }
 
-  // Split-party: the 3 suggested choices are for the NEXT character, who may be
-  // standing somewhere else entirely — bind them to THAT scene, not this one.
+  // Split-party: the 3 suggested choices are for the NEXT character. When they
+  // stand in the SAME scene just narrated, the GM writes them (it knows the
+  // scene intimately). When they stand ELSEWHERE, the GM never saw that scene —
+  // the SERVER composes their choices from that node's own data
+  // (composeSceneChoices) and the GM's are discarded, so tell it not to try.
   if (scene && scene.nextNode) {
-    const nextNodeDef = graph.nodes.find((n) => n.id === scene.nextNode);
-    const nextExits = computeExits(graph, state, scene.nextNode);
-    const nextParts: string[] = [];
-    if (nextExits.open.length) nextParts.push(`可前往：${nextExits.open.map((n) => shortName(n.name)).join("、")}`);
-    if (nextExits.locked.length) nextParts.push(`看得到但進不去：${nextExits.locked.map((n) => shortName(n.name)).join("、")}`);
-    lines.push(
-      `NEXT TURN'S SCENE (for the 3 suggested choices ONLY): ${scene.nextName} is at ${shortName(nextNodeDef?.name ?? scene.nextNode)}. ` +
-      `The choices MUST be actions ${scene.nextName} can take THERE — at that location, or moving to one of ITS exits${nextParts.length ? `（${nextParts.join(" | ")}）` : ""}. ` +
-      `Do NOT write choices set at ${scene.actorName}'s location unless it is the same place, and do NOT reference other characters, their discoveries, or what is happening in their scenes — ${scene.nextName} may not even know about those.`
-    );
+    if (scene.nextNode === scene.actorNode) {
+      lines.push(
+        `NEXT TURN'S SCENE (for the 3 suggested choices ONLY): ${scene.nextName} acts next, HERE at this same location. ` +
+        `The choices MUST be actions ${scene.nextName} can take at this location or moving to one of its 可前往 exits. ` +
+        `Do NOT reference other characters, their discoveries, or what is happening in their scenes — ${scene.nextName} may not even know about those.`
+      );
+    } else {
+      lines.push(
+        `NEXT TURN: ${scene.nextName} acts next from a DIFFERENT location (${nodeName(scene.nextNode)}). ` +
+        `The system composes their suggested choices — output "choices": [] and write none yourself.`
+      );
+    }
   }
 
   // Triggered NPC encounters this turn.
