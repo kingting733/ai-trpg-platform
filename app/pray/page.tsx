@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
   ITEM_POOL,
@@ -178,9 +179,9 @@ export default function PrayPage() {
         return (
           <div className="pray-reveal rounded-xl p-5 mb-6 flex items-start gap-4"
             style={{ background: "rgba(20,16,11,0.85)", border: `1.5px solid ${st.glow}`, boxShadow: `0 0 30px ${st.glow}` }}>
-            <div className="w-14 h-14 rounded-lg shrink-0 flex items-center justify-center text-2xl"
+            <div className="w-14 h-14 rounded-lg shrink-0 flex items-center justify-center"
               style={{ background: "rgba(10,8,5,0.8)", border: `1px solid ${st.glow}`, color: st.color }}>
-              🜏
+              <Sparkles size={22} strokeWidth={1.5} />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -233,7 +234,7 @@ export default function PrayPage() {
                             const zh = { shrivelling: "萎縮術", elder_sign: "遠古印記", contact_dead: "死者絮語" }[spellKey] ?? spellKey;
                             const bearer = spellBearerOf(spellKey);
                             return bearer ? (
-                              <p className="text-[11px]" style={{ color: "#b18cd4" }}>🜏 已銘刻於 {bearer.name}（不可更改）</p>
+                              <p className="inline-flex items-center gap-1 text-[11px]" style={{ color: "#b18cd4" }}><Sparkles size={11} strokeWidth={2} /> 已銘刻於 {bearer.name}（不可更改）</p>
                             ) : (
                               <select
                                 value=""

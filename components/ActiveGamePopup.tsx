@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 interface ActiveRoom {
@@ -81,9 +82,9 @@ export function ActiveGamePopup() {
         <p className="text-slate-400 text-xs mb-3">你有一場冒險正在進行中。</p>
         <button
           onClick={() => router.push(`/rooms/${room.id}`)}
-          className="w-full bg-zinc-800 hover:bg-zinc-700 text-white py-2 rounded-lg text-sm font-medium transition-colors"
+          className="w-full bg-zinc-800 hover:bg-zinc-700 text-white py-2 rounded-lg text-sm font-medium transition-colors inline-flex items-center justify-center gap-1"
         >
-          返回遊戲 →
+          返回遊戲 <ArrowRight size={14} strokeWidth={2} />
         </button>
       </div>
     </div>

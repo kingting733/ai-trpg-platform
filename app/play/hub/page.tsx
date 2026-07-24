@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { ArrowRight } from "lucide-react";
 
 interface Scenario {
   id: string;
@@ -115,8 +116,8 @@ export default function HubPage() {
                       <span className="font-mono text-slate-500">{r.room_code}</span>
                     </p>
                   </div>
-                  <span className="text-zinc-100 font-medium text-sm shrink-0">
-                    {r.status === "in_progress" ? "返回遊戲 →" : "返回大廳 →"}
+                  <span className="inline-flex items-center gap-1 text-zinc-100 font-medium text-sm shrink-0">
+                    {r.status === "in_progress" ? "返回遊戲" : "返回大廳"} <ArrowRight size={14} strokeWidth={2} />
                   </span>
                 </div>
               </Link>

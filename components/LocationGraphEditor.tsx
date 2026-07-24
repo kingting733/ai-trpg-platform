@@ -2,6 +2,10 @@
 
 import { useMemo, useRef, useState } from "react";
 import {
+  Circle, Lock, EyeOff, DoorOpen, X, ArrowRight, ArrowLeftRight, ArrowLeft,
+  BookOpen, Sparkles, AlertTriangle, Pencil, User, Zap, Repeat,
+} from "lucide-react";
+import {
   type LocationNode,
   type EvidenceDef,
   type NpcPlacement,
@@ -52,7 +56,7 @@ export function emptyNpcEncounter(): NpcEncounter {
   return { npc: "", when: [], beat: "" };
 }
 
-function FieldLabel({ label, tip }: { label: string; tip: string }) {
+function FieldLabel({ label, tip }: { label: string; tip: React.ReactNode }) {
   const [show, setShow] = useState(false);
   return (
     <div className="flex items-center gap-1 mb-1">
@@ -77,7 +81,9 @@ function FieldLabel({ label, tip }: { label: string; tip: string }) {
 const FIELD_TIPS = {
   id: "英文或數字短代號，在整個劇本中唯一。\n例：A、B、lab1\n用途：其他地點的解鎖條件會引用這個 id。",
   name: "玩家看得到的地點名稱，例：「阿澤住所」、「林士站月台」。",
-  initial: `開放（起點）：遊戲一開始玩家就可以去。\n已知但鎖定：玩家知道這裡存在，但暫時進不去（地圖上顯示🔒）。\n隱藏：玩家完全不知道這裡存在，需要被「發現」後才會出現在地圖。`,
+  initial: (
+    <>開放（起點）：遊戲一開始玩家就可以去。<br />已知但鎖定：玩家知道這裡存在，但暫時進不去（地圖上顯示 <Lock className="inline w-2.5 h-2.5 align-[-1px]" />）。<br />隱藏：玩家完全不知道這裡存在，需要被「發現」後才會出現在地圖。</>
+  ),
   desc: "GM 看的場景備註，不會給玩家看。描述這個地點的氛圍、有什麼重要道具、NPC 狀態等。",
   unlock: `只有當此地點設為「已知但鎖定」或「隱藏」時才需要填。\n留空 = 不設額外條件（開放的地點本來就能去；鎖定的地點則只能靠其他地點的「自動發現」開啟）。\n填了條件，滿足後系統自動開門。\n\n語法：\n  visit:X        ── 去過地點 X\n  item:e1        ── 拿到證物 e1\n  count:標籤:3    ── 累積 3 件有該標籤的證物\n  round:5        ── 到第 5 回合\n  after:X:3      ── 進入 X 滿 3 回合後\n  objective:obj_1 ── 完成某個任務目標\n\n用 & 代表「且」、| 代表「或」\n例：item:e1 & visit:B | round:10`,
   discovers: `到達此地點後，系統自動把哪些「隱藏」地點變成「已知但鎖定」狀態（顯示在玩家地圖）。\n點選要自動發現的地點即可（可多選）。`,
@@ -97,7 +103,9 @@ const FIELD_TIPS = {
   region: "「區域」只是地圖上的分組（例如一整間 1404室），玩家不會「站在區域」，而是站在區域裡的某個地點。進入區域時會落在它的入口地點。",
   entry: "玩家從外面進入這個區域時，會抵達的地點（例如 1404室 的入口是 1404門口）。",
   allConnected: "打開後，此區域內所有地點自動互相連通，不用手動拉線（例如同一間屋內的客廳、神位、廁所）。",
-  showLocked: "打開後，玩家一走進此區域，就能看見裡面尚未解鎖的地點（顯示🔒，例如上鎖的睡房門）。",
+  showLocked: (
+    <>打開後，玩家一走進此區域，就能看見裡面尚未解鎖的地點（顯示 <Lock className="inline w-2.5 h-2.5 align-[-1px]" />，例如上鎖的睡房門）。</>
+  ),
 };
 
 // ── Map canvas geometry ────────────────────────────────────────────────────────
@@ -111,8 +119,10 @@ function autoPos(i: number): { x: number; y: number } {
   return { x: 24 + (i % 5) * 178, y: 24 + Math.floor(i / 5) * 96 };
 }
 
-function statusIcon(s: LocationNode["initial"]): string {
-  return s === "unlocked" ? "○" : s === "discovered" ? "🔒" : "🕳";
+function StatusIcon({ s }: { s: LocationNode["initial"] }) {
+  if (s === "unlocked") return <Circle className="inline w-2.5 h-2.5" strokeWidth={2.5} />;
+  if (s === "discovered") return <Lock className="inline w-2.5 h-2.5" strokeWidth={2.5} />;
+  return <EyeOff className="inline w-2.5 h-2.5" strokeWidth={2.5} />;
 }
 
 // Module-scope (NOT recreated per render — an inner component type would make
@@ -562,7 +572,7 @@ export function LocationGraphEditor({
                     onClick={() => update(i, { evidence: node.evidence.filter((_, j) => j !== ei) })}
                     className="text-red-400/70 hover:text-red-400 text-xs shrink-0"
                   >
-                    ✕
+                    <X size={12} strokeWidth={2.5} />
                   </button>
                 </div>
               </div>
@@ -638,7 +648,7 @@ export function LocationGraphEditor({
         <div className="flex items-center gap-2 flex-wrap text-xs">
           {inContainer ? (
             <>
-              <button type="button" onClick={() => { setView({ kind: "full" }); setLinking(null); }} className="text-zinc-400 hover:text-gold">← 返回全圖</button>
+              <button type="button" onClick={() => { setView({ kind: "full" }); setLinking(null); }} className="text-zinc-400 hover:text-gold inline-flex items-center gap-1"><ArrowLeft size={12} strokeWidth={2} />返回全圖</button>
               <span className="text-gold font-medium">{container?.name || inContainer}</span>
             </>
           ) : (
@@ -736,7 +746,7 @@ export function LocationGraphEditor({
                 style={{ background: "#141822", border: "1px solid rgba(201,169,110,0.5)", color: "#c9a96e" }}
                 title="編輯路徑"
               >
-                {e.two_way ? "⇄" : "→"}
+                {e.two_way ? <ArrowLeftRight size={10} strokeWidth={2.5} /> : <ArrowRight size={10} strokeWidth={2.5} />}
               </button>
               {edgeMenu === idx && (() => {
                 const nameOf = (id: string) =>
@@ -746,7 +756,7 @@ export function LocationGraphEditor({
                   {/* Direction readout — updates live so 反向 has visible effect. */}
                   <div className="px-1 text-slate-300">
                     <span className="text-gold font-medium">{nameOf(e.from)}</span>
-                    <span className="mx-1 text-gold">{e.two_way ? "⇄" : "→"}</span>
+                    <span className="mx-1 text-gold inline-flex align-[-1px]">{e.two_way ? <ArrowLeftRight size={11} strokeWidth={2.5} /> : <ArrowRight size={11} strokeWidth={2.5} />}</span>
                     <span className="text-gold font-medium">{nameOf(e.to)}</span>
                     <span className="ml-1.5 text-slate-500">{e.two_way ? "（雙向）" : "（單向）"}</span>
                   </div>
@@ -754,18 +764,18 @@ export function LocationGraphEditor({
                     <button
                       type="button"
                       onClick={() => onEdgesChange?.(edges.map((x, j) => (j === idx ? { ...x, two_way: !x.two_way } : x)))}
-                      className="px-2 py-1 rounded border border-slate-600 text-slate-300 hover:border-gold hover:text-gold"
+                      className="px-2 py-1 rounded border border-slate-600 text-slate-300 hover:border-gold hover:text-gold inline-flex items-center gap-1"
                     >
-                      {e.two_way ? "改為單向 →" : "改為雙向 ⇄"}
+                      {e.two_way ? <>改為單向 <ArrowRight size={11} strokeWidth={2.5} /></> : <>改為雙向 <ArrowLeftRight size={11} strokeWidth={2.5} /></>}
                     </button>
                     {!e.two_way && (
                       <button
                         type="button"
                         onClick={() => onEdgesChange?.(edges.map((x, j) => (j === idx ? { ...x, from: x.to, to: x.from } : x)))}
-                        className="px-2 py-1 rounded border border-slate-600 text-slate-300 hover:border-gold hover:text-gold"
+                        className="px-2 py-1 rounded border border-slate-600 text-slate-300 hover:border-gold hover:text-gold inline-flex items-center gap-1"
                         title="調換單向路徑的方向"
                       >
-                        反向 ⇋
+                        反向 <Repeat size={11} strokeWidth={2.5} />
                       </button>
                     )}
                     <button
@@ -827,8 +837,8 @@ export function LocationGraphEditor({
                 onTap={() => handleCardTap(n.id, false)}
               >
                 <div className="flex items-center justify-between gap-1">
-                  <p className="text-[12px] truncate text-slate-200">
-                    {statusIcon(n.initial)} {n.name?.trim() || n.id || "（未命名）"}
+                  <p className="text-[12px] truncate text-slate-200 inline-flex items-center gap-1">
+                    <StatusIcon s={n.initial} /> {n.name?.trim() || n.id || "（未命名）"}
                   </p>
                   <button
                     type="button"
@@ -840,8 +850,8 @@ export function LocationGraphEditor({
                     連接
                   </button>
                 </div>
-                <p className="text-[10px] text-slate-500 truncate">
-                  {container?.entry === n.id ? "🚪 入口 · " : ""}
+                <p className="text-[10px] text-slate-500 truncate inline-flex items-center gap-0.5">
+                  {container?.entry === n.id && <><DoorOpen size={9} strokeWidth={2} />入口 · </>}
                   {n.evidence.length > 0 ? `${n.evidence.length} 證物` : ""}
                 </p>
               </CanvasCard>
@@ -873,8 +883,8 @@ export function LocationGraphEditor({
                 nodes.find((n) => n.id === id)?.name || containers.find((c) => c.id === id)?.name || id;
               return (
                 <div key={idx} className="flex items-center gap-2 text-xs text-slate-300">
-                  <span className="flex-1 truncate">
-                    {nameOf(e.from)} <span className="text-gold">{e.two_way ? "⇄" : "→"}</span> {nameOf(e.to)}
+                  <span className="flex-1 truncate inline-flex items-center gap-1">
+                    {nameOf(e.from)} <span className="text-gold inline-flex">{e.two_way ? <ArrowLeftRight size={11} strokeWidth={2.5} /> : <ArrowRight size={11} strokeWidth={2.5} />}</span> {nameOf(e.to)}
                   </span>
                   <button
                     type="button"
@@ -893,7 +903,7 @@ export function LocationGraphEditor({
                       反向
                     </button>
                   )}
-                  <button type="button" onClick={() => onEdgesChange?.(edges.filter((_, j) => j !== idx))} className="text-red-400/70 hover:text-red-400">✕</button>
+                  <button type="button" onClick={() => onEdgesChange?.(edges.filter((_, j) => j !== idx))} className="text-red-400/70 hover:text-red-400"><X size={12} strokeWidth={2.5} /></button>
                 </div>
               );
             })}
@@ -909,7 +919,7 @@ export function LocationGraphEditor({
   return (
     <div className="space-y-4">
       <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 space-y-2 text-xs text-slate-400">
-        <p className="text-slate-300 font-medium">📖 地點系統說明</p>
+        <p className="text-slate-300 font-medium inline-flex items-center gap-1.5"><BookOpen size={14} strokeWidth={2} />地點系統說明</p>
         <p>伺服器會追蹤隊伍位置、已取得的證物，以及每個地點的解鎖狀態。AI GM 無法讓玩家進入未解鎖的地點。</p>
         {mapMode ? (
           <p>
@@ -929,10 +939,10 @@ export function LocationGraphEditor({
         <button
           type="button"
           onClick={() => onTravelModeChange!("edges")}
-          className="w-full rounded-xl py-3 text-sm transition-colors"
+          className="w-full rounded-xl py-3 text-sm transition-colors inline-flex items-center justify-center gap-1.5"
           style={{ background: "rgba(201,169,110,0.08)", border: "1px dashed rgba(201,169,110,0.5)", color: "#c9a96e" }}
         >
-          ✨ 升級為地圖模式 — 視覺化地圖、區域分組、路徑連接（玩家將只能沿路徑移動）
+          <Sparkles size={14} strokeWidth={2} />升級為地圖模式 — 視覺化地圖、區域分組、路徑連接（玩家將只能沿路徑移動）
         </button>
       )}
       {mapCapable && mapMode && (
@@ -947,7 +957,7 @@ export function LocationGraphEditor({
       {warnings.length > 0 && (
         <div className="bg-amber-950/40 border border-amber-900/50 rounded-lg px-4 py-2.5 text-xs text-amber-300/90 space-y-1">
           {warnings.map((w, i) => (
-            <p key={i}>⚠ {w}</p>
+            <p key={i} className="inline-flex items-start gap-1"><AlertTriangle size={12} strokeWidth={2} className="shrink-0 mt-0.5" />{w}</p>
           ))}
         </div>
       )}
@@ -957,7 +967,7 @@ export function LocationGraphEditor({
           {renderMapCanvas()}
           {selectedIdx >= 0 && (
             <div>
-              <p className="text-xs text-gold mb-1.5">✏️ 節點詳情：{nodes[selectedIdx].name || nodes[selectedIdx].id}
+              <p className="text-xs text-gold mb-1.5 inline-flex items-center gap-1"><Pencil size={11} strokeWidth={2} />節點詳情：{nodes[selectedIdx].name || nodes[selectedIdx].id}
                 <button type="button" onClick={() => setSelected(null)} className="ml-2 text-slate-500 hover:text-slate-300">收起</button>
               </p>
               {renderNodeForm(selectedIdx, true)}
@@ -984,7 +994,7 @@ export function LocationGraphEditor({
         <div className="bg-slate-800/40 border border-slate-700 rounded-xl p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-slate-300 font-medium">🧑 NPC 位置設定</p>
+              <p className="text-xs text-slate-300 font-medium inline-flex items-center gap-1"><User size={12} strokeWidth={2} />NPC 位置設定</p>
               <p className="text-[11px] text-slate-500 mt-0.5">伺服器根據條件告訴 GM 誰在當前地點，GM 不能自行決定 NPC 的位置。</p>
             </div>
             <button
@@ -1041,7 +1051,7 @@ export function LocationGraphEditor({
                 onClick={() => onNpcPlacementsChange(npcPlacements.filter((_, j) => j !== pi))}
                 className="text-red-400/70 hover:text-red-400 text-xs"
               >
-                ✕
+                <X size={12} strokeWidth={2.5} />
               </button>
             </div>
           ))}
@@ -1057,7 +1067,7 @@ export function LocationGraphEditor({
         <div className="bg-slate-800/40 border border-slate-700 rounded-xl p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-slate-300 font-medium">⚡ NPC 觸發事件</p>
+              <p className="text-xs text-slate-300 font-medium inline-flex items-center gap-1"><Zap size={12} strokeWidth={2} />NPC 觸發事件</p>
               <p className="text-[11px] text-slate-500 mt-0.5">條件成立時，NPC 會主動找上玩家（無論位置），每個事件只觸發一次。</p>
             </div>
             <button
@@ -1091,7 +1101,7 @@ export function LocationGraphEditor({
                   onClick={() => onNpcEncountersChange(npcEncounters.filter((_, j) => j !== ei))}
                   className="text-red-400/70 hover:text-red-400 text-xs self-end pb-1.5"
                 >
-                  ✕
+                  <X size={12} strokeWidth={2.5} />
                 </button>
               </div>
               <div>

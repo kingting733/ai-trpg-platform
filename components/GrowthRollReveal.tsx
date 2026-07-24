@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Dices, Sparkle, ArrowRight } from "lucide-react";
 
 export interface Growth {
   skillName?: string;
@@ -60,8 +61,8 @@ export function GrowthRollReveal({ growth, onRevealed }: { growth: Growth; onRev
           animation: rolling ? "dice-shake 0.5s ease-in-out infinite" : undefined,
         }}
       >
-        <span className="tabular-nums font-bold" style={{ fontSize: phase === "idle" ? 22 : 24, color: numColor }}>
-          {phase === "idle" ? "🎲" : display}
+        <span className="tabular-nums font-bold flex items-center justify-center" style={{ fontSize: phase === "idle" ? 22 : 24, color: numColor }}>
+          {phase === "idle" ? <Dices size={26} strokeWidth={2} /> : display}
         </span>
       </button>
 
@@ -75,7 +76,7 @@ export function GrowthRollReveal({ growth, onRevealed }: { growth: Growth; onRev
         {rolling && <p className="text-zinc-400">擲骰中…（目標：高於 {threshold}）</p>}
         {done && (
           passed
-            ? <p style={{ color: "#6ee7b7" }}>✦ 成長檢定通過！「{growth.skillName}」{growth.old} → <span className="font-bold">{growth.new}</span></p>
+            ? <p className="inline-flex items-center gap-1 flex-wrap" style={{ color: "#6ee7b7" }}><Sparkle size={14} strokeWidth={2} /> 成長檢定通過！「{growth.skillName}」{growth.old} <ArrowRight size={12} strokeWidth={2} /> <span className="font-bold">{growth.new}</span></p>
             : <p className="text-zinc-500">成長檢定未通過（{target} ≤ {threshold}）。下次再努力。</p>
         )}
       </div>

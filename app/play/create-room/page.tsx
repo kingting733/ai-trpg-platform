@@ -2,6 +2,7 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { ArrowLeft } from "lucide-react";
 
 const PANEL = {
   background: "linear-gradient(150deg,#1c1813 0%,#13100b 55%,#0f0c08 100%)",
@@ -80,7 +81,7 @@ function CreateRoomInner() {
         style={{ color: "rgba(201,169,110,0.55)" }}
         onMouseEnter={(e) => (e.currentTarget.style.color = "#c9a96e")}
         onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(201,169,110,0.55)")}>
-        ← 返回
+        <ArrowLeft size={14} strokeWidth={2} /> 返回
       </button>
 
       {/* Header */}

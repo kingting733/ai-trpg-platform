@@ -1,5 +1,7 @@
 "use client";
 
+import { Lock, ArrowRight } from "lucide-react";
+
 // Short orientation shown at the top of the create / edit scenario form, so a
 // first-time creator immediately understands: what's mandatory, that the GM
 // tabs are optional, and a sensible order to fill things in.
@@ -14,12 +16,14 @@ export function ScenarioFormGuide() {
         </li>
         <li>
           <span className="text-slate-200">② 世界與故事</span>、
-          <span className="text-slate-200">③ 主持人工具</span>（標有 <span className="opacity-70">🔒</span>）
+          <span className="text-slate-200">③ 主持人工具</span>（標有 <span className="opacity-70 inline-flex items-center"><Lock size={12} strokeWidth={2} /></span>）
           皆為<span className="text-slate-300">選填</span>，內容只有 AI 主持人看得到，玩家不會看到。
         </li>
         <li>
-          建議順序：先把 <span className="text-slate-300">① 必填</span> 填好 → 補
-          <span className="text-slate-300"> ② 開場與故事原文</span> →
+          建議順序：先把 <span className="text-slate-300">① 必填</span> 填好
+          <ArrowRight size={12} strokeWidth={2} className="inline mx-1 align-[-1px]" />補
+          <span className="text-slate-300"> ② 開場與故事原文</span>
+          <ArrowRight size={12} strokeWidth={2} className="inline mx-1 align-[-1px]" />
           再到 <span className="text-slate-300">③ 設定 NPC、地點與結局</span>。完成度越高，AI 主持得越好。
         </li>
       </ul>

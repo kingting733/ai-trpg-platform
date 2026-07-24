@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Compass, Sparkles, ArrowRight, PersonStanding, Drama, ArrowLeftRight, CircleX, Moon, BookOpen, MessageCircle, Swords, type LucideIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
   INTERLUDE_MISSIONS,
@@ -24,6 +25,15 @@ const OCCUPATION_ICON: Record<string, string> = {
 const RARITY_CHIP: Record<string, string> = {
   Common: "border-zinc-600 text-zinc-400", Rare: "border-sky-600/70 text-sky-300",
   Epic: "border-purple-500/70 text-purple-300", Legendary: "border-amber-500/70 text-amber-300",
+};
+// Mirrors INTERLUDE_MISSIONS' key order (lib/game/interlude.ts) — the mission
+// data still carries its own `emoji` field (used only as a fallback key here),
+// but the UI renders these icons instead.
+const MISSION_ICON: Record<string, LucideIcon> = {
+  night_patrol: Moon,
+  case_research: BookOpen,
+  rumor_gathering: MessageCircle,
+  physical_training: Swords,
 };
 
 // Asset paths — drop files here and they light up automatically.
@@ -176,14 +186,14 @@ export default function InterludePage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap pt-2 pb-5">
         <div className="flex items-center gap-4">
-          <span className="text-4xl opacity-70">🧭</span>
+          <Compass size={36} strokeWidth={1.5} className="opacity-70 text-zinc-300" />
           <div>
             <h1 className="font-serif text-gold leading-none mb-1.5" style={{ fontSize: "clamp(1.8rem,3.5vw,2.5rem)", letterSpacing: "0.08em" }}>幕間任務</h1>
             <p className="text-zinc-500 text-sm">派遣調查員執行 24 小時的幕間任務，離線也能持續推進。</p>
           </div>
         </div>
         <div className="flex items-center gap-2 px-4 py-2 rounded-xl" style={{ background: "rgba(22,19,16,0.8)", border: "1px solid rgba(201,169,110,0.35)" }}>
-          <span className="text-gold">✦</span>
+          <Sparkles size={14} strokeWidth={2} className="text-gold" />
           <span className="text-sm text-zinc-400">點數</span>
           <span className="text-gold font-bold tabular-nums text-lg">{points}</span>
         </div>
@@ -194,7 +204,7 @@ export default function InterludePage() {
       {cards.length === 0 ? (
         <div className="text-center py-20 rounded-xl" style={{ border: "1px dashed #2e2416", background: "#0e0c08" }}>
           <p className="text-zinc-400">你還沒有任何調查員。</p>
-          <button onClick={() => router.push("/characters")} className="mt-3 text-sm text-gold underline decoration-dotted">去抽取調查員 →</button>
+          <button onClick={() => router.push("/characters")} className="mt-3 text-sm text-gold underline decoration-dotted inline-flex items-center gap-1">去抽取調查員 <ArrowRight size={13} strokeWidth={2} /></button>
         </div>
       ) : (
         <>
@@ -221,7 +231,9 @@ export default function InterludePage() {
               <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(180deg, rgba(8,10,16,0.35), rgba(8,10,16,0.15) 40%, rgba(8,10,16,0.55))" }} />
               <div className="absolute left-1/2 bottom-3 -translate-x-1/2 z-10">
                 {charError ? (
-                  <div className={`il-char ${walking ? "" : "il-paused"}`} style={{ fontSize: 96, lineHeight: "150px" }}>🚶</div>
+                  <div className={`il-char ${walking ? "" : "il-paused"}`} style={{ height: 150, display: "flex", alignItems: "center" }}>
+                    <PersonStanding size={72} strokeWidth={1.5} className="text-zinc-300" />
+                  </div>
                 ) : (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -244,7 +256,7 @@ export default function InterludePage() {
             {active && (
               <div className="flex items-center gap-4 px-4 py-3 flex-wrap">
                 <div className="flex items-center gap-2 min-w-[160px]">
-                  <span className="text-xl">{activeMission?.emoji}</span>
+                  {activeMission && (() => { const Icon = MISSION_ICON[activeMission.key] ?? Compass; return <Icon size={20} strokeWidth={2} className="text-gold shrink-0" />; })()}
                   <div><p className="text-sm text-zinc-200">{activeMission?.name}</p><p className="text-[11px] text-zinc-600">成功率 {active.success_rate}%</p></div>
                 </div>
                 <div className="flex-1 min-w-[160px]">
@@ -274,7 +286,7 @@ export default function InterludePage() {
                 {featured?.occupation && OCCUPATION_ICON[featured.occupation] ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={OCCUPATION_ICON[featured.occupation]} alt="" width={56} height={56} className="rounded-lg shrink-0" style={{ objectFit: "cover", border: "1px solid rgba(201,169,110,0.25)" }} />
-                ) : <div className="w-14 h-14 rounded-lg shrink-0 flex items-center justify-center" style={{ background: "rgba(14,12,8,0.6)", border: "1px solid rgba(201,169,110,0.2)" }}><span className="text-2xl opacity-40">🎭</span></div>}
+                ) : <div className="w-14 h-14 rounded-lg shrink-0 flex items-center justify-center" style={{ background: "rgba(14,12,8,0.6)", border: "1px solid rgba(201,169,110,0.2)" }}><Drama size={24} strokeWidth={1.5} className="opacity-40" /></div>}
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <h3 className="font-serif truncate" style={{ color: "#e4d8be" }}>{featured?.name ?? "—"}</h3>
@@ -291,12 +303,13 @@ export default function InterludePage() {
                 </div>
               )}
               {featured && (
-                <p className="text-[11px] mb-2" style={{ color: featured.equipped_item ? "#cbb890" : "#52525b" }}>
-                  🜏 {featured.equipped_item ? `裝備：${itemById(featured.equipped_item)?.name ?? "未知物品"}` : "未裝備任何物品"}
+                <p className="text-[11px] mb-2 inline-flex items-center gap-1" style={{ color: featured.equipped_item ? "#cbb890" : "#52525b" }}>
+                  <Sparkles size={11} strokeWidth={2} />
+                  {featured.equipped_item ? `裝備：${itemById(featured.equipped_item)?.name ?? "未知物品"}` : "未裝備任何物品"}
                 </p>
               )}
-              <button type="button" onClick={() => setSwitching((s) => !s)} disabled={!!active} className="w-full text-xs py-2 rounded-lg transition-colors disabled:opacity-40" style={{ border: "1px solid #2e2416", color: "#c9a96e" }}>
-                切換調查員 ⇄
+              <button type="button" onClick={() => setSwitching((s) => !s)} disabled={!!active} className="w-full text-xs py-2 rounded-lg transition-colors disabled:opacity-40 inline-flex items-center justify-center gap-1" style={{ border: "1px solid #2e2416", color: "#c9a96e" }}>
+                切換調查員 <ArrowLeftRight size={11} strokeWidth={2} />
               </button>
               {switching && !active && (
                 <div className="mt-2 max-h-40 overflow-y-auto flex flex-col gap-1">
@@ -334,12 +347,15 @@ export default function InterludePage() {
                           border: `1px solid ${isSel ? "rgba(201,169,110,0.6)" : "#2e2416"}`,
                         }}
                       >
-                        <p className="text-sm mb-1" style={{ color: isSel ? "#e4d8be" : "#d4d4d8" }}>{m.emoji} {m.name}</p>
+                        <p className="text-sm mb-1 inline-flex items-center gap-1.5" style={{ color: isSel ? "#e4d8be" : "#d4d4d8" }}>
+                          {(() => { const Icon = MISSION_ICON[m.key] ?? Compass; return <Icon size={14} strokeWidth={2} />; })()}
+                          {m.name}
+                        </p>
                         <p className="text-[11px] text-zinc-600 leading-snug mb-2 min-h-[2.5em]">{m.desc}</p>
                         {rate != null ? (
                           <p className="text-[11px] text-gold">
                             最高成功率 {rate}%
-                            {gridMods && gridMods.rateBonus > 0 && <span className="text-emerald-400/80 ml-1">（🜏+{gridMods.rateBonus}%）</span>}
+                            {gridMods && gridMods.rateBonus > 0 && <span className="text-emerald-400/80 ml-1 inline-flex items-center gap-0.5">（<Sparkles size={10} strokeWidth={2} />+{gridMods.rateBonus}%）</span>}
                           </p>
                         ) : <p className="text-[11px] text-zinc-700">選擇調查員查看</p>}
                       </button>
@@ -373,11 +389,17 @@ export default function InterludePage() {
                 const equippedDef = itemById(featured.equipped_item);
                 return (
                   <>
-                    <p className="text-gold mb-1">{m.emoji} {m.name}</p>
+                    <p className="text-gold mb-1 inline-flex items-center gap-1.5">
+                      {(() => { const Icon = MISSION_ICON[m.key] ?? Compass; return <Icon size={14} strokeWidth={2} />; })()}
+                      {m.name}
+                    </p>
                     <p className="text-[11px] text-zinc-600 leading-snug mb-3">{m.desc}</p>
 
                     <p className="text-[10px] uppercase tracking-wider text-zinc-600 mb-1">選擇要鍛鍊的技能</p>
-                    <p className="text-[10px] text-zinc-600 mb-1.5">技能越高 → 成功率／點數越高，但成長越難；技能越低 → 風險高，但更容易成長。</p>
+                    <p className="text-[10px] text-zinc-600 mb-1.5">
+                      技能越高 <ArrowRight size={9} strokeWidth={2} className="inline align-[-1px]" /> 成功率／點數越高，但成長越難；
+                      技能越低 <ArrowRight size={9} strokeWidth={2} className="inline align-[-1px]" /> 風險高，但更容易成長。
+                    </p>
                     <div className="flex flex-col gap-1 mb-3">
                       {m.skills.map((k) => {
                         const v = currentSkillValue(k, featured.skills, attrs);
@@ -408,12 +430,15 @@ export default function InterludePage() {
                       <span className="text-gold font-bold text-sm">{rate}%</span>
                     </div>
                     {equippedDef && (
-                      <p className="text-[10px] text-zinc-600 mb-2">🜏 已裝備「{equippedDef.name}」{mods.rateBonus > 0 || mods.pointsMult !== 1 || mods.failFloor !== 0.1 || mods.growthBonus > 0 ? "（效果已計入）" : "（此任務無效果）"}</p>
+                      <p className="text-[10px] text-zinc-600 mb-2 inline-flex items-center gap-1">
+                        <Sparkles size={10} strokeWidth={2} />
+                        已裝備「{equippedDef.name}」{mods.rateBonus > 0 || mods.pointsMult !== 1 || mods.failFloor !== 0.1 || mods.growthBonus > 0 ? "（效果已計入）" : "（此任務無效果）"}
+                      </p>
                     )}
                     <div className="mb-2" />
 
                     <div className="rounded-lg p-2.5 mb-2" style={{ background: "rgba(6,78,59,0.18)", border: "1px solid rgba(16,94,66,0.5)" }}>
-                      <p style={{ color: "#6ee7b7" }}>✦ 成功時</p>
+                      <p style={{ color: "#6ee7b7" }} className="inline-flex items-center gap-1"><Sparkles size={11} strokeWidth={2} />成功時</p>
                       <ul className="text-[11px] text-zinc-400 mt-1 space-y-0.5">
                         <li>· 獲得 <span className="text-gold">{pts}</span> 點數</li>
                         <li>· 對「{SKILL_ZH_BY_KEY[chosenKey] ?? chosenKey}」進行成長檢定（擲高於 {chosenVal} 則 +1）</li>
@@ -421,7 +446,7 @@ export default function InterludePage() {
                       </ul>
                     </div>
                     <div className="rounded-lg p-2.5 mb-3" style={{ background: "rgba(127,29,29,0.15)", border: "1px solid rgba(153,27,27,0.45)" }}>
-                      <p style={{ color: "#fca5a5" }}>✧ 失敗時</p>
+                      <p style={{ color: "#fca5a5" }} className="inline-flex items-center gap-1"><CircleX size={11} strokeWidth={2} />失敗時</p>
                       <ul className="text-[11px] text-zinc-400 mt-1 space-y-0.5">
                         <li>· 僅獲得 <span className="text-zinc-300">{Math.ceil(pts * mods.failFloor)}</span> 點數（{Math.round(mods.failFloor * 100)}%）</li>
                         <li>· 不進行成長檢定</li>
@@ -433,10 +458,10 @@ export default function InterludePage() {
                       type="button"
                       onClick={() => dispatch(m.key)}
                       disabled={working}
-                      className="w-full py-2.5 rounded-lg font-serif text-sm transition-all disabled:opacity-40 hover:brightness-110"
+                      className="w-full py-2.5 rounded-lg font-serif text-sm transition-all disabled:opacity-40 hover:brightness-110 inline-flex items-center justify-center gap-1"
                       style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07" }}
                     >
-                      {working ? "派遣中…" : `派 ${featured.name} 出發 →`}
+                      {working ? "派遣中…" : <>派 {featured.name} 出發 <ArrowRight size={14} strokeWidth={2} /></>}
                     </button>
                   </>
                 );
@@ -447,13 +472,16 @@ export default function InterludePage() {
           {/* Claim result */}
           {result && (
             <div className="rounded-lg p-4 mb-4" style={{ background: "rgba(20,16,11,0.7)", border: "1px solid rgba(201,169,110,0.3)" }}>
-              <p className="text-xs uppercase tracking-wider mb-2" style={{ color: result.success ? "#6ee7b7" : "#fdba74" }}>{result.success ? "✦ 任務成功" : "✧ 不太順利"}</p>
+              <p className="text-xs uppercase tracking-wider mb-2 inline-flex items-center gap-1" style={{ color: result.success ? "#6ee7b7" : "#fdba74" }}>
+                {result.success ? <Sparkles size={12} strokeWidth={2} /> : <CircleX size={12} strokeWidth={2} />}
+                {result.success ? "任務成功" : "不太順利"}
+              </p>
               <p className="text-sm text-zinc-300 leading-relaxed mb-3">{result.narration}</p>
               <div className="flex items-center gap-4 text-xs flex-wrap mb-2"><span className="text-gold">＋{result.points} 點數</span>{result.growth?.capped && <span className="text-zinc-500">本週成長已達上限</span>}</div>
               {result.growth && !result.growth.capped && (
                 growthRevealed
                   ? ((result.growth.gain ?? 0) > 0
-                      ? <p className="text-xs" style={{ color: "#6ee7b7" }}>✦ 「{result.growth.skillName}」{result.growth.old} → {result.growth.new}</p>
+                      ? <p className="text-xs inline-flex items-center gap-1" style={{ color: "#6ee7b7" }}><Sparkles size={11} strokeWidth={2} />「{result.growth.skillName}」{result.growth.old} → {result.growth.new}</p>
                       : <p className="text-xs text-zinc-500">成長檢定未通過（{result.growth.d100} ≤ {result.growth.old}）</p>)
                   : <GrowthRollReveal growth={result.growth} onRevealed={() => setGrowthRevealed(true)} />
               )}
@@ -474,7 +502,7 @@ export default function InterludePage() {
                   return (
                     <div key={h.id} className="flex items-center gap-3 text-xs py-1.5 border-b last:border-0" style={{ borderColor: "rgba(42,36,24,0.6)" }}>
                       <span className={`px-1.5 py-0.5 rounded shrink-0 ${o?.success ? "text-emerald-300" : "text-rose-300"}`} style={{ border: `1px solid ${o?.success ? "rgba(16,94,66,0.6)" : "rgba(153,27,27,0.6)"}`, background: o?.success ? "rgba(6,78,59,0.3)" : "rgba(127,29,29,0.25)" }}>{o?.success ? "成功" : "失敗"}</span>
-                      <span className="shrink-0">{m?.emoji}</span>
+                      <span className="shrink-0">{m && (() => { const Icon = MISSION_ICON[m.key] ?? Compass; return <Icon size={13} strokeWidth={2} className="text-zinc-500" />; })()}</span>
                       <span className="text-zinc-300 w-24 truncate shrink-0">{m?.name}</span>
                       <span className="text-zinc-500 flex-1 truncate">{name} · {o ? `+${o.points} 點` : "—"}{grew ? `，${o?.growth?.skillName} +1` : ""}</span>
                       <span className="text-gold tabular-nums shrink-0">＋{o?.points ?? 0}</span>

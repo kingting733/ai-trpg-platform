@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 interface Player {
@@ -112,7 +113,7 @@ export default function LobbyPage({ params }: { params: { id: string } }) {
         style={{ color: "rgba(201,169,110,0.55)" }}
         onMouseEnter={(e) => (e.currentTarget.style.color = "#c9a96e")}
         onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(201,169,110,0.55)")}>
-        ← 返回
+        <ArrowLeft size={14} strokeWidth={2} /> 返回
       </button>
 
       {/* Header */}

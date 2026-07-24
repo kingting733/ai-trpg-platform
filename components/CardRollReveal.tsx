@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { Drama, Sparkle, Star, ArrowRight, AlertTriangle } from "lucide-react";
 
 const OCCUPATION_ICON: Record<string, string> = {
   "記者":     "/reporter.png",
@@ -17,7 +18,7 @@ const OCCUPATION_ICON: Record<string, string> = {
 
 function OccupationImg({ name, className, size = 40 }: { name: string; className?: string; size?: number }) {
   const src = OCCUPATION_ICON[name];
-  if (!src) return <span className={className} style={{ fontSize: size * 0.7 }}>🎭</span>;
+  if (!src) return <span className={className} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Drama size={size * 0.7} strokeWidth={2} /></span>;
   // eslint-disable-next-line @next/next/no-img-element
   return <img src={src} alt={name} width={size} height={size} className={className} style={{ objectFit: "contain" }} />;
 }
@@ -224,7 +225,11 @@ function SkillAllocator({ card, onSaved, onRequestSkip }: { card: RevealCard; on
                 : { background: "rgba(14,12,8,0.6)", border: "1px solid #2a2010" }}>
               <span className="flex-1 text-xs text-zinc-300">
                 {s.zh}
-                {buffed && <span className="ml-1 text-[10px]" style={{ color: "#c9a96e" }}>★職業</span>}
+                {buffed && (
+                  <span className="ml-1 text-[10px] inline-flex items-center gap-0.5" style={{ color: "#c9a96e" }}>
+                    <Star size={9} strokeWidth={2} fill="currentColor" />職業
+                  </span>
+                )}
               </span>
               <span className="text-[10px] text-zinc-600 w-5 text-right shrink-0">{base}</span>
               <span className="text-zinc-700 text-xs">+</span>
@@ -347,7 +352,7 @@ function OccupationReveal({
           {icon
             // eslint-disable-next-line @next/next/no-img-element
             ? <img src={icon} alt={displayed} width={72} height={72} style={{ objectFit: "contain" }} />
-            : <span className="text-6xl">🎭</span>}
+            : <Drama size={72} strokeWidth={1.5} />}
         </div>
         <span
           className="font-serif text-2xl tracking-wide transition-all"
@@ -372,7 +377,7 @@ function OccupationReveal({
             {buffedSkills.map((key) => (
               <div key={key} className="rounded-lg px-3 py-2.5 flex items-center gap-2"
                 style={{ background: "rgba(201,169,110,0.08)", border: "1px solid rgba(201,169,110,0.35)" }}>
-                <span className="text-gold text-sm">★</span>
+                <Star size={14} strokeWidth={2} fill="currentColor" className="text-gold" />
                 <span className="text-sm font-medium" style={{ color: "#e4d8be" }}>
                   {SKILL_ZH_MAP[key] ?? key}
                 </span>
@@ -389,7 +394,7 @@ function OccupationReveal({
           className="w-full py-2.5 rounded-lg font-serif text-sm transition-all hover:brightness-110"
           style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07", boxShadow: "0 0 16px rgba(201,169,110,0.2)" }}
         >
-          查看屬性總覽 →
+          <span className="inline-flex items-center gap-1">查看屬性總覽 <ArrowRight size={16} strokeWidth={2} /></span>
         </button>
       )}
 
@@ -443,7 +448,7 @@ function Die({ value, state, sides, delay = 0 }: { value: number; state: DieStat
               transition: "box-shadow 0.3s, border-color 0.3s" }
           : {}
       }>
-      {state === "idle" ? "✦" : display}
+      {state === "idle" ? <Sparkle size={18} strokeWidth={2} /> : display}
     </span>
   );
 }
@@ -583,7 +588,10 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
                 <button onClick={nextStat}
                   className="w-full py-2.5 rounded-lg font-serif text-sm tracking-wide transition-all hover:brightness-110"
                   style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07", boxShadow: "0 0 16px rgba(201,169,110,0.2)" }}>
-                  {lastStat ? (card.occupation ? "抽取職業 →" : "查看屬性總覽 →") : "下一項 →"}
+                  <span className="inline-flex items-center gap-1">
+                    {lastStat ? (card.occupation ? "抽取職業" : "查看屬性總覽") : "下一項"}
+                    <ArrowRight size={14} strokeWidth={2} />
+                  </span>
                 </button>
               ) : (
                 <div className="w-full py-2.5 text-center text-sm font-serif" style={{ color: "rgba(201,169,110,0.5)" }}>
@@ -660,7 +668,7 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
               <button onClick={() => setPhase("skills")}
                 className="w-full py-2.5 rounded-lg font-serif text-sm transition-all hover:brightness-110"
                 style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07", boxShadow: "0 0 16px rgba(201,169,110,0.2)" }}>
-                分配技能點數 →
+                <span className="inline-flex items-center gap-1">分配技能點數 <ArrowRight size={16} strokeWidth={2} /></span>
               </button>
               <button onClick={() => setConfirmSkip(true)} className="mt-2 w-full text-xs text-zinc-600 hover:text-zinc-400">
                 跳過，直接加入收藏
@@ -679,7 +687,7 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
             style={{ background: "rgba(5,4,2,0.82)", backdropFilter: "blur(2px)" }}
             onClick={(e) => e.stopPropagation()}>
             <div className="w-full rounded-xl p-5 text-center" style={{ ...PANEL, border: "1px solid rgba(201,169,110,0.4)" }}>
-              <div className="text-3xl mb-2">⚠️</div>
+              <div className="mb-2 flex justify-center text-amber-400"><AlertTriangle size={32} strokeWidth={2} /></div>
               <h3 className="font-serif text-base mb-2" style={{ color: "#e4d8be" }}>尚未分配技能點數</h3>
               <p className="text-xs leading-relaxed mb-4" style={{ color: "rgba(201,169,110,0.6)" }}>
                 你還有 <span className="font-bold" style={{ color: "#c9a96e" }}>{card.edu * 2 + card.int * 2}</span> 點技能點數未使用。

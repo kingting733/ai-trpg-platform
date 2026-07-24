@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { Check, X } from "lucide-react";
 import type { DailySeedConfig } from "@/lib/ai/daily-scenario";
 
 export interface AdminScenario {
@@ -517,12 +518,12 @@ function DailyPanel({
                   {d.status === "draft" && (
                     <>
                       <button onClick={() => onApprove(d)} disabled={busy === d.id}
-                        className="text-xs px-3 py-1.5 rounded-lg bg-green-800/60 hover:bg-green-700/70 text-green-100 disabled:opacity-50">
-                        {busy === d.id ? "…" : "✓ 核准發佈"}
+                        className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-green-800/60 hover:bg-green-700/70 text-green-100 disabled:opacity-50">
+                        {busy === d.id ? "…" : (<><Check size={14} strokeWidth={2} /> 核准發佈</>)}
                       </button>
                       <button onClick={() => onReject(d)} disabled={busy === d.id}
-                        className="text-xs px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-red-900/50 text-slate-300 hover:text-red-300 disabled:opacity-50">
-                        ✗ 退回
+                        className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-red-900/50 text-slate-300 hover:text-red-300 disabled:opacity-50">
+                        <X size={14} strokeWidth={2} /> 退回
                       </button>
                     </>
                   )}

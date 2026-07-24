@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Drama, AlertTriangle } from "lucide-react";
 import type { ScenarioEnding, EndingType } from "@/lib/game/endings";
 import { ConditionBuilder, type Option } from "@/components/ConditionBuilder";
 
@@ -113,7 +114,7 @@ export function EndingsEditor({
   return (
     <div className="space-y-4">
       <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 space-y-2 text-xs text-slate-400">
-        <p className="text-slate-300 font-medium">🎭 多重結局系統說明</p>
+        <p className="text-slate-300 font-medium inline-flex items-center gap-1.5"><Drama size={16} strokeWidth={2} /> 多重結局系統說明</p>
         <p>
           定義多個具名結局，系統每回合自動以純程式邏輯檢查觸發條件，無需 AI 判斷。觸發後，AI 根據實際劇情生成個性化的結局描述。
         </p>
@@ -127,7 +128,7 @@ export function EndingsEditor({
 
       {warnings.length > 0 && (
         <div className="bg-amber-950/40 border border-amber-900/50 rounded-lg px-4 py-2.5 text-xs text-amber-300/90 space-y-1">
-          {warnings.map((w, i) => <p key={i}>⚠ {w}</p>)}
+          {warnings.map((w, i) => <p key={i} className="inline-flex items-center gap-1"><AlertTriangle size={12} strokeWidth={2} /> {w}</p>)}
         </div>
       )}
 

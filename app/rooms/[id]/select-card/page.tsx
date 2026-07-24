@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Drama, Layers, Hourglass, Check, ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 interface CharacterCard {
@@ -122,13 +123,13 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
   if (cards.length === 0) {
     return (
       <div className="max-w-lg mx-auto text-center py-24">
-        <div className="text-5xl mb-4 opacity-50">🎴</div>
+        <div className="mb-4 opacity-50 flex justify-center"><Layers size={48} strokeWidth={1.5} /></div>
         <h2 className="font-serif text-2xl mb-2" style={{ color: "#e4d8be" }}>尚無調查員</h2>
         <p className="text-zinc-500 mb-6">你需要至少一位調查員才能遊玩。請先抽取每日卡。</p>
         <Link href="/characters"
-          className="inline-block px-6 py-3 rounded-lg font-serif text-sm transition-all hover:brightness-110"
+          className="inline-flex items-center gap-1 px-6 py-3 rounded-lg font-serif text-sm transition-all hover:brightness-110"
           style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07" }}>
-          前往我的調查員 →
+          前往我的調查員 <ArrowRight size={16} strokeWidth={2} />
         </Link>
       </div>
     );
@@ -179,9 +180,9 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
               <div className="absolute inset-[6px] rounded-lg pointer-events-none"
                 style={{ border: `1px solid ${accent.frame}` }} />
               {busy && (
-                <span className="absolute top-3 right-3 z-10 text-[11px] px-2 py-0.5 rounded-full"
+                <span className="absolute top-3 right-3 z-10 inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full"
                   style={{ background: "rgba(40,34,24,0.95)", border: "1px solid rgba(201,169,110,0.4)", color: "#c9a96e" }}>
-                  ⏳ 出任務中
+                  <Hourglass size={11} strokeWidth={2} /> 出任務中
                 </span>
               )}
 
@@ -196,7 +197,7 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
                   ) : (
                     <div className="w-16 h-16 shrink-0 rounded-xl flex items-center justify-center"
                       style={{ background: "rgba(14,12,8,0.6)", border: "1px solid rgba(201,169,110,0.2)" }}>
-                      <span className="text-2xl opacity-40">🎭</span>
+                      <Drama size={22} strokeWidth={1.5} className="opacity-40" />
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
@@ -228,7 +229,7 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
                 <div className="flex items-center justify-between text-xs pt-2"
                   style={{ borderTop: "1px solid #2a2010" }}>
                   <span className="text-zinc-500">合計 <span className="font-bold" style={{ color: "#c9a96e" }}>{card.total_stats}</span></span>
-                  {isSelected && <span className="font-medium" style={{ color: "#6ee7b7" }}>已選擇 ✓</span>}
+                  {isSelected && <span className="inline-flex items-center gap-1 font-medium" style={{ color: "#6ee7b7" }}>已選擇 <Check size={13} strokeWidth={2} /></span>}
                 </div>
               </div>
             </button>
@@ -245,10 +246,10 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
         <button
           onClick={confirmCard}
           disabled={!selectedId || confirming}
-          className="w-full sm:w-auto px-8 py-3 rounded-lg font-serif text-base transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="inline-flex items-center justify-center gap-1 w-full sm:w-auto px-8 py-3 rounded-lg font-serif text-base transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07", boxShadow: "0 0 18px rgba(201,169,110,0.2)" }}
         >
-          {confirming ? "進入房間中..." : selected ? `出戰：${selected.name} →` : "選擇一位調查員以繼續"}
+          {confirming ? "進入房間中..." : selected ? (<>出戰：{selected.name} <ArrowRight size={16} strokeWidth={2} /></>) : "選擇一位調查員以繼續"}
         </button>
         <Link href="/characters" className="text-center sm:text-left text-sm transition-colors text-zinc-600 hover:text-zinc-300">
           抽取更多調查員

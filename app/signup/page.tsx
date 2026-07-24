@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { Mail, Sparkles } from "lucide-react";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -84,7 +85,7 @@ export default function SignupPage() {
             boxShadow: "0 0 40px rgba(201,169,110,0.06)",
           }}
         >
-          <div className="text-5xl mb-4">📧</div>
+          <div className="mb-4 flex justify-center"><Mail size={48} strokeWidth={1.5} className="text-gold" /></div>
           <h1 className="font-serif text-2xl text-gold mb-3 tracking-wide">請查看你的電子郵件</h1>
           <p className="text-zinc-400 mb-2">
             我們已將確認連結寄送至 <span className="text-zinc-100">{email}</span>。
@@ -116,7 +117,7 @@ export default function SignupPage() {
       >
         <div className="flex flex-col items-center mb-6">
           <div className="w-9 h-9 rounded border border-gold/40 flex items-center justify-center text-gold mb-3">
-            ✦
+            <Sparkles size={16} strokeWidth={2} />
           </div>
           <h1 className="font-serif text-2xl text-gold tracking-wide">建立帳號</h1>
           <div className="flex items-center gap-3 mt-3 mb-1 w-full">

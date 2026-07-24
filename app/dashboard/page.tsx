@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { BookOpen, ArrowRight } from "lucide-react";
 
 interface Scenario {
   id: string;
@@ -91,10 +92,10 @@ export default function DashboardPage() {
           <div className="p-12 text-center text-slate-500">載入中...</div>
         ) : scenarios.length === 0 ? (
           <div className="p-12 text-center text-slate-500">
-            <div className="text-4xl mb-3">📖</div>
+            <div className="mb-3 flex justify-center"><BookOpen size={36} strokeWidth={1.5} /></div>
             <p>尚無劇本，建立你的第一個吧！</p>
-            <Link href="/scenarios/new" className="text-zinc-100 hover:text-white text-sm mt-2 inline-block">
-              建立劇本 →
+            <Link href="/scenarios/new" className="inline-flex items-center gap-1 text-zinc-100 hover:text-white text-sm mt-2">
+              建立劇本 <ArrowRight size={14} strokeWidth={2} />
             </Link>
           </div>
         ) : (

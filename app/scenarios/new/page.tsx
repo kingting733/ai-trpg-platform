@@ -2,6 +2,7 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { Sparkles, Lock, Map, Theater } from "lucide-react";
 import type { ImportedScenario } from "@/lib/ai/import-scenario";
 import type { NpcEntry } from "@/lib/ai/gm";
 import { newNpcId } from "@/lib/game/npc";
@@ -269,7 +270,7 @@ export default function NewScenarioPage() {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex-1 min-w-[220px]">
             <h2 className="text-white font-semibold flex items-center gap-2">
-              <span>✨</span> 從故事文件匯入
+              <Sparkles size={18} strokeWidth={2} /> 從故事文件匯入
             </h2>
             <p className="text-slate-400 text-sm mt-1">
               上傳 <span className="text-slate-300">.txt</span>、<span className="text-slate-300">.md</span>、{" "}
@@ -315,7 +316,7 @@ export default function NewScenarioPage() {
               activeTab === tab.id ? "bg-zinc-800 text-white" : "text-slate-400 hover:text-white"
             }`}
           >
-            {tab.id !== "player" && <span className="mr-1 opacity-60">🔒</span>}
+            {tab.id !== "player" && <Lock size={12} strokeWidth={2} className="inline-block mr-1 opacity-60" />}
             {tab.label}
           </button>
         ))}
@@ -433,7 +434,7 @@ export default function NewScenarioPage() {
 
             {/* Location unlock graph */}
             <div>
-              <label className="block text-sm text-slate-400 mb-1">🗺 地點系統（選填）</label>
+              <label className="flex items-center gap-1.5 text-sm text-slate-400 mb-1"><Map size={14} strokeWidth={2} /> 地點系統（選填）</label>
               <p className="text-xs text-slate-500 mb-2">設定遊戲中的地點、線索證物、解鎖條件與 NPC 出沒。搜索成功時可向玩家揭示圖片／文字。留空則由 AI 主持人依故事自由處理場景。</p>
               <LocationGraphEditor
                 nodes={locNodes}
@@ -455,7 +456,7 @@ export default function NewScenarioPage() {
 
             {/* Multi-endings */}
             <div>
-              <label className="block text-sm text-slate-400 mb-2">🎭 多重結局（選填）</label>
+              <label className="flex items-center gap-1.5 text-sm text-slate-400 mb-2"><Theater size={14} strokeWidth={2} /> 多重結局（選填）</label>
               <EndingsEditor
                 endings={endings}
                 onChange={setEndings}

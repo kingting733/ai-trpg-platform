@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { ArrowLeft } from "lucide-react";
 
 interface Scenario {
   id: string;
@@ -116,8 +117,8 @@ export default function ScenarioDetailPage({ params }: { params: { id: string } 
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <p className="font-serif text-lg" style={{ color: "#e4d8be" }}>找不到此劇本。</p>
-        <Link href="/scenarios" className="text-sm transition-colors" style={{ color: "rgba(201,169,110,0.6)" }}>
-          ← 返回劇本庫
+        <Link href="/scenarios" className="inline-flex items-center gap-1 text-sm transition-colors" style={{ color: "rgba(201,169,110,0.6)" }}>
+          <ArrowLeft size={14} strokeWidth={2} /> 返回劇本庫
         </Link>
       </div>
     );
@@ -139,7 +140,7 @@ export default function ScenarioDetailPage({ params }: { params: { id: string } 
         style={{ color: "rgba(201,169,110,0.55)" }}
         onMouseEnter={(e) => (e.currentTarget.style.color = "#c9a96e")}
         onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(201,169,110,0.55)")}>
-        ← 返回劇本庫
+        <ArrowLeft size={14} strokeWidth={2} /> 返回劇本庫
       </Link>
 
       {/* Main info panel */}

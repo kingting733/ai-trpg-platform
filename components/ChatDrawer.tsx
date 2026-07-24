@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, useCallback } from "react";
+import { MessageCircle, X, Hand } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 interface ChatMessage {
@@ -168,7 +169,7 @@ export function ChatDrawer({
         }}
         title="玩家聊天室（可拖曳移動）"
       >
-        <span className="text-xl">💬</span>
+        <MessageCircle size={22} strokeWidth={2} className="text-[#c9a96e]" />
         {unread > 0 && (
           <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full text-[10px] font-bold flex items-center justify-center"
             style={{ background: "#b91c1c", color: "#fff", border: "1px solid #0f0c08" }}>
@@ -197,19 +198,19 @@ export function ChatDrawer({
         <div className="flex items-center justify-between px-4 py-3 shrink-0"
           style={{ borderBottom: "1px solid #2e2416" }}>
           <div className="flex items-center gap-2">
-            <span className="text-lg">💬</span>
+            <MessageCircle size={18} strokeWidth={2} style={{ color: "#c9a96e" }} />
             <div>
               <h3 className="font-serif text-sm" style={{ color: "#e4d8be", letterSpacing: "0.05em" }}>玩家聊天室</h3>
               <p className="text-[10px] text-zinc-600">場外討論 · 主持人看不到</p>
             </div>
           </div>
-          <button onClick={() => setOpen(false)} className="text-zinc-500 hover:text-zinc-300 text-lg leading-none">✕</button>
+          <button onClick={() => setOpen(false)} className="text-zinc-500 hover:text-zinc-300 leading-none"><X size={18} strokeWidth={2} /></button>
         </div>
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2.5 min-h-0">
           {messages.length === 0 ? (
-            <p className="text-zinc-700 text-xs text-center mt-8 italic">還沒有訊息。打個招呼吧 👋</p>
+            <p className="text-zinc-700 text-xs text-center mt-8 italic inline-flex items-center justify-center gap-1 w-full">還沒有訊息。打個招呼吧 <Hand size={12} strokeWidth={2} /></p>
           ) : (
             messages.map((m) => {
               const mine = m.user_id === currentUserId;

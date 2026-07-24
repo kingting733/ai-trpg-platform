@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { Lock, ArrowLeft, Map, Theater } from "lucide-react";
 import type { NpcEntry } from "@/lib/ai/gm";
 import { CoverImageUpload } from "@/components/CoverImageUpload";
 import { LocationGraphEditor } from "@/components/LocationGraphEditor";
@@ -241,8 +242,8 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <p className="text-slate-400">找不到劇本或你沒有編輯權限。</p>
-        <button onClick={() => router.push("/dashboard")} className="text-zinc-100 hover:text-white text-sm">
-          ← 返回後台
+        <button onClick={() => router.push("/dashboard")} className="inline-flex items-center gap-1 text-zinc-100 hover:text-white text-sm">
+          <ArrowLeft size={14} strokeWidth={2} /> 返回後台
         </button>
       </div>
     );
@@ -269,8 +270,8 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
             狀態：<span className={currentStatus === "published" ? "text-green-400" : "text-slate-400"}>{currentStatus === "published" ? "已發佈" : "草稿"}</span>
           </p>
         </div>
-        <button onClick={() => router.push("/dashboard")} className="text-slate-400 hover:text-white text-sm">
-          ← 返回後台
+        <button onClick={() => router.push("/dashboard")} className="inline-flex items-center gap-1 text-slate-400 hover:text-white text-sm">
+          <ArrowLeft size={14} strokeWidth={2} /> 返回後台
         </button>
       </div>
 
@@ -285,7 +286,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
               activeTab === tab.id ? "bg-zinc-800 text-white" : "text-slate-400 hover:text-white"
             }`}
           >
-            {tab.id !== "player" && <span className="mr-1 opacity-60">🔒</span>}
+            {tab.id !== "player" && <Lock size={12} strokeWidth={2} className="inline-block mr-1 opacity-60" />}
             {tab.label}
           </button>
         ))}
@@ -407,7 +408,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
 
             {/* Location unlock graph */}
             <div>
-              <label className="block text-sm text-slate-400 mb-1">🗺 地點系統（選填）</label>
+              <label className="flex items-center gap-1.5 text-sm text-slate-400 mb-1"><Map size={14} strokeWidth={2} /> 地點系統（選填）</label>
               <p className="text-xs text-slate-500 mb-2">設定遊戲中的地點、線索證物、解鎖條件與 NPC 出沒。搜索成功時可向玩家揭示圖片／文字。留空則由 AI 主持人依故事自由處理場景。</p>
               <LocationGraphEditor
                 nodes={locNodes}
@@ -429,7 +430,7 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
 
             {/* Multi-endings */}
             <div>
-              <label className="block text-sm text-slate-400 mb-2">🎭 多重結局（選填）</label>
+              <label className="flex items-center gap-1.5 text-sm text-slate-400 mb-2"><Theater size={14} strokeWidth={2} /> 多重結局（選填）</label>
               <EndingsEditor
                 endings={endings}
                 onChange={setEndings}

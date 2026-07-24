@@ -7,6 +7,11 @@ import { endingAllowsGrowth } from "@/lib/game/endings";
 import { MYTHOS_SPELLS, MYTHOS_ZH_BY_KEY, MYTHOS_KEY_BY_ZH, MYTHOS_MP_COST, mythosSuccessRate } from "@/lib/game/mythos";
 import { coerceLocationGraph, coerceLocationState, computeExits, positionOf, type LocationGraph } from "@/lib/game/locations";
 import { ChatDrawer } from "@/components/ChatDrawer";
+import {
+  MapPin, Lock, Package, CircleCheck, Circle, Search, ArrowDown, Dices, Sparkles,
+  ArrowRight, Map as MapIcon, Backpack, Users, X, Skull, Brain, Swords, TrendingUp,
+  type LucideIcon,
+} from "lucide-react";
 
 interface Character {
   id: string;
@@ -665,7 +670,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
         <div className="flex flex-col gap-1.5">
           {current && (
             <div className="flex items-center gap-2 text-xs mb-1">
-              <span className="shrink-0 w-4 text-center">📍</span>
+              <span className="shrink-0 w-4 flex items-center justify-center"><MapPin size={12} strokeWidth={2} /></span>
               <span className="text-gold font-semibold">
                 {region && <span className="text-gold/60">{shortLoc(region.name)} › </span>}
                 {shortLoc(current.name)}
@@ -692,7 +697,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                 );
                 return (
                   <div key={n.id} className="flex items-center gap-2 text-xs">
-                    <span className="shrink-0 w-4 text-center">{visited ? "✓" : "○"}</span>
+                    <span className="shrink-0 w-4 flex items-center justify-center">{visited ? <CircleCheck size={12} strokeWidth={2} /> : <Circle size={10} strokeWidth={2} />}</span>
                     {canGo ? (
                       <button
                         type="button"
@@ -713,7 +718,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
               <p className="text-[10px] tracking-wider text-zinc-600 mt-1">看得到但進不去</p>
               {exits.locked.map((n) => (
                 <div key={n.id} className="flex items-center gap-2 text-xs">
-                  <span className="shrink-0 w-4 text-center">🔒</span>
+                  <span className="shrink-0 w-4 flex items-center justify-center"><Lock size={11} strokeWidth={2} /></span>
                   <span className="text-zinc-600">{shortLoc(n.name)}</span>
                 </div>
               ))}
@@ -733,10 +738,10 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
             <span
               key={`${it.name}-${i}`}
               title={it.note || undefined}
-              className="text-xs px-2 py-1 rounded"
+              className="text-xs px-2 py-1 rounded inline-flex items-center gap-1"
               style={{ background: "rgba(14,12,8,0.8)", color: "#d4d4d8", border: "1px solid #2e2416" }}
             >
-              📦 {it.name}
+              <Package size={11} strokeWidth={2} />{it.name}
             </span>
           ))}
         </div>
@@ -761,7 +766,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                     style={done
                       ? { background: "rgba(6,78,59,0.5)", color: "#6ee7b7", border: "1px solid rgba(6,95,70,0.7)" }
                       : { background: "rgba(14,12,8,0.8)", color: "#71717a", border: "1px solid #2e2416" }}>
-                    {done ? "✓" : "○"}
+                    {done ? <CircleCheck size={11} strokeWidth={2} /> : <Circle size={9} strokeWidth={2} />}
                   </span>
                   <div className="flex-1 min-w-0">
                     <span className={done ? "text-zinc-500 line-through" : "text-zinc-300"}>{obj.text}</span>
@@ -999,7 +1004,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
               )}
               {entry.entry_type === "location_media" && (
                 <div className="rounded-lg p-3.5" style={{ background: "rgba(20,16,11,0.6)", border: "1px solid rgba(201,169,110,0.30)" }}>
-                  <span className="text-xs text-gold font-medium uppercase tracking-wider flex items-center gap-1 mb-2">🔍 發現</span>
+                  <span className="text-xs text-gold font-medium uppercase tracking-wider flex items-center gap-1 mb-2"><Search size={12} strokeWidth={2} />發現</span>
                   {entry.media_url && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -1044,7 +1049,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
               className="absolute bottom-3 right-3 z-20 text-sm sm:text-xs font-medium px-4 py-2.5 sm:py-1.5 rounded-full shadow-lg flex items-center gap-1 transition-colors active:brightness-125"
               style={{ background: "rgba(26,21,14,0.97)", border: "1px solid rgba(201,169,110,0.45)", color: "#c9a96e" }}
             >
-              ↓ 最新訊息
+              <ArrowDown size={13} strokeWidth={2} />最新訊息
             </button>
           )}
         </div>
@@ -1128,7 +1133,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                   : { background: "rgba(14,12,8,0.8)", border: "1px solid #2e2416", color: "#9a8c6e" }}
                 title="選擇要使用的技能（可選）"
               >
-                <span>🎲</span>
+                <Dices size={14} strokeWidth={2} />
                 <span className="whitespace-nowrap">{selectedSkill ? (SKILL_ZH[selectedSkill] ?? MYTHOS_ZH_BY_KEY[selectedSkill] ?? selectedSkill) : "技能"}</span>
                 <span className="text-[10px] opacity-70">▾</span>
               </button>
@@ -1163,7 +1168,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                             className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-sm hover:brightness-125 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                             style={{ background: active ? "rgba(155,120,190,0.16)" : "transparent", color: active ? "#d9c8ec" : "#b3a1c6" }}
                           >
-                            <span>🜏 {s.zh}</span>
+                            <span className="inline-flex items-center gap-1"><Sparkles size={12} strokeWidth={2} />{s.zh}</span>
                             <span className="tabular-nums text-[11px]" style={{ color: "#9b78be" }}>{rate}%＋代價</span>
                           </button>
                         );
@@ -1235,10 +1240,10 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                 return (
                   <button
                     onClick={() => router.push(`/rooms/${params.id}/select-card`)}
-                    className="px-6 py-2.5 rounded-lg font-serif transition-all hover:brightness-110"
+                    className="px-6 py-2.5 rounded-lg font-serif transition-all hover:brightness-110 inline-flex items-center gap-1"
                     style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07" }}
                   >
-                    選擇調查員以繼續 →
+                    選擇調查員以繼續 <ArrowRight size={14} strokeWidth={2} />
                   </button>
                 );
               }
@@ -1253,11 +1258,12 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
             Hidden on desktop (the panels live in the right column there). */}
         <div className="flex lg:hidden -mx-3 -mb-3 shrink-0" style={{ borderTop: "1px solid rgba(201,169,110,0.22)" }}>
           {([
-            { key: "location", icon: "🗺", label: "地點" },
-            { key: "item", icon: "🎒", label: "物品" },
-            { key: "team", icon: "👥", label: "隊伍" },
+            { key: "location", icon: MapIcon, label: "地點" },
+            { key: "item", icon: Backpack, label: "物品" },
+            { key: "team", icon: Users, label: "隊伍" },
           ] as const).map((b, idx) => {
             const active = activePanel === b.key;
+            const Icon = b.icon;
             return (
               <button
                 key={b.key}
@@ -1271,7 +1277,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                   boxShadow: active ? "inset 0 2px 0 #c9a96e" : "none",
                 }}
               >
-                <span className="text-lg leading-none">{b.icon}</span>
+                <Icon size={18} strokeWidth={2} />
                 <span className="text-[11px] tracking-wide">{b.label}</span>
               </button>
             );
@@ -1300,7 +1306,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                 style={{ border: "1px solid #2e2416" }}
                 aria-label="關閉"
               >
-                ✕
+                <X size={16} strokeWidth={2} />
               </button>
             </div>
             {activePanel === "location" ? locationPanel : activePanel === "item" ? itemPanel : teamPanel}
@@ -1321,15 +1327,15 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
 
 // ─── Ending Screen ────────────────────────────────────────────────────────────
 
-const ENDING_META: Record<string, { icon: string; badge: string; accent: string; glow: string }> = {
+const ENDING_META: Record<string, { icon: LucideIcon; badge: string; accent: string; glow: string }> = {
   // Canonical ending types (lib/game/endings.ts).
-  victory: { icon: "✦", badge: "勝利結局", accent: "#c9a96e", glow: "rgba(201,169,110,0.45)" },
-  neutral: { icon: "↗", badge: "中立結局", accent: "#fdba74", glow: "rgba(253,186,116,0.40)" },
-  failure: { icon: "✕", badge: "失敗",     accent: "#fca5a5", glow: "rgba(252,165,165,0.40)" },
+  victory: { icon: Sparkles, badge: "勝利結局", accent: "#c9a96e", glow: "rgba(201,169,110,0.45)" },
+  neutral: { icon: TrendingUp, badge: "中立結局", accent: "#fdba74", glow: "rgba(253,186,116,0.40)" },
+  failure: { icon: X, badge: "失敗",     accent: "#fca5a5", glow: "rgba(252,165,165,0.40)" },
   // Legacy values kept for rooms completed before the type rename.
-  best:    { icon: "✦", badge: "最佳結局", accent: "#c9a96e", glow: "rgba(201,169,110,0.45)" },
-  normal:  { icon: "✔", badge: "勝利",     accent: "#6ee7b7", glow: "rgba(110,231,183,0.40)" },
-  bad:     { icon: "↗", badge: "苦甜結局", accent: "#fdba74", glow: "rgba(253,186,116,0.40)" },
+  best:    { icon: Sparkles, badge: "最佳結局", accent: "#c9a96e", glow: "rgba(201,169,110,0.45)" },
+  normal:  { icon: CircleCheck, badge: "勝利",     accent: "#6ee7b7", glow: "rgba(110,231,183,0.40)" },
+  bad:     { icon: TrendingUp, badge: "苦甜結局", accent: "#fdba74", glow: "rgba(253,186,116,0.40)" },
 };
 
 function EndingScreen({
@@ -1359,7 +1365,7 @@ function EndingScreen({
         <div className="relative w-16 h-16 rounded-full flex items-center justify-center text-3xl"
           style={{ background: "linear-gradient(150deg,#1c1813,#0f0c08)", border: `2px solid ${glow}`, color: accent, boxShadow: `0 0 28px ${glow}` }}>
           <div className="absolute inset-[4px] rounded-full pointer-events-none" style={{ border: `1px solid ${glow}` }} />
-          {hasEnding ? meta.icon : "⚔"}
+          {hasEnding ? <meta.icon size={28} strokeWidth={2} /> : <Swords size={28} strokeWidth={2} />}
         </div>
         {hasEnding && (
           <span className="text-xs px-3 py-1 rounded-full font-semibold uppercase tracking-wider"
@@ -1418,7 +1424,7 @@ function EndingScreen({
           className="w-full py-3 rounded-lg font-serif transition-all hover:brightness-110 flex items-center justify-center gap-2"
           style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07", boxShadow: "0 0 18px rgba(201,169,110,0.2)" }}
         >
-          📈 角色成長 — 對本局成功使用過的技能進行成長檢定
+          <TrendingUp size={16} strokeWidth={2} />角色成長 — 對本局成功使用過的技能進行成長檢定
         </button>
       ) : (
         <div className="w-full text-center text-zinc-600 text-sm py-2.5 rounded-lg" style={{ border: "1px solid #2e2416" }}>
@@ -1473,11 +1479,11 @@ function DiceResult({ roll }: { roll: RollResult }) {
       {roll.d100_roll != null && (
         <div className={`rounded-lg border px-3 py-2 text-xs ${style?.cls ?? "border-slate-700 bg-slate-900/40"}`}>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-bold tracking-wider">🎲 {STAT_ZH[roll.stat_used ?? ""] ?? roll.stat_used?.toUpperCase()}</span>
+            <span className="font-bold tracking-wider inline-flex items-center gap-1"><Dices size={13} strokeWidth={2} />{STAT_ZH[roll.stat_used ?? ""] ?? roll.stat_used?.toUpperCase()}</span>
             <span className="opacity-90">
               d100 = <b>{roll.d100_roll}</b> vs {roll.target}%
             </span>
-            <span className="font-bold">→ {style?.label ?? roll.outcome}</span>
+            <span className="font-bold inline-flex items-center gap-1"><ArrowRight size={12} strokeWidth={2} />{style?.label ?? roll.outcome}</span>
           </div>
           {(roll.hp_change !== 0 || roll.san_change !== 0 || roll.consequence_summary) && (
             <div className="mt-1 opacity-90">
@@ -1497,14 +1503,14 @@ function DiceResult({ roll }: { roll: RollResult }) {
             : "text-zinc-300 border-slate-700 bg-slate-900/40"
         }`}>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-bold tracking-wider">⚔️ 攻擊 → {roll.attack.target_name}</span>
+            <span className="font-bold tracking-wider inline-flex items-center gap-1"><Swords size={13} strokeWidth={2} />攻擊 <ArrowRight size={12} strokeWidth={2} />{roll.attack.target_name}</span>
             {!roll.attack.hit ? (
               <span className="font-bold">落空</span>
             ) : roll.attack.crit ? (
               <span className="font-bold">重擊命中（無法閃避）</span>
             ) : roll.attack.dodge_roll != null ? (
-              <span className="opacity-90">
-                閃避 d100 = <b>{roll.attack.dodge_roll}</b> vs {roll.attack.dodge_target}% → {roll.attack.dodged ? "閃過" : "未閃過"}
+              <span className="opacity-90 inline-flex items-center gap-1">
+                閃避 d100 = <b>{roll.attack.dodge_roll}</b> vs {roll.attack.dodge_target}% <ArrowRight size={11} strokeWidth={2} />{roll.attack.dodged ? "閃過" : "未閃過"}
               </span>
             ) : null}
           </div>
@@ -1512,7 +1518,7 @@ function DiceResult({ roll }: { roll: RollResult }) {
             <div className="mt-1 font-semibold">
               {roll.attack.skill_label}傷害 −{roll.attack.damage} HP
               {roll.attack.target_hp_after != null && !roll.attack.is_npc && `（剩餘 ${roll.attack.target_hp_after}）`}
-              {roll.attack.target_died && <span className="ml-1">☠ 倒下</span>}
+              {roll.attack.target_died && <span className="ml-1 inline-flex items-center gap-1"><Skull size={12} strokeWidth={2} />倒下</span>}
             </div>
           )}
         </div>
@@ -1522,10 +1528,10 @@ function DiceResult({ roll }: { roll: RollResult }) {
       {sc && (
         <div className={`rounded-lg border px-3 py-2 text-xs ${sc.success ? "text-teal-200 border-teal-800 bg-teal-950/30" : "text-rose-300 border-rose-700 bg-rose-950/40"}`}>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-bold uppercase tracking-wider">🧠 理智檢定</span>
+            <span className="font-bold uppercase tracking-wider inline-flex items-center gap-1"><Brain size={13} strokeWidth={2} />理智檢定</span>
             <span className="opacity-80">{sc.severity_label}</span>
             <span className="opacity-90">d100 = <b>{sc.roll}</b> vs 意志 {sc.pow}</span>
-            <span className="font-bold">→ {sc.success ? "撐住" : "失守"}</span>
+            <span className="font-bold inline-flex items-center gap-1"><ArrowRight size={12} strokeWidth={2} />{sc.success ? "撐住" : "失守"}</span>
           </div>
           {sc.trigger_text && (
             <div className="mt-1 opacity-90">

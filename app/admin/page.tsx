@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AdminClient, AdminScenario, AdminRoom, DailyDraft } from "./AdminClient";
 import { coerceSeedConfig, type DailySeedConfig } from "@/lib/ai/daily-scenario";
@@ -19,7 +20,7 @@ export default async function AdminPage() {
   if (me?.role !== "admin") {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-center">
-        <div className="text-4xl">🔒</div>
+        <Lock size={36} strokeWidth={1.5} className="text-white" />
         <h1 className="text-xl font-semibold text-white">沒有管理員權限</h1>
         <p className="text-slate-400 text-sm max-w-md">
           此頁面僅限管理員存取。若你應該擁有管理權限，請在資料庫將你的帳號 role 設為 'admin'。

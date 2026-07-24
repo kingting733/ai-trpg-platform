@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { TrendingUp, Dices, Check } from "lucide-react";
 import { SKILL_ZH_BY_KEY } from "@/lib/game/skills";
 
 interface EligibleSkill { key: string; name: string; current: number; }
@@ -59,7 +60,7 @@ export default function GrowthPage({ params }: { params: { id: string } }) {
   return (
     <div className="max-w-lg mx-auto py-10">
       <div className="text-center mb-6">
-        <div className="text-4xl mb-2">📈</div>
+        <div className="mb-2 flex justify-center"><TrendingUp size={36} strokeWidth={1.5} className="text-white" /></div>
         <h1 className="text-2xl font-bold text-white mb-1">角色成長</h1>
         <p className="text-slate-400 text-sm">
           挑選一個你在本場冒險中<span className="text-amber-400">成功使用過</span>的技能，進行成長檢定。<br />
@@ -137,9 +138,9 @@ export default function GrowthPage({ params }: { params: { id: string } }) {
         <button
           onClick={doGrowth}
           disabled={!selected || rolling}
-          className="w-full bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-white py-3 rounded-lg font-semibold mb-4"
+          className="inline-flex items-center justify-center gap-1.5 w-full bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-white py-3 rounded-lg font-semibold mb-4"
         >
-          {rolling ? "擲骰中..." : selected ? "進行成長檢定 🎲" : "選擇一個技能"}
+          {rolling ? "擲骰中..." : selected ? (<>進行成長檢定 <Dices size={16} strokeWidth={2} /></>) : "選擇一個技能"}
         </button>
       )}
 
@@ -166,8 +167,8 @@ function ResultDetail({
         d100 = <b className="text-white">{roll}</b> vs 目前 <b className="text-white">{oldValue}</b>
       </div>
       {improved ? (
-        <div className="text-emerald-300 font-semibold text-lg">
-          ✓ 成長成功！+{gain}　<span className="text-white">{oldValue} → {newValue}</span>
+        <div className="inline-flex items-center gap-1.5 text-emerald-300 font-semibold text-lg">
+          <Check size={18} strokeWidth={2} /> 成長成功！+{gain}　<span className="text-white">{oldValue} → {newValue}</span>
         </div>
       ) : (
         <div className="text-slate-400">

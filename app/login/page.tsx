@@ -3,6 +3,7 @@ import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { Sparkles } from "lucide-react";
 
 function LoginForm() {
   const router = useRouter();
@@ -70,7 +71,7 @@ function LoginForm() {
         {/* Decorative crest + line, matching the site header */}
         <div className="flex flex-col items-center mb-6">
           <div className="w-9 h-9 rounded border border-gold/40 flex items-center justify-center text-gold mb-3">
-            ✦
+            <Sparkles size={16} strokeWidth={2} />
           </div>
           <h1 className="font-serif text-2xl text-gold tracking-wide">歡迎回來</h1>
           <div className="flex items-center gap-3 mt-3 mb-1 w-full">

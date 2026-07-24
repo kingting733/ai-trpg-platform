@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { ArrowLeft } from "lucide-react";
 
 export default function JoinRoomPage({ params }: { params: { code: string } }) {
   const router = useRouter();
@@ -69,7 +70,7 @@ export default function JoinRoomPage({ params }: { params: { code: string } }) {
         {status === "error" && (
           <div>
             <p className="text-red-400 text-lg mb-4">{error}</p>
-            <button onClick={() => router.push("/play/hub")} className="text-zinc-100 hover:text-white">← 返回大廳</button>
+            <button onClick={() => router.push("/play/hub")} className="inline-flex items-center gap-1 text-zinc-100 hover:text-white"><ArrowLeft size={14} strokeWidth={2} /> 返回大廳</button>
           </div>
         )}
       </div>

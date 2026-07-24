@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { NavbarClient } from "./NavbarClient";
 import { NavbarLinks } from "./NavbarLinks";
@@ -24,8 +25,8 @@ export async function Navbar() {
       <div className="container mx-auto px-3 sm:px-4 max-w-6xl flex items-center justify-between gap-2 h-14">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2.5 shrink-0">
-          <div className="w-7 h-7 rounded border border-gold/40 flex items-center justify-center text-gold text-sm shrink-0">
-            ✦
+          <div className="w-7 h-7 rounded border border-gold/40 flex items-center justify-center text-gold shrink-0">
+            <Sparkles size={14} strokeWidth={2} />
           </div>
           <span className="hidden sm:inline font-semibold text-zinc-100 tracking-wide text-sm whitespace-nowrap">TRPG Platform</span>
         </Link>

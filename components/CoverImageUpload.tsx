@@ -1,6 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { ImageIcon } from "lucide-react";
 
 interface Props {
   value: string;                       // current cover_image_url
@@ -89,7 +90,7 @@ export function CoverImageUpload({ value, onChange }: Props) {
             <span className="text-sm">上傳中...</span>
           ) : (
             <>
-              <span className="text-3xl">🖼️</span>
+              <ImageIcon size={32} strokeWidth={1.5} className="text-current" />
               <span className="text-sm">點擊上傳封面圖片</span>
               <span className="text-xs text-slate-600">JPG / PNG / WebP，最大 5MB</span>
             </>

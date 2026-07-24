@@ -1,6 +1,7 @@
 "use client";
 import type { NpcEntry, NpcKnowledge } from "@/lib/ai/gm";
 import { ConditionBuilder, type CondKind, type Option } from "@/components/ConditionBuilder";
+import { Smile, Swords, Skull, PersonStanding, ChevronRight, MessageSquare, Lock, Crosshair, Shield, type LucideIcon } from "lucide-react";
 
 // Gate condition kinds offered for NPC knowledge. Excludes npc_dead/npc_alive
 // because the server's location-condition evaluator doesn't support them (those
@@ -51,12 +52,12 @@ const COMBAT_STATS: (keyof NpcEntry)[] = [
 // One-click stat blocks. Each preset sets HP/MP + the 8 characteristics but
 // never touches name / personality / goal / social_immune / id.
 type NumericStat = "hp" | "mp" | "str" | "con" | "siz" | "dex" | "app" | "int" | "pow" | "edu" | "luck";
-type Preset = { label: string; emoji: string; stats: Partial<Record<NumericStat, number>> };
+type Preset = { label: string; Icon: LucideIcon; stats: Partial<Record<NumericStat, number>> };
 const PRESETS: Preset[] = [
-  { label: "普通人", emoji: "🙂", stats: { hp: 10, mp: 5, str: 50, con: 50, siz: 50, dex: 50, app: 50, int: 50, pow: 50, edu: 50, luck: 50 } },
-  { label: "強壯戰士", emoji: "⚔️", stats: { hp: 15, mp: 8, str: 70, con: 70, siz: 60, dex: 60, app: 50, int: 50, pow: 55, edu: 45, luck: 50 } },
-  { label: "兇猛怪物", emoji: "👹", stats: { hp: 22, mp: 5, str: 85, con: 80, siz: 80, dex: 55, app: 25, int: 25, pow: 65, edu: 10, luck: 40 } },
-  { label: "孱弱平民", emoji: "🧎", stats: { hp: 6, mp: 4, str: 35, con: 40, siz: 45, dex: 45, app: 50, int: 55, pow: 45, edu: 55, luck: 50 } },
+  { label: "普通人", Icon: Smile, stats: { hp: 10, mp: 5, str: 50, con: 50, siz: 50, dex: 50, app: 50, int: 50, pow: 50, edu: 50, luck: 50 } },
+  { label: "強壯戰士", Icon: Swords, stats: { hp: 15, mp: 8, str: 70, con: 70, siz: 60, dex: 60, app: 50, int: 50, pow: 55, edu: 45, luck: 50 } },
+  { label: "兇猛怪物", Icon: Skull, stats: { hp: 22, mp: 5, str: 85, con: 80, siz: 80, dex: 55, app: 25, int: 25, pow: 65, edu: 10, luck: 40 } },
+  { label: "孱弱平民", Icon: PersonStanding, stats: { hp: 6, mp: 4, str: 35, con: 40, siz: 45, dex: 45, app: 50, int: 55, pow: 45, edu: 55, luck: 50 } },
 ];
 
 export function NpcRosterEditor({
@@ -158,8 +159,8 @@ export function NpcRosterEditor({
             {/* Advanced characteristics — collapsed by default. */}
             <details className="group mt-1 border border-slate-700/60 rounded-lg bg-slate-900/40">
               <summary className="cursor-pointer select-none list-none px-3 py-2 text-xs text-slate-400 hover:text-slate-200 flex items-center justify-between">
-                <span>⚔️ 戰鬥屬性（選填，預設 50 即可）</span>
-                <span className="opacity-60 group-open:rotate-90 transition-transform">▸</span>
+                <span className="inline-flex items-center gap-1.5"><Swords size={13} strokeWidth={2} /> 戰鬥屬性（選填，預設 50 即可）</span>
+                <span className="opacity-60 group-open:rotate-90 transition-transform"><ChevronRight size={13} strokeWidth={2} /></span>
               </summary>
               <div className="px-3 pb-3 pt-1">
                 <div className="flex flex-wrap gap-1.5 mb-3">
@@ -170,9 +171,9 @@ export function NpcRosterEditor({
                       type="button"
                       onClick={() => update(i, p.stats)}
                       title={`一鍵套用「${p.label}」的數值`}
-                      className="text-[11px] text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-md px-2 py-1"
+                      className="inline-flex items-center gap-1 text-[11px] text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-md px-2 py-1"
                     >
-                      {p.emoji} {p.label}
+                      <p.Icon size={12} strokeWidth={2} /> {p.label}
                     </button>
                   ))}
                 </div>
@@ -197,7 +198,7 @@ export function NpcRosterEditor({
             {/* Combat stance — drives the server-authoritative NPC attacks. */}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-1">
               <label className="flex items-center gap-2" title="hostile：一登場就攻擊隊伍；neutral：被攻擊後才反擊；friendly：從不主動攻擊">
-                <span className="text-xs text-slate-400">⚔ 戰鬥立場</span>
+                <span className="inline-flex items-center gap-1 text-xs text-slate-400"><Swords size={12} strokeWidth={2} /> 戰鬥立場</span>
                 <select
                   value={npc.disposition ?? "neutral"}
                   onChange={(e) => update(i, { disposition: e.target.value as NpcEntry["disposition"] })}
@@ -215,7 +216,7 @@ export function NpcRosterEditor({
                   onChange={(e) => update(i, { armed: e.target.checked })}
                   className="accent-amber-500 w-4 h-4"
                 />
-                <span className="text-xs text-slate-300">🔫 持有遠程武器（射擊）</span>
+                <span className="inline-flex items-center gap-1 text-xs text-slate-300"><Crosshair size={12} strokeWidth={2} /> 持有遠程武器（射擊）</span>
               </label>
             </div>
 
@@ -226,14 +227,14 @@ export function NpcRosterEditor({
                 onChange={(e) => update(i, { social_immune: e.target.checked })}
                 className="accent-amber-500 w-4 h-4"
               />
-              <span className="text-xs text-amber-300/80">🛡 對社交技能免疫（怪物、無意識存在、終極敵人）</span>
+              <span className="inline-flex items-center gap-1 text-xs text-amber-300/80"><Shield size={12} strokeWidth={2} /> 對社交技能免疫（怪物、無意識存在、終極敵人）</span>
             </label>
 
             {/* NPC knowledge — gated info the NPC reveals when asked about a topic. */}
             <details className="group mt-1 border border-slate-700/60 rounded-lg bg-slate-900/40">
               <summary className="cursor-pointer select-none list-none px-3 py-2 text-xs text-slate-400 hover:text-slate-200 flex items-center justify-between">
-                <span>💬 情報 / 知識（選填）— 當玩家問對問題時，此 NPC 透露的資訊{(npc.knowledge?.length ?? 0) > 0 ? `（${npc.knowledge!.length}）` : ""}</span>
-                <span className="opacity-60 group-open:rotate-90 transition-transform">▸</span>
+                <span className="inline-flex items-center gap-1.5"><MessageSquare size={13} strokeWidth={2} /> 情報 / 知識（選填）— 當玩家問對問題時，此 NPC 透露的資訊{(npc.knowledge?.length ?? 0) > 0 ? `（${npc.knowledge!.length}）` : ""}</span>
+                <span className="opacity-60 group-open:rotate-90 transition-transform"><ChevronRight size={13} strokeWidth={2} /></span>
               </summary>
               <div className="px-3 pb-3 pt-1 space-y-3">
                 <p className="text-[11px] text-slate-500">每則情報有「話題」與「內容」。玩家向此 NPC 問到該話題時，AI 主持人會以 NPC 的口吻透露內容。可加上「解鎖條件」，條件未達成前不會透露。</p>
@@ -257,7 +258,7 @@ export function NpcRosterEditor({
                       className={taCls}
                     />
                     <div>
-                      <p className="text-[11px] text-slate-500 mb-1">🔒 解鎖條件（選填 — 留空則玩家一問就會透露）</p>
+                      <p className="text-[11px] text-slate-500 mb-1 inline-flex items-center gap-1"><Lock size={11} strokeWidth={2} /> 解鎖條件（選填 — 留空則玩家一問就會透露）</p>
                       <ConditionBuilder
                         value={k.when ?? []}
                         onChange={(v) => updateKnowledge(i, ki, { when: v })}

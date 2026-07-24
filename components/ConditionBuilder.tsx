@@ -10,6 +10,7 @@
 // any-of array of all-of arrays of term strings.
 
 import { useState } from "react";
+import { Footprints, Key, BarChart3, Clock, Hourglass, Skull, Heart, Target, X } from "lucide-react";
 
 export type CondKind =
   | "visit"
@@ -74,22 +75,23 @@ function humanize(
   items: Option[],
   objectives: Option[],
   npcs: Option[],
-): string {
+): { icon: React.ReactNode; text: string } {
   const { kind, a, b } = parseTerm(term);
   const nodeName = (id: string) => nodes.find((n) => n.id === id)?.name || id;
   const itemName = (id: string) => items.find((n) => n.id === id)?.name || id;
   const objName = (id: string) => objectives.find((n) => n.id === id)?.name || id;
   const npcName = (id: string) => npcs.find((n) => n.id === id)?.name || id;
+  const icon = <Footprints size={12} strokeWidth={2} />;
   switch (kind) {
-    case "visit": return `🚶 去過「${nodeName(a)}」`;
-    case "item": return `🔑 取得「${itemName(a)}」`;
-    case "count": return `📊 「${a}」標籤 ≥ ${b}`;
-    case "round": return `⏱ 第 ${a} 回合`;
-    case "after": return `⏳ 進入「${nodeName(a)}」滿 ${b} 回合`;
-    case "npc_dead": return `💀 ${npcName(a)} 死亡`;
-    case "npc_alive": return `❤️ ${npcName(a)} 存活`;
-    case "objective": return `🎯 ${objName(a)}`;
-    default: return term;
+    case "visit": return { icon: <Footprints size={12} strokeWidth={2} />, text: `去過「${nodeName(a)}」` };
+    case "item": return { icon: <Key size={12} strokeWidth={2} />, text: `取得「${itemName(a)}」` };
+    case "count": return { icon: <BarChart3 size={12} strokeWidth={2} />, text: `「${a}」標籤 ≥ ${b}` };
+    case "round": return { icon: <Clock size={12} strokeWidth={2} />, text: `第 ${a} 回合` };
+    case "after": return { icon: <Hourglass size={12} strokeWidth={2} />, text: `進入「${nodeName(a)}」滿 ${b} 回合` };
+    case "npc_dead": return { icon: <Skull size={12} strokeWidth={2} />, text: `${npcName(a)} 死亡` };
+    case "npc_alive": return { icon: <Heart size={12} strokeWidth={2} />, text: `${npcName(a)} 存活` };
+    case "objective": return { icon: <Target size={12} strokeWidth={2} />, text: `${objName(a)}` };
+    default: return { icon, text: term };
   }
 }
 
@@ -287,8 +289,8 @@ export function ConditionBuilder({
               <span key={ti} className="inline-flex items-center gap-1">
                 {ti > 0 && <span className="text-[10px] text-emerald-400/70 font-medium px-0.5">且 AND</span>}
                 <span className="inline-flex items-center gap-1 bg-slate-700/70 border border-slate-600 rounded-md pl-2 pr-1 py-0.5 text-[11px] text-slate-100">
-                  {humanize(term, nodes, items, objectives, npcs)}
-                  <button type="button" onClick={() => removeTerm(gi, ti)} className="text-slate-400 hover:text-red-400 leading-none">✕</button>
+                  {(() => { const h = humanize(term, nodes, items, objectives, npcs); return <span className="inline-flex items-center gap-1">{h.icon} {h.text}</span>; })()}
+                  <button type="button" onClick={() => removeTerm(gi, ti)} className="text-slate-400 hover:text-red-400 leading-none inline-flex items-center"><X size={12} strokeWidth={2} /></button>
                 </span>
               </span>
             ))}

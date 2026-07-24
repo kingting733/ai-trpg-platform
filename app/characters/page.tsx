@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { CardRollReveal, RevealCard } from "@/components/CardRollReveal";
+import { Dices, Check, Sparkles, Layers, Pencil, Trophy, Trash2, ChevronUp, ChevronDown, Drama } from "lucide-react";
 
 interface CharacterCard {
   id: string;
@@ -194,8 +195,14 @@ export default function CharactersPage() {
                 : { background: "rgba(26,21,14,0.9)", border: "1px solid rgba(201,169,110,0.35)", color: "#c9a96e", boxShadow: "0 0 18px rgba(201,169,110,0.12)" }
             }
           >
-            <span className="text-base">🎲</span>
-            {opening ? "擲骰中..." : openedToday ? `今日已達上限 (${todayCount}/${DAILY_LIMIT}) ✓` : `抽取調查員 (${todayCount}/${DAILY_LIMIT})`}
+            <Dices size={16} strokeWidth={2} className="text-current" />
+            <span className="inline-flex items-center gap-1">
+              {opening
+                ? "擲骰中..."
+                : openedToday
+                ? (<>今日已達上限 ({todayCount}/{DAILY_LIMIT}) <Check size={14} strokeWidth={2} /></>)
+                : `抽取調查員 (${todayCount}/${DAILY_LIMIT})`}
+            </span>
           </button>
           {openedToday && (
             <span className="text-xs text-zinc-600">明天（UTC）再來抽取。</span>
@@ -214,7 +221,9 @@ export default function CharactersPage() {
 
       {revealed && (
         <div className="mb-8">
-          <p className="text-xs text-gold uppercase tracking-[0.2em] mb-3">✦ 獲得新調查員！</p>
+          <p className="inline-flex items-center gap-1 text-xs text-gold uppercase tracking-[0.2em] mb-3">
+            <Sparkles size={14} strokeWidth={2} /> 獲得新調查員！
+          </p>
           <div className="max-w-xs">
             <CardView card={revealed} highlight scenarioTitles={scenarioTitles} onNameSaved={handleNameSaved} onDeleted={handleDeleted} />
           </div>
@@ -226,7 +235,7 @@ export default function CharactersPage() {
       ) : cards.length === 0 ? (
         <div className="text-center py-20 rounded-xl"
           style={{ border: "1px dashed #2e2416", background: "#0e0c08" }}>
-          <div className="text-4xl mb-3 opacity-60">🎴</div>
+          <div className="mb-3 opacity-60 flex justify-center"><Layers size={40} strokeWidth={1.5} /></div>
           <p className="text-zinc-400">你還沒有任何調查員。</p>
           <p className="text-zinc-600 text-sm mt-1">抽取第一張卡開始你的收藏。</p>
         </div>
@@ -377,7 +386,7 @@ function CardView({
                 ) : (
                   <div className="w-16 h-16 shrink-0 rounded-xl flex items-center justify-center"
                     style={{ background: "rgba(14,12,8,0.6)", border: "1px solid rgba(201,169,110,0.2)" }}>
-                    <span className="text-2xl opacity-40">🎭</span>
+                    <Drama size={22} strokeWidth={1.5} className="opacity-40" />
                   </div>
                 )}
                 <div className="min-w-0">
@@ -386,9 +395,9 @@ function CardView({
                     <button
                       onClick={startEdit}
                       title="Rename card"
-                      className="text-zinc-600 hover:text-gold shrink-0 text-xs leading-none"
+                      className="text-zinc-600 hover:text-gold shrink-0 leading-none"
                     >
-                      ✎
+                      <Pencil size={12} strokeWidth={2} />
                     </button>
                   </div>
                   {card.occupation && (
@@ -418,9 +427,9 @@ function CardView({
           <div className="flex items-center gap-2.5">
             <button
               onClick={() => setShowSkills((v) => !v)}
-              className="text-xs text-gold/80 hover:text-gold underline underline-offset-2"
+              className="inline-flex items-center gap-1 text-xs text-gold/80 hover:text-gold underline underline-offset-2"
             >
-              {showSkills ? "收起技能 ▲" : "查看技能 ▼"}
+              {showSkills ? (<>收起技能 <ChevronUp size={12} strokeWidth={2} /></>) : (<>查看技能 <ChevronDown size={12} strokeWidth={2} /></>)}
             </button>
             <span className="text-zinc-700">
               {new Date(card.created_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
@@ -455,10 +464,10 @@ function CardView({
               {card.cleared_scenarios.map((sid) => (
                 <span
                   key={sid}
-                  className="text-[10px] px-1.5 py-0.5 rounded"
+                  className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded"
                   style={{ background: "rgba(6,78,59,0.4)", border: "1px solid rgba(6,95,70,0.6)", color: "#6ee7b7" }}
                 >
-                  🏆 {scenarioTitles?.[sid] ?? "劇本"}
+                  <Trophy size={11} strokeWidth={2} /> {scenarioTitles?.[sid] ?? "劇本"}
                 </span>
               ))}
             </div>
@@ -468,9 +477,9 @@ function CardView({
         {!confirmDelete ? (
           <button
             onClick={() => setConfirmDelete(true)}
-            className="mt-3 w-full text-xs text-zinc-700 hover:text-red-400 transition-colors py-1"
+            className="inline-flex items-center justify-center gap-1 mt-3 w-full text-xs text-zinc-700 hover:text-red-400 transition-colors py-1"
           >
-            🗑 刪除此卡
+            <Trash2 size={13} strokeWidth={2} /> 刪除此卡
           </button>
         ) : (
           <div className="mt-3 flex gap-2">

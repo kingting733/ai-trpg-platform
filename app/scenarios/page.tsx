@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { Sparkles, ArrowRight } from "lucide-react";
 
 interface Scenario {
   id: string;
@@ -68,7 +69,7 @@ function HeroSection() {
                 解封都市怪談檔案，選擇你的下一場冒險。
               </p>
               <div className="flex items-center gap-2 text-gold/40 text-sm">
-                <span className="w-4 h-4 border border-gold/30 rounded-full flex items-center justify-center text-[9px]">✦</span>
+                <span className="w-4 h-4 border border-gold/30 rounded-full flex items-center justify-center text-[9px]"><Sparkles size={9} strokeWidth={2} className="text-gold/40" /></span>
                 AI GM 驅動的沉浸式劇本體驗
               </div>
             </div>
@@ -249,7 +250,7 @@ function ScenarioCard({ scenario }: { scenario: Scenario }) {
               (e.currentTarget as HTMLDivElement).style.background = "#1a1510";
             }}
           >
-            查看詳情 →
+            <span className="inline-flex items-center gap-1">查看詳情 <ArrowRight size={14} strokeWidth={2} /></span>
           </div>
         </div>
       </div>
@@ -328,7 +329,7 @@ export default function ScenariosPage() {
             <div className="absolute inset-0 pointer-events-none opacity-[0.05]"
               style={{ backgroundImage: "radial-gradient(circle, #c9a96e 1px, transparent 1px)", backgroundSize: "18px 18px" }} />
             <div className="relative flex items-center gap-4">
-              <span className="text-4xl shrink-0">✦</span>
+              <Sparkles size={36} strokeWidth={1.5} className="shrink-0 text-gold" />
               <div className="min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-[10px] tracking-[0.25em] uppercase" style={{ color: "rgba(201,169,110,0.7)" }}>今日劇本</span>
@@ -337,7 +338,7 @@ export default function ScenariosPage() {
                 <h3 className="font-serif text-xl truncate" style={{ color: "#e4d8be" }}>{todayDaily.title}</h3>
                 <p className="text-sm mt-1 line-clamp-2" style={{ color: "#9a8f7a" }}>{todayDaily.description}</p>
               </div>
-              <span className="ml-auto shrink-0 text-sm hidden sm:inline" style={{ color: "rgba(201,169,110,0.7)" }}>立即遊玩 →</span>
+              <span className="ml-auto shrink-0 text-sm hidden sm:inline inline-flex items-center gap-1" style={{ color: "rgba(201,169,110,0.7)" }}>立即遊玩 <ArrowRight size={14} strokeWidth={2} /></span>
             </div>
           </div>
         </Link>
