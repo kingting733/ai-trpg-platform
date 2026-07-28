@@ -1,11 +1,14 @@
 // Server-side only. Analyzes a story document and returns structured scenario
 // fields to PRE-FILL the creation form. It never saves or publishes anything.
 
-import type { LocationEntry, NpcEntry } from "@/lib/ai/gm";
+import type { LocationEntry, NpcEntry, NpcKnowledge } from "@/lib/ai/gm";
 import { newNpcId } from "@/lib/game/npc";
 import { coerceLocationGraph, type LocationGraph } from "@/lib/game/locations";
 import { coerceEndings, type ScenarioEnding } from "@/lib/game/endings";
 import { coerceScenarioObjectives, type ScenarioObjective } from "@/lib/game/objectives-def";
+// import-report only imports TYPES from this module, so the cycle is erased at
+// compile time and there is no runtime circular dependency.
+import { buildImportReport, type ImportReport } from "@/lib/ai/import-report";
 
 export const IMPORT_GENRES = ["Fantasy", "Cyberpunk", "Horror", "Sci-Fi", "Mystery", "Historical", "Other"];
 export const IMPORT_DIFFICULTIES = ["Story", "Normal", "Hard", "Nightmare"];
@@ -103,27 +106,72 @@ function normalizeLocations(v: unknown): LocationEntry[] {
     .slice(0, 15);
 }
 
+/** Coerce an NPC's gated knowledge base (topic → info, with an optional unlock
+ *  gate). Accepts `info` (canonical) or `content` (a common LLM synonym), so an
+ *  imported knowledge base isn't silently lost to a field-name mismatch. */
+function normalizeNpcKnowledge(v: unknown): NpcKnowledge[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const out = v
+    .filter((k) => k && typeof k === "object")
+    .map((k: any): NpcKnowledge => ({
+      id: typeof k.id === "string" && k.id.trim() ? k.id.trim() : newNpcId(),
+      topic: asString(k.topic),
+      info: asString(k.info) || asString(k.content),
+      when: coerceUnlockGrammar(k.when),
+    }))
+    .filter((k) => k.topic && k.info)
+    .slice(0, 20);
+  return out.length ? out : undefined;
+}
+
+/** The shared string[][] unlock grammar (any-of groups of all-of terms). */
+function coerceUnlockGrammar(v: unknown): string[][] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((g) =>
+      Array.isArray(g)
+        ? g.map(asString).filter(Boolean)
+        : typeof g === "string" && g.trim()
+        ? [g.trim()]
+        : []
+    )
+    .filter((g) => g.length > 0);
+}
+
 function normalizeNpcs(v: unknown): NpcEntry[] {
   if (!Array.isArray(v)) return [];
   return v
     .filter((x) => x && typeof x === "object" && typeof x.name === "string" && x.name.trim())
-    .map((x: any) => ({
-      id: typeof x.id === "string" && x.id.trim() ? x.id.trim() : newNpcId(),
-      name: asString(x.name),
-      hp: asInt(x.hp, 10),
-      mp: asInt(x.mp, 5),
-      str: asInt(x.str, 50),
-      con: asInt(x.con, 50),
-      siz: asInt(x.siz, 50),
-      dex: asInt(x.dex, 50),
-      app: asInt(x.app, 50),
-      int: asInt(x.int, 50),
-      pow: asInt(x.pow, 50),
-      edu: asInt(x.edu, 50),
-      luck: asInt(x.luck, 50),
-      personality: asString(x.personality),
-      goal: asString(x.goal),
-    }))
+    .map((x: any) => {
+      const disposition =
+        x.disposition === "hostile" || x.disposition === "friendly" || x.disposition === "neutral"
+          ? x.disposition
+          : undefined;
+      const knowledge = normalizeNpcKnowledge(x.knowledge);
+      return {
+        id: typeof x.id === "string" && x.id.trim() ? x.id.trim() : newNpcId(),
+        name: asString(x.name),
+        hp: asInt(x.hp, 10),
+        mp: asInt(x.mp, 5),
+        str: asInt(x.str, 50),
+        con: asInt(x.con, 50),
+        siz: asInt(x.siz, 50),
+        dex: asInt(x.dex, 50),
+        app: asInt(x.app, 50),
+        int: asInt(x.int, 50),
+        pow: asInt(x.pow, 50),
+        edu: asInt(x.edu, 50),
+        luck: asInt(x.luck, 50),
+        personality: asString(x.personality),
+        goal: asString(x.goal),
+        // Behavioural fields — previously dropped on import, which silently
+        // discarded the whole NPC-knowledge system and every combat stance.
+        ...(disposition ? { disposition } : {}),
+        ...(x.social_immune === true ? { social_immune: true } : {}),
+        ...(x.armed === true ? { armed: true } : {}),
+        ...(knowledge ? { knowledge } : {}),
+      };
+    })
     .slice(0, 20);
 }
 
@@ -333,10 +381,18 @@ function looksLikeScenarioJSON(parsed: any): boolean {
   return signals.filter((k) => k in parsed).length >= 3;
 }
 
-/** Analyze raw document text and return validated, editable scenario fields. */
+/** Analyze raw document text and return validated, editable scenario fields.
+ *  `report` is present only on the JSON fast path, where we can diff what the
+ *  author's LLM emitted against what the platform actually kept. */
 export async function analyzeScenarioDocument(
   text: string
-): Promise<{ scenario: ImportedScenario; truncated: boolean; sourceDocument: string }> {
+): Promise<{
+  scenario: ImportedScenario;
+  truncated: boolean;
+  sourceDocument: string;
+  viaJson?: boolean;
+  report?: ImportReport;
+}> {
   // FAST PATH — the document is already scenario JSON (hand-written or generated
   // by another AI following our format). Import it directly: no AI call, no
   // reinterpretation, and source_document becomes the clean full_story prose
@@ -347,10 +403,15 @@ export async function analyzeScenarioDocument(
       const parsed = JSON.parse(extractFirstJSON(trimmed));
       if (looksLikeScenarioJSON(parsed)) {
         const fullStory = typeof parsed.full_story === "string" ? parsed.full_story.trim() : "";
+        const scenario = normalizeImported(parsed);
         return {
-          scenario: normalizeImported(parsed),
+          scenario,
           truncated: false,
           sourceDocument: (fullStory || text).slice(0, SOURCE_DOC_MAX_CHARS),
+          viaJson: true,
+          // Never let coercion silently eat authored content: tell the creator
+          // exactly what survived, what was dropped, and what looks wrong.
+          report: buildImportReport(parsed, scenario),
         };
       }
     } catch {

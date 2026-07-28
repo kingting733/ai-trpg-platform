@@ -15,6 +15,34 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // PASTE PATH — the creator generated scenario JSON with their own LLM and
+  // pasted it in. Most people copy JSON out of a chat window; forcing them to
+  // save a .txt first is friction for no reason. Same analyzer, same
+  // validation — only the transport differs.
+  const contentType = request.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    let body: any;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+    }
+    const pasted = typeof body?.text === "string" ? body.text : "";
+    if (pasted.length > MAX_BYTES) {
+      return NextResponse.json({ error: "貼上的內容太長（上限 2MB）。" }, { status: 413 });
+    }
+    const cleaned = pasted.replace(/\r\n/g, "\n").trim();
+    if (cleaned.length < 20) {
+      return NextResponse.json({ error: "貼上的內容太短，無法建立劇本。" }, { status: 400 });
+    }
+    try {
+      const result = await analyzeScenarioDocument(cleaned);
+      return NextResponse.json(result);
+    } catch (e: any) {
+      return NextResponse.json({ error: e?.message ?? "AI analysis failed." }, { status: 500 });
+    }
+  }
+
   let formData: FormData;
   try {
     formData = await request.formData();
@@ -92,8 +120,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { scenario, truncated, sourceDocument } = await analyzeScenarioDocument(text);
-    return NextResponse.json({ scenario, truncated, sourceDocument });
+    const result = await analyzeScenarioDocument(text);
+    return NextResponse.json(result);
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? "AI analysis failed." }, { status: 500 });
   }

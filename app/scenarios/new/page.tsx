@@ -3,7 +3,10 @@ import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Sparkles, Lock, Map, Theater } from "lucide-react";
+import Link from "next/link";
 import type { ImportedScenario } from "@/lib/ai/import-scenario";
+import type { ImportReport } from "@/lib/ai/import-report";
+import { ImportReportPanel } from "@/components/ImportReportPanel";
 import type { NpcEntry } from "@/lib/ai/gm";
 import { newNpcId } from "@/lib/game/npc";
 import { CoverImageUpload } from "@/components/CoverImageUpload";
@@ -92,6 +95,8 @@ export default function NewScenarioPage() {
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [importNote, setImportNote] = useState<string | null>(null);
+  const [pasteText, setPasteText] = useState("");
+  const [importReport, setImportReport] = useState<ImportReport | null>(null);
 
   function applyImport(d: ImportedScenario) {
     setTitle(d.title ?? "");
@@ -122,6 +127,46 @@ export default function NewScenarioPage() {
     setActiveTab("player");
   }
 
+  /** Import scenario JSON pasted straight from the creator's own LLM chat.
+   *  Same analyzer and same validation as the file path — only the transport
+   *  differs — so it lands on the no-AI fast path and returns an import report. */
+  async function handlePasteImport() {
+    const text = pasteText.trim();
+    if (!text) return;
+
+    setImportError(null);
+    setImportNote(null);
+    setImportReport(null);
+    setSuccess(null);
+    setError(null);
+    setImporting(true);
+    try {
+      const res = await fetch("/api/scenarios/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json) {
+        setImportError(json?.error ?? `匯入失敗（HTTP ${res.status}）。`);
+        return;
+      }
+      applyImport(json.scenario as ImportedScenario);
+      if (typeof json.sourceDocument === "string") setSourceDocument(json.sourceDocument);
+      if (json.report) setImportReport(json.report as ImportReport);
+      setImportNote(
+        json.viaJson
+          ? "已直接匯入你的 JSON（未經 AI 重新詮釋）。請檢閱下方報告與各分頁內容後再儲存。"
+          : "貼上的內容不是本平台的 JSON 格式，已改用 AI 分析預填。請逐一檢閱。"
+      );
+      setPasteText("");
+    } catch {
+      setImportError("網路錯誤，請再試一次。");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
@@ -129,6 +174,7 @@ export default function NewScenarioPage() {
 
     setImportError(null);
     setImportNote(null);
+    setImportReport(null);
     setSuccess(null);
     setError(null);
 
@@ -158,8 +204,10 @@ export default function NewScenarioPage() {
 
       applyImport(json.scenario as ImportedScenario);
       if (typeof json.sourceDocument === "string") setSourceDocument(json.sourceDocument);
+      if (json.report) setImportReport(json.report as ImportReport);
       setImportNote(
-        `已從「${file.name}」匯入。AI 已預填以下欄位 — 請逐一檢閱並編輯，然後選擇儲存為草稿或發佈。` +
+        `已從「${file.name}」匯入。${json.viaJson ? "檔案本身即為本平台 JSON，已直接匯入（未經 AI）。" : "AI 已預填以下欄位 —"} ` +
+          "請逐一檢閱並編輯，然後選擇儲存為草稿或發佈。" +
           (json.truncated ? "（文件過長，僅分析了前段內容。）" : "")
       );
     } catch (e: any) {
@@ -302,6 +350,35 @@ export default function NewScenarioPage() {
         {importError && (
           <div className="mt-3 bg-red-900/30 border border-red-700 text-red-300 text-sm rounded-lg px-3 py-2">{importError}</div>
         )}
+        {/* Paste path — most people copy JSON out of a chat window rather than
+            saving a file first. */}
+        <div className="mt-4 pt-4 border-t border-zinc-700/50">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+            <p className="text-slate-400 text-sm">
+              已經用自己的 AI 產生好 JSON？直接貼上即可（不經我們的 AI、即時完成）。
+            </p>
+            <Link href="/scenarios/prompt" className="text-xs text-gold hover:brightness-125 underline decoration-dotted whitespace-nowrap">
+              取得產生 JSON 的 Prompt →
+            </Link>
+          </div>
+          <textarea
+            value={pasteText}
+            onChange={(e) => setPasteText(e.target.value)}
+            rows={4}
+            placeholder='把 AI 產生的 JSON 貼在這裡，以 { 開頭…'
+            disabled={importing}
+            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-xs font-mono placeholder-slate-600 focus:outline-none focus:border-zinc-500 resize-y disabled:opacity-60"
+          />
+          <button
+            type="button"
+            onClick={handlePasteImport}
+            disabled={importing || !pasteText.trim()}
+            className="mt-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium"
+          >
+            {importing ? "匯入中..." : "匯入貼上的 JSON"}
+          </button>
+        </div>
+        {importReport && <div className="mt-3"><ImportReportPanel report={importReport} /></div>}
         {importNote && (
           <div className="mt-3 bg-green-900/30 border border-green-700 text-green-300 text-sm rounded-lg px-3 py-2">{importNote}</div>
         )}
