@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateGMResponseStreaming, sanitizeChoices, GMAIInput, ScenarioGMContext, LedgerEntry, NpcEntry } from "@/lib/ai/gm";
+import { generateGMResponseStreaming, sanitizeChoicesWithMeta, GMAIInput, ScenarioGMContext, LedgerEntry, NpcEntry } from "@/lib/ai/gm";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -1285,6 +1285,14 @@ export async function POST(request: Request) {
                 .slice(-5)
                 .map((e) => `[T${e.turn}] ${e.character}: ${e.fact}`)
             : [],
+          // The NEXT actor's scene history, so the GM's 3 choices can follow
+          // that room's own story instead of repeating generic filler.
+          nextSceneFacts: nextActorNode && nextActorNode !== actorNode
+            ? updatedLedger
+                .filter((e) => e.node === nextActorNode)
+                .slice(-4)
+                .map((e) => `[T${e.turn}] ${e.character}: ${e.fact}`)
+            : [],
         }
       : null;
   const locationDirective =
@@ -1470,26 +1478,43 @@ export async function POST(request: Request) {
         const dest = resolveMoveTarget(gmResponse.move_to, locationGraph, locState, actorNode);
         if (dest) choicesNode = dest.id;
       }
-      // HYBRID: the GM writes choices only for the scene it just narrated.
-      // When the NEXT actor stands in a DIFFERENT scene, the GM never saw it —
-      // the server composes their choices from that node's own creator data
-      // instead (no A-scene bleed by construction).
-      const nextIsElsewhere =
+      // SPLIT-PARTY CHOICES. The GM writes the choices in every case — it now
+      // receives the next actor's scene (desc / NPCs / exits / history) in the
+      // location block, so it can follow THAT room's story. Two guards keep it
+      // honest, and a deterministic fallback keeps the buttons useful:
+      //   1. object-level bleed guard — names of things in the ACTING scene are
+      //      rejected (node-name filtering alone missed 「檢查香爐」);
+      //   2. if nothing the GM wrote survives validation, compose choices from
+      //      the next node's own data rather than shipping 3 generic lines.
+      const nextIsElsewhere = !!(
         !nextIsActor && locationGraph && locState &&
-        nextActorNode && nextActorNode !== actorNode;
-      if (nextIsElsewhere) {
+        nextActorNode && nextActorNode !== actorNode
+      );
+      // Objects that belong to the acting character's scene, not the next one.
+      const actorSceneObjects = nextIsElsewhere && locationGraph && actorNode
+        ? (locationGraph.nodes.find((n) => n.id === actorNode)?.evidence ?? []).map((e) => e.name)
+        : [];
+      const sanitized = sanitizeChoicesWithMeta(
+        gmResponse.choices,
+        partyForAI.map((c) => c.name),
+        locationGraph,
+        locState,
+        choicesNode,
+        actorSceneObjects,
+      );
+      if (nextIsElsewhere && sanitized.kept === 0 && locationGraph && locState && nextActorNode) {
+        // The GM wrote nothing usable for the other scene — fall back to
+        // choices built from that node's own creator data (authored 取得方式,
+        // a placed NPC, a real exit) instead of three generic lines.
         gmResponse.choices = composeSceneChoices(
           locationGraph, locState, nextActorNode, room.current_round, objProgress, npcRoster,
           (ref) => npcStateEntry(ref, npcRoster, npcStateNow)?.alive !== false,
         );
-      } else {
-        gmResponse.choices = sanitizeChoices(
-          gmResponse.choices,
-          partyForAI.map((c) => c.name),
-          locationGraph,
-          locState,
-          choicesNode,
+        console.warn(
+          `[choices] GM produced no usable choices for ${nextActor?.name ?? "next actor"} at ${nextActorNode}; used composed fallback.`
         );
+      } else {
+        gmResponse.choices = sanitized.choices;
       }
     }
 

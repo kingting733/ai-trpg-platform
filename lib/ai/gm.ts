@@ -1006,7 +1006,27 @@ export function sanitizeChoices(
   graph: LocationGraph | null,
   state: LocationState | null,
   forNode?: string | null,
+  forbiddenExtra?: string[],
 ): [string, string, string] {
+  return sanitizeChoicesWithMeta(raw, rosterNames, graph, state, forNode, forbiddenExtra).choices;
+}
+
+/**
+ * Same as sanitizeChoices, but also reports how many of the GM's OWN choices
+ * survived validation (`kept`) before generic defaults backfilled the rest.
+ * Callers use it to detect "the GM produced nothing usable for this scene" and
+ * fall back to server-composed choices instead of shipping three generic lines.
+ */
+export function sanitizeChoicesWithMeta(
+  raw: unknown,
+  rosterNames: string[],
+  graph: LocationGraph | null,
+  state: LocationState | null,
+  forNode?: string | null,
+  /** Extra substrings to reject — e.g. object/evidence names that belong to a
+   *  DIFFERENT character's scene, which must not leak into these choices. */
+  forbiddenExtra?: string[],
+): { choices: [string, string, string]; kept: number } {
   const list = Array.isArray(raw) ? raw.filter((c): c is string => typeof c === "string") : [];
 
   // Location names the GM may mention in a choice: the NEXT actor's node +
@@ -1026,6 +1046,14 @@ export function sanitizeChoices(
       // A forbidden name that is a substring of an allowed one (bare 神位 vs
       // current 1404神位) would false-positive on legitimate choices — skip it.
       .filter((s) => s.length >= 2 && !okNames.some((ok) => ok.includes(s.toLowerCase())));
+  }
+  // Object-level bleed guard: names of things that exist in ANOTHER character's
+  // scene. Node-name filtering alone misses 「檢查香爐」 — 香爐 is an object, not
+  // a place, so it slipped through and got offered to a player standing
+  // somewhere else entirely.
+  for (const extra of forbiddenExtra ?? []) {
+    const s = extra.trim();
+    if (s.length >= 2) forbidden.push(s);
   }
 
   const out: string[] = [];
@@ -1053,6 +1081,7 @@ export function sanitizeChoices(
     out.push(tag ? `${tag} ${body}` : body);
     if (out.length === 3) break;
   }
+  const kept = out.length;
   while (out.length < 3) out.push(DEFAULT_CHOICES[out.length]);
-  return [out[0], out[1], out[2]];
+  return { choices: [out[0], out[1], out[2]], kept };
 }
