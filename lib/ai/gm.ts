@@ -124,6 +124,10 @@ export interface GMAIInput {
   /** Mythos cast this turn (docs/design/mythos-skills-v1.md) — server-resolved
    *  spell outcome + narration orders (reveal / backlash / fizzle). */
   mythosDirective?: string | null;
+  /** False when the split-party path generates the next actor's choices itself
+   *  and the prompt therefore asks the GM for "choices": []. The response
+   *  validator must not demand 3 choices in that case. Defaults to true. */
+  expectChoices?: boolean;
   currentRound: number;
   /** The character who just submitted the action — narration resolves THIS actor. */
   actingCharacterName: string;
@@ -955,16 +959,43 @@ export async function generateGMResponseStreaming(
       }
       const { narration, dataRaw } = splitNarrationAndData(raw);
       const parsed = JSON.parse(extractJSONObject(dataRaw)) as Omit<GMResponseWithChoices, "narration">;
-      if (narration && Array.isArray(parsed.choices) && parsed.choices.length === 3) {
+      // When the split-party path supplies the next actor's choices itself, the
+      // prompt tells the GM to emit "choices": [] — so demanding exactly 3 here
+      // would reject a perfectly good response (and did: it threw away the whole
+      // narration and surfaced the parse-failure text).
+      const choicesOk = Array.isArray(parsed.choices)
+        && (input.expectChoices === false || parsed.choices.length === 3);
+      if (narration && choicesOk) {
         return { narration, ...parsed };
       }
-      throw new Error("Invalid shape");
+      // Keep the narration on the error object so the catch block can decide to
+      // salvage it rather than discard the turn's most valuable output.
+      const err = new Error("Invalid shape") as Error & { salvageNarration?: string; salvageParsed?: any };
+      if (narration) { err.salvageNarration = narration; err.salvageParsed = parsed; }
+      throw err;
     } catch (e) {
       console.error(`[gm] streaming attempt ${attempt}/${MAX_ATTEMPTS} parse failed:`, e instanceof Error ? e.message : e);
       // Retry only if it failed FAST (well under one attempt's budget) — never
       // after a timeout, which has already spent the wall clock.
       const elapsed = Date.now() - turnStart;
       if (attempt < MAX_ATTEMPTS && elapsed < RETRY_BUDGET_MS * 0.5) continue; // auto-regenerate
+
+      // LAST RESORT — never throw away a narration the model actually produced.
+      // The narration is the expensive, player-visible part of the turn; the
+      // choices are ALWAYS re-validated and backfilled to exactly 3 downstream
+      // (sanitizeChoicesWithMeta), so a bad JSON tail must not cost the player
+      // their whole scene. Only a genuinely empty narration shows the error.
+      const salvage = e as Error & { salvageNarration?: string; salvageParsed?: any };
+      if (salvage?.salvageNarration && salvage.salvageNarration.trim().length > 0) {
+        console.warn("[gm] salvaged narration despite an unusable JSON tail — choices will be backfilled.");
+        const p = salvage.salvageParsed ?? {};
+        return {
+          ...p,
+          narration: salvage.salvageNarration,
+          choices: Array.isArray(p.choices) ? p.choices : [],
+        };
+      }
+
       const fallbackText = "[GM response could not be parsed. Please try again.]";
       // The player may already have seen partial narration stream in before the
       // failure; sending the fallback text as one more chunk keeps the visible

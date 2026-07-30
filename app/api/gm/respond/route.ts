@@ -1292,6 +1292,13 @@ export async function POST(request: Request) {
     locationGraph && locState && nextActor
       ? positionOf(locState, nextActor.id, locationGraph)
       : null;
+  // Split party: the next actor's choices come from the isolated scene-locked
+  // call, so the narrating GM is asked for none. Declared here (before the AI
+  // input is built) because the response validator must know not to require 3.
+  const nextIsElsewhere = !!(
+    nextActor && resolvedActor && nextActor.id !== resolvedActor.id &&
+    locationGraph && locState && nextActorNode && nextActorNode !== actorNode
+  );
   const sceneCtx: SceneContext | null =
     locationGraph && locState && resolvedActor
       ? {
@@ -1407,6 +1414,9 @@ export async function POST(request: Request) {
           .join("\n")}`
       : null,
     currentRound: room.current_round,
+    // Split party → the prompt asks for "choices": [], so the validator must
+    // not reject the response for having 0 instead of 3.
+    expectChoices: !nextIsElsewhere,
     actingCharacterName: resolvedActor?.name ?? "Unknown",
     nextCharacterName: nextActor?.name ?? "Unknown",
     playerAction: actionText,
@@ -1459,10 +1469,8 @@ export async function POST(request: Request) {
   // that exist in no structured data, so no text filter could catch them.
   // Launched here so it runs IN PARALLEL with the narration call (the actor's
   // turn cannot change the next actor's scene) — no added latency.
-  const nextIsElsewhere = !!(
-    nextActor && resolvedActor && nextActor.id !== resolvedActor.id &&
-    locationGraph && locState && nextActorNode && nextActorNode !== actorNode
-  );
+  // (nextIsElsewhere is declared above, alongside nextActorNode, because the
+  // GM input needs it to set expectChoices.)
   let sceneChoicesPromise: Promise<string[]> | null = null;
   if (nextIsElsewhere && locationGraph && locState && nextActorNode && nextActor) {
     const nextNodeDef = locationGraph.nodes.find((n) => n.id === nextActorNode);
