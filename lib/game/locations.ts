@@ -1123,9 +1123,98 @@ export function resolveMoveTarget(
  *  here is harmless because travel only actually happens when the text ALSO
  *  names a real, unlocked location (detectTravelTarget + the status gate). "go"
  *  uses a word boundary so it does not match good/gold/going; 去 needs none. */
-const TRAVEL_RE = /前往|出發|移動|趕往|回到|返回|走向|走到|進入|走進|踏入|潛入|闖入|搭車|坐車|乘車|去|go to|travel to|head to|return to|move to|head back|travel back|enter\b|\bgo\b/i;
+// Approach verbs are included too: a Cantonese/zh-TW player naturally writes
+// 行近/走近/靠近/行埋 rather than 前往, and previously those only worked by
+// accident through the bare-name path — which broke the moment the sentence had
+// more than ~4 characters beyond the place name. Safe to include because travel
+// ALSO requires a real node name to match, so 「走近供桌」 (an object) never moves.
+const TRAVEL_RE = /前往|出發|移動|趕往|回到|返回|走向|走到|走近|行近|行埋|行去|行到|靠近|步向|過去|折返|繞到|退到|進入|走進|踏入|踏進|潛入|闖入|搭車|坐車|乘車|去|go to|travel to|head to|return to|move to|head back|travel back|approach\b|enter\b|\bgo\b/i;
 export function looksLikeTravel(actionText: string): boolean {
   return TRAVEL_RE.test(actionText);
+}
+
+// ── Choice ↔ scene binding ────────────────────────────────────────────────────
+// A suggested choice may legitimately name a place OTHER than the acting
+// character's own node — but ONLY as a travel destination. "Go to the living
+// room" is fine; "examine the sofa in the living room" is not, because the
+// character is not there and cannot perceive or touch anything in it.
+//
+// The old reachability-only check could not tell those apart, and in `free`
+// travel mode computeExits() reports EVERY unlocked node as an exit — so the
+// forbidden list was almost empty and choices describing another player's room
+// sailed through. That is what made split-party players receive each other's
+// options.
+
+/** What a choice's location reference means for the character it is offered to. */
+export type ChoiceLocationVerdict =
+  /** References no place other than the actor's own node — safe as written. */
+  | { kind: "ok" }
+  /** A movement to a place the actor can actually reach this turn. */
+  | { kind: "move"; node: LocationNode }
+  /** Acting at / perceiving a place the actor is not in, or an unreachable or
+   *  unknown place. Must not be offered. */
+  | { kind: "reject"; node: LocationNode | null };
+
+/**
+ * Classify a choice body against the node the choice is FOR.
+ * `forNode` = where the character receiving this choice actually stands.
+ */
+export function classifyChoiceLocation(
+  body: string,
+  graph: LocationGraph,
+  state: LocationState,
+  forNode: string | null | undefined,
+): ChoiceLocationVerdict {
+  const origin = forNode ?? state.current;
+  const exits = computeExits(graph, state, origin);
+  const reachable = new Set(exits.open.map((n) => n.id));
+
+  // Which places does this choice name? Longest name first so 「1404神位」 wins
+  // over a bare 「神位」 substring of another node.
+  const named: Array<{ node: LocationNode; name: string }> = [];
+  for (const n of graph.nodes) {
+    const sn = shortName(n.name).trim();
+    if (sn.length >= 2 && body.includes(sn)) named.push({ node: n, name: sn });
+  }
+  // A container name resolves to its entry node (「1404室」 → 1404門口).
+  for (const c of graph.containers) {
+    const cn = shortName(c.name).trim();
+    if (cn.length >= 2 && body.includes(cn)) {
+      const entry = entryNodeOf(graph, c.id);
+      if (entry) named.push({ node: entry, name: cn });
+    }
+  }
+  named.sort((a, b) => b.name.length - a.name.length);
+
+  // Only places that are NOT the actor's own node constrain the choice.
+  const foreign = named.filter((x) => x.node.id !== origin);
+  if (foreign.length === 0) return { kind: "ok" };
+
+  const target = foreign[0].node;
+
+  // Unknown/hidden places must never appear, in any form.
+  const status = state.status[target.id] ?? "hidden";
+  if (status === "hidden") return { kind: "reject", node: target };
+
+  // Is this a movement? Either an explicit movement verb, or the choice is
+  // essentially nothing but the place name (the click-to-fill / bare-name form).
+  const stripped = body
+    .split(foreign[0].name).join("")
+    .replace(/[\s，,。．.!！?？、:：;；「」『』()（）]/g, "");
+  const isMovement = TRAVEL_RE.test(body) || stripped.length <= 4;
+
+  if (!isMovement) return { kind: "reject", node: target };
+  // Movement is only offerable if the actor can actually get there this turn.
+  if (!reachable.has(target.id)) return { kind: "reject", node: target };
+  return { kind: "move", node: target };
+}
+
+/** The canonical, always-resolvable movement phrasing for a node. Every movement
+ *  choice is rewritten to this so clicking it is guaranteed to move the
+ *  character — independent of which verb the GM happened to use, and immune to
+ *  the bare-name residue guard that silently swallowed 「行近X，仔細觀察」. */
+export function canonicalMoveChoice(node: LocationNode): string {
+  return `前往${shortName(node.name)}`;
 }
 
 // Does a clue's 取得方式 (how) describe a plain SEARCH (so a generic search of

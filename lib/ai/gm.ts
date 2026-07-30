@@ -1,5 +1,5 @@
 import type { ScenarioObjective } from "@/lib/game/objectives-def";
-import { computeExits, locationShortName, type LocationGraph, type LocationState } from "@/lib/game/locations";
+import { computeExits, locationShortName, classifyChoiceLocation, canonicalMoveChoice, type LocationGraph, type LocationState } from "@/lib/game/locations";
 
 export interface LocationEntry {
   name: string;
@@ -373,7 +373,7 @@ SUGGESTED ACTIONS — SKILL-TAGGED, 3 DISTINCT SLOTS (STRICT):
 - ONE DESTINATION PER CHOICE: a choice may name AT MOST ONE location. If it moves the party or searches a place, name only that single target — do NOT also mention a second location as a landmark or origin (the travel system reads the location name from the option, and two names make the destination ambiguous). Bad: "走近客廳角落嘅神位" (two places). Good: "檢查神位的香爐".
 - CHOICES ARE BOUND TO THE LOCATION SYSTEM (STRICT — read the current turn's LOCATION SYSTEM block). Locations are SEPARATE scenes; the party can only act where it currently is. Every choice MUST be one of exactly two kinds:
   (1) an action performed AT the CURRENT LOCATION, or
-  (2) travelling to exactly ONE place listed under 可前往 (phrased plainly as going there, e.g. "前往走廊").
+  (2) travelling to exactly ONE place listed under 可前往. A movement choice MUST be phrased with 前往 and nothing else — write exactly "前往<地點名>" (e.g. "前往走廊"). Do NOT use 行近／走近／靠近／行埋／步向, and do NOT append extra clauses like "，仔細觀察" or "聽聽裡面嘅聲音" — a movement option is ONLY the move. (The system rewrites movement choices to this canonical form anyway; matching it yourself keeps the wording natural.)
   HARD RULES for choices:
   · NEVER assume the party is standing anywhere other than the CURRENT LOCATION. Do NOT write "站在B…", "在B處聆聽C", or any option set at a place the party has not moved to.
   · NEVER let a single choice combine a move with a remote action ("go to B and listen to C", "from B search C"). No multi-hop. Move OR act here — not both.
@@ -1077,6 +1077,19 @@ export function sanitizeChoicesWithMeta(
     if (rosterNames.some((name) => name && body.includes(name))) continue;
     // Choices must never point at locked/hidden/unreachable places.
     if (forbidden.some((f) => body.includes(f))) continue;
+    // SCENE BINDING. A choice may name another place only as a travel
+    // DESTINATION — never as somewhere the character acts, searches or listens,
+    // since they are not standing there. Reachability alone could not tell those
+    // apart (and in `free` mode every unlocked node is "reachable"), which is
+    // how split-party players ended up receiving each other's options.
+    if (graph && state) {
+      const verdict = classifyChoiceLocation(body, graph, state, forNode ?? state.current);
+      if (verdict.kind === "reject") continue;
+      // Normalize movement to the canonical form so the travel matcher always
+      // resolves it — 「行近1404門口，仔細觀察」 previously failed both the verb
+      // check and the bare-name residue guard, so clicking it did nothing.
+      if (verdict.kind === "move") body = canonicalMoveChoice(verdict.node);
+    }
     if (body.length > 22) body = body.slice(0, 20) + "…";
     out.push(tag ? `${tag} ${body}` : body);
     if (out.length === 3) break;

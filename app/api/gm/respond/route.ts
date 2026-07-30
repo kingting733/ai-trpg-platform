@@ -609,6 +609,30 @@ export async function POST(request: Request) {
   const freshLocationState =
     !room.location_state ||
     (typeof room.location_state === "object" && Object.keys(room.location_state).length === 0);
+
+  // SELF-HEAL positions[] — every in-room character must have an explicit entry.
+  // positionOf() falls back to the legacy `current` mirror, which tracks the LAST
+  // MOVER: so in a room whose state predates split-party seeding, the moment one
+  // character walks away EVERY other character silently "follows" them. That made
+  // the engine believe the party was together (nextActorNode === actorNode), so
+  // the next player's choices were bound to the wrong scene entirely.
+  // Idempotent: only fills gaps, never overwrites a real position. NOTE this
+  // cannot RECOVER a legacy character's true position — that was never recorded.
+  // It snapshots the same fallback positionOf() already returns, which stops the
+  // ongoing drift (matching the spec's "everyone stands where the party was").
+  // Persisted with the rest of locState in the room update below.
+  if (locationGraph && locState) {
+    let backfilled = 0;
+    for (const c of sortedByDex) {
+      if (!locState.positions[c.id]) {
+        const resolved = positionOf(locState, c.id, locationGraph);
+        if (resolved) { locState.positions[c.id] = resolved; backfilled++; }
+      }
+    }
+    if (backfilled > 0 && !freshLocationState) {
+      console.warn(`[locations] backfilled positions for ${backfilled} character(s) in room ${roomId} — legacy state without per-character positions.`);
+    }
+  }
   if (locationGraph && locState && freshLocationState && locState.current) {
     // Split-party: everyone spawns at the entry node (splitting is opt-in by
     // walking away). positionOf falls back to `current` anyway, but explicit
