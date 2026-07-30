@@ -10,6 +10,34 @@ code deploy** — running it first breaks character creation. Motivating urgency
 with Mythos v1, the old client-side insert could forge `cthulhu_knowledge` /
 `mythos_skills` (free spells at 70% cast rate), not just hp/skills.
 
+## RULE: hardened table ⇒ service-role write
+
+Once a table's client INSERT/UPDATE/DELETE policies are dropped, **every** route
+that writes it must use `createAdminClient()`. Missing one does not fail at
+build or typecheck — it fails at runtime with
+`new row violates row-level security policy for table "<t>"`, and only on the
+code path a user happens to hit. This bit us once: `/api/characters/open`
+(the daily card draw) and `/api/characters/[id]` (delete) were still on the
+user client after phase 2 dropped `character_cards` INSERT/UPDATE.
+
+Audit command — run after ANY hardening change, expect no `admin:NO`:
+
+```bash
+for t in character_cards characters user_items card_missions card_growth users; do
+  echo "### $t"
+  for f in $(grep -rl "from(\"$t\")" app --include="*.ts"); do
+    w=$(grep -A3 "from(\"$t\")" $f | grep -oE "\.(insert|update|delete)\(" | sort -u | tr '\n' ' ')
+    [ -z "$w" ] && continue
+    a=$(grep -c "createAdminClient" $f)
+    printf "   %-46s writes:%-24s admin:%s\n" "$f" "$w" "$([ $a -gt 0 ] && echo yes || echo NO)"
+  done
+done
+```
+
+Note `users` keeps `users_insert_own` (signup bootstrap in
+`/auth/callback`) — only `users_update_own` was dropped, so points can move
+solely via `adjust_points`/service-role.
+
 ## Deploy order (IMPORTANT)
 1. `SUPABASE_SERVICE_ROLE_KEY` must be set in Vercel (it already is — the daily
    cron `lib/server/daily-runner.ts` uses it). The hardened routes now REQUIRE

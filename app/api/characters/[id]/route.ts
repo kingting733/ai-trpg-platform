@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function DELETE(
   _request: Request,
@@ -23,11 +24,14 @@ export async function DELETE(
     return NextResponse.json({ error: "此調查員正在執行幕間任務，先領取或取消才能刪除。" }, { status: 409 });
   }
 
-  const { error } = await supabase
+  // Service-role write: character_cards has no client DELETE policy after the
+  // phase-2 RLS hardening. The .eq("user_id") guard IS the ownership check now
+  // (RLS no longer backstops it), so it must not be removed.
+  const { error } = await createAdminClient()
     .from("character_cards")
     .delete()
     .eq("id", params.id)
-    .eq("user_id", user.id); // RLS + belt-and-suspenders
+    .eq("user_id", user.id); // ownership guard — the only one, post-hardening
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

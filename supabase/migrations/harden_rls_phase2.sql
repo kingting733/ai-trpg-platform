@@ -32,8 +32,23 @@ begin
   end loop;
 end $$;
 
--- 2) character_cards: defensively drop any client INSERT/UPDATE policies
---    (creation is /api/characters/open; every update path is service-role).
+-- 2) character_cards: drop any client INSERT/UPDATE policies.
+--    PREREQUISITE — every route that writes this table MUST already use
+--    createAdminClient(), or it will start failing with
+--    "new row violates row-level security policy". Verified writers:
+--      /api/characters/open        INSERT (daily card draw)
+--      /api/characters/[id]        DELETE
+--      /api/characters/[id]/rename UPDATE
+--      /api/characters/[id]/skills UPDATE
+--      /api/items/equip            UPDATE
+--      /api/mythos/bind            UPDATE
+--      /api/interlude/claim        UPDATE
+--      /api/rooms/[id]/growth      UPDATE
+--    Each one authenticates via getUser() and scopes every write with
+--    .eq("user_id", user.id) — that guard IS the ownership check now, because
+--    RLS no longer backstops it. Do not remove it.
+--    NOTE: this loop also removes DELETE-adjacent gaps only if such policies
+--    exist; character_cards ends up with SELECT-only client access.
 do $$
 declare pol record;
 begin

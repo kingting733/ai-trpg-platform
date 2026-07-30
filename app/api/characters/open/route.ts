@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { rollCharacterCard } from "@/lib/cards/dice";
 
 export async function POST() {
@@ -30,7 +31,11 @@ export async function POST() {
   // skill_points is computed (EDU×2 + INT×2) and never stored in the DB.
   const { skill_points, ...cardData } = rolled;
 
-  const { data: card, error } = await supabase
+  // Service-role write: character_cards has no client INSERT policy after the
+  // phase-2 RLS hardening (docs/design/security-hardening-pass.md). Ownership
+  // is established by getUser() above and user_id is set from it — never from
+  // the request — and the daily limit + unique-per-UTC-day index still apply.
+  const { data: card, error } = await createAdminClient()
     .from("character_cards")
     .insert({ user_id: user.id, ...cardData })
     .select("*")
