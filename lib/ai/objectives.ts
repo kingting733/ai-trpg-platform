@@ -114,7 +114,7 @@ function langLabel(language?: string | null): string | null {
   return LANGUAGE_LABELS[language] ?? language;
 }
 
-async function callAI(system: string, user: string, maxTokens: number, label = "objectives"): Promise<string> {
+export async function callAI(system: string, user: string, maxTokens: number, label = "objectives"): Promise<string> {
   const provider = process.env.AI_PROVIDER ?? "deepseek";
   // Use AI_CLASSIFY_MODEL (fast non-thinking model) — objective checking is
   // a simple classification task; a reasoning model wastes time and budget here.

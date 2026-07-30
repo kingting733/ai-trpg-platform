@@ -1477,31 +1477,16 @@ export function buildLocationBlock(
         `Do NOT reference other characters, their discoveries, or what is happening in their scenes — ${scene.nextName} may not even know about those.`
       );
     } else {
-      // The next actor is somewhere else. Give the GM that scene's PUBLIC facts
-      // so it can write choices that actually follow that room's story — its
-      // description, who is standing there, where it leads, and what has already
-      // happened there. Deliberately WITHHELD: that node's still-unfound
-      // evidence and any hidden places, so narrating THIS scene can never leak
-      // the other scene's secrets.
-      const nextNodeDef = graph.nodes.find((n) => n.id === scene.nextNode);
-      const nextExits = computeExits(graph, state, scene.nextNode);
-      const nextNpcs = evaluateNpcPlacements(graph, state, currentRound, objectiveProgress, scene.nextNode);
-      const nextFound = (nextNodeDef?.evidence ?? []).filter((e) => state.evidence_found.includes(e.id));
-      const parts: string[] = [];
-      if (nextNodeDef?.desc) parts.push(`場景：${nextNodeDef.desc}`);
-      if (nextNpcs.length) parts.push(`在場 NPC：${nextNpcs.map((r) => npcDisplayName(r, npcRoster)).join("、")}`);
-      if (nextFound.length) parts.push(`此處已取得的證物：${nextFound.map((e) => e.name).join("、")}`);
-      if (nextExits.open.length) parts.push(`可前往：${nextExits.open.map((n) => shortName(n.name)).join("、")}`);
-      if (nextExits.locked.length) parts.push(`看得到但進不去：${nextExits.locked.map((n) => shortName(n.name)).join("、")}`);
-      if (scene.nextSceneFacts?.length) parts.push(`那裡已發生的事：${scene.nextSceneFacts.join("；")}`);
+      // The next actor is somewhere else. Their 3 choices are produced by a
+      // SEPARATE scene-locked call (lib/ai/scene-choices.ts) whose only context
+      // is THEIR location — this GM must not attempt them. Every prompt-level
+      // attempt leaked the narrated scene into the other player's buttons,
+      // because the GM names objects from its own narration (香爐, a crack in
+      // the wall) that exist in no structured data, so no filter could catch
+      // them. Isolation is the guarantee; this stub also saves tokens.
       lines.push(
-        `NEXT TURN'S SCENE (for the 3 suggested choices ONLY — ${scene.nextName} is at ` +
-        `${shortName(nextNodeDef?.name ?? scene.nextNode)}, a DIFFERENT location from the scene you are narrating): ` +
-        `${parts.join(" | ")}\n` +
-        `Write the 3 choices as concrete actions ${scene.nextName} can take THERE — following THAT scene's own ` +
-        `situation and history, not this turn's. They may act at that location or move to one of ITS 可前往 exits. ` +
-        `Do NOT mention anything from ${scene.actorName}'s scene (no objects, discoveries, or events from it), ` +
-        `do NOT name any other character, and do NOT reveal anything ${scene.nextName} has not witnessed.`
+        `NEXT TURN: ${scene.nextName} acts next from a DIFFERENT location (${nodeName(scene.nextNode)}). ` +
+        `Their suggested choices are handled by the system — output "choices": [] and write none yourself.`
       );
     }
   }

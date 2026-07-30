@@ -1,0 +1,92 @@
+// Scene-locked choice generation for split parties.
+//
+// WHY THIS EXISTS: when the next actor stands in a DIFFERENT location than the
+// scene just narrated, asking the narrating GM to also write the next actor's
+// choices kept leaking the acting scene into them. Every text-level filter
+// failed the same way: the GM names OBJECTS from its own narration (供桌, 香爐,
+// a crack in the wall) which exist in no structured data, so no blacklist can
+// catch them. The only airtight guarantee is ISOLATION: this module makes a
+// separate, tiny AI call whose entire context is the next actor's own location.
+// It cannot mention the other scene because it has never seen it.
+//
+// The call runs IN PARALLEL with the main narration call (it does not depend on
+// the narration — the actor's turn cannot change the next actor's scene), so it
+// adds no latency. On failure/empty output the route falls back to
+// composeSceneChoices (deterministic, creator-authored data).
+
+import { callAI } from "@/lib/ai/objectives";
+
+export interface SceneChoicesInput {
+  /** The character these 3 buttons are for. */
+  characterName: string;
+  /** Their location: name, optional region, GM scene notes. */
+  nodeName: string;
+  regionName?: string | null;
+  nodeDesc?: string | null;
+  /** NPCs actually placed at this node (alive). */
+  npcsHere: string[];
+  /** Open exits FROM this node (server-computed). */
+  exitsOpen: string[];
+  /** Ledger facts that happened AT this node — the scene's own story. */
+  sceneFacts: string[];
+  /** The character's most recent action text, if any (their own thread). */
+  lastAction?: string | null;
+  /** zh skill names usable as [tags], e.g. 偵查/聆聽/心理學. */
+  skillTags: string[];
+}
+
+/** Pure prompt builder — testable, and the isolation guarantee lives here:
+ *  the input type simply has no field that could carry another scene. */
+export function buildSceneChoicesPrompt(input: SceneChoicesInput): { system: string; user: string } {
+  const system = `你是跑團平台的「建議行動」產生器。你只知道下面描述的這一個場景，為指定角色寫出 3 個此刻可行的建議行動按鈕。
+
+規則（嚴格）：
+1. 只能根據下面提供的場景資訊。不要發明這裡沒提到的人物、物件或地點。
+2. 每個行動 6–15 個中文字，可在最前面加一個技能標籤，格式「[技能] 行動」。技能只能從允許清單挑選。
+3. 行動只有兩種：在此地點做一件事；或移動——移動必須寫成「前往<出口名>」，不可用其他動詞，不可附加其他子句。
+4. 三個行動要彼此不同（例如：一個調查、一個社交/聆聽、一個移動或謹慎行動），並延續「此地已發生的事」。
+5. 只輸出一個 JSON 陣列，例如 ["[偵查] 檢查供桌","與王伯交談","前往走廊"]。不要任何其他文字。`;
+
+  const lines: string[] = [];
+  lines.push(`角色：${input.characterName}`);
+  lines.push(`所在地點：${input.regionName ? `${input.regionName} › ` : ""}${input.nodeName}`);
+  if (input.nodeDesc?.trim()) lines.push(`場景描述：${input.nodeDesc.trim()}`);
+  lines.push(input.npcsHere.length ? `在場 NPC：${input.npcsHere.join("、")}` : "在場 NPC：無");
+  lines.push(input.exitsOpen.length ? `可前往的出口：${input.exitsOpen.join("、")}` : "可前往的出口：無");
+  if (input.sceneFacts.length) lines.push(`此地已發生的事：${input.sceneFacts.join("；")}`);
+  if (input.lastAction?.trim()) lines.push(`${input.characterName} 上一個行動：${input.lastAction.trim()}`);
+  lines.push(`允許的技能標籤：${input.skillTags.join("、")}`);
+  return { system, user: lines.join("\n") };
+}
+
+/** Pure parser — accepts a raw JSON array, a fenced one, or line-split text. */
+export function parseSceneChoices(raw: string): string[] {
+  const text = (raw ?? "").trim();
+  if (!text) return [];
+  // Try a JSON array first (possibly inside fences or surrounding prose).
+  const start = text.indexOf("[");
+  const end = text.lastIndexOf("]");
+  if (start >= 0 && end > start) {
+    try {
+      const arr = JSON.parse(text.slice(start, end + 1));
+      if (Array.isArray(arr)) {
+        return arr.filter((x): x is string => typeof x === "string" && x.trim().length > 0).map((x) => x.trim()).slice(0, 3);
+      }
+    } catch {
+      // fall through to line splitting
+    }
+  }
+  return text
+    .split("\n")
+    .map((l) => l.replace(/^[\s\-*\d.、]+/, "").trim())
+    .filter((l) => l.length >= 2 && l.length <= 40 && !/^```/.test(l))
+    .slice(0, 3);
+}
+
+/** Generate scene-locked choices. Empty array on any failure — the caller
+ *  falls back to composeSceneChoices, never to nothing. */
+export async function generateSceneChoices(input: SceneChoicesInput): Promise<string[]> {
+  const { system, user } = buildSceneChoicesPrompt(input);
+  const raw = await callAI(system, user, 200, "scene-choices");
+  return parseSceneChoices(raw);
+}
