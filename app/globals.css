@@ -106,6 +106,33 @@ body {
 .dice-roll { display: inline-block; font-size: 1.05em; animation: dice-shake 0.55s ease-in-out infinite; }
 .dice-roll::after { content: "\2680"; animation: dice-cycle 0.66s steps(1) infinite; }
 
+/* Spectator waiting state — shown to the players who are NOT acting, so a
+   turn in progress never looks like a frozen screen. A slow breathing dot
+   (someone is thinking) plus animated ellipsis. */
+.waiting-pulse {
+  display: inline-block; width: 7px; height: 7px; border-radius: 9999px;
+  background: rgba(201,169,110,0.75);
+  animation: waiting-breathe 1.8s ease-in-out infinite;
+}
+@keyframes waiting-breathe {
+  0%, 100% { opacity: 0.25; transform: scale(0.8); box-shadow: 0 0 0 0 rgba(201,169,110,0.35); }
+  50%      { opacity: 1;    transform: scale(1);   box-shadow: 0 0 0 4px rgba(201,169,110,0); }
+}
+.waiting-dots::after {
+  content: "…"; display: inline-block; width: 1.1em; text-align: left;
+  animation: waiting-dots 1.6s steps(4, end) infinite;
+}
+@keyframes waiting-dots {
+  0%   { content: ""; }
+  25%  { content: "·"; }
+  50%  { content: "··"; }
+  75%, 100% { content: "···"; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .waiting-pulse { animation: none; opacity: 0.7; }
+  .waiting-dots::after { animation: none; content: "···"; }
+}
+
 /* "你的上一幕" orientation aid — when it becomes your turn we scroll your own
    previous scene into view and flash it, so with 3 other players between your
    turns you don't have to hunt for where you left off. The persistent accent

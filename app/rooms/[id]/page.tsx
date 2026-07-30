@@ -336,6 +336,41 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     setStoryLog((logs as unknown as StoryLogEntry[]) ?? []);
   }, [params.id, router]);
 
+  // SPECTATOR TURN STATE — what the players who are NOT acting should see.
+  // Derived purely from the log, so it needs no schema change and no extra
+  // request: the acting player's action row is persisted BEFORE narration
+  // begins, so "an action with no gm_response after it" means the GM is
+  // currently writing. Anything older than STALE_MS is treated as a turn that
+  // errored out, so a crashed turn can't leave everyone staring at a spinner
+  // forever.
+  const SPECTATOR_STALE_MS = 150_000;
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  const pendingTurn = useMemo(() => {
+    for (let i = storyLog.length - 1; i >= 0; i--) {
+      const e = storyLog[i];
+      if (e.entry_type === "gm_response") return null; // narration already landed
+      if (e.entry_type === "action") {
+        const age = nowTick - new Date(e.created_at).getTime();
+        if (age > SPECTATOR_STALE_MS) return null;
+        return { name: e.characters?.name ?? "調查員" };
+      }
+    }
+    return null;
+  }, [storyLog, nowTick]);
+
+  // Re-evaluate the staleness cutoff periodically; without this a stuck turn
+  // would keep showing "GM is writing" until the next poll changed storyLog.
+  useEffect(() => {
+    if (!pendingTurn) return;
+    const id = setInterval(() => setNowTick(Date.now()), 5000);
+    return () => clearInterval(id);
+  }, [pendingTurn]);
+
+  // Adaptive polling. Normally 3s is plenty, but while ANOTHER player's turn is
+  // being narrated the spectators are staring at a "GM is writing" indicator —
+  // poll faster so both that indicator and the narration itself land promptly
+  // instead of up to 3s late.
+  const turnInFlight = !!pendingTurn && room?.current_turn_player_id !== currentUserId;
   useEffect(() => {
     fetchAll();
     const interval = setInterval(() => {
@@ -343,9 +378,9 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
       // the end of submitAction is the source of truth, and polling here would
       // duplicate the streaming box with the freshly-persisted DB entry.
       if (!streamingRef.current) fetchAll();
-    }, 3000);
+    }, turnInFlight ? 1200 : 3000);
     return () => clearInterval(interval);
-  }, [fetchAll]);
+  }, [fetchAll, turnInFlight]);
 
   // Cycle the GM "thinking" flavor line every 2s — only while waiting for the
   // FIRST narration token (once prose streams in, that view takes over).
@@ -1038,6 +1073,31 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                 </span>
               )}
             </div>
+          )}
+
+          {/* SPECTATOR STATUS — for everyone who is NOT the acting player. The
+              acting player gets `gmThinking` from their own submit; without
+              this the others just watched a frozen screen and could not tell
+              whether the game was waiting on a human or on the GM. */}
+          {!isMyTurn && !gmThinking && hasStarted && !iAmDead && (
+            pendingTurn ? (
+              <div className="rounded-lg p-3.5" style={{ background: "rgba(20,16,11,0.5)", border: "1px solid rgba(201,169,110,0.10)" }}>
+                <span className="text-xs text-gold/60 font-medium uppercase tracking-wider block mb-1">GM</span>
+                <span className="gm-thinking-line text-zinc-400 text-sm italic inline-flex items-center gap-1.5">
+                  <span className="dice-roll" aria-hidden />
+                  主持人正在敘述 {pendingTurn.name} 的行動…
+                </span>
+              </div>
+            ) : currentTurnChar ? (
+              <div className="rounded-lg px-3.5 py-2.5 flex items-center gap-2.5"
+                style={{ background: "rgba(20,16,11,0.35)", border: "1px dashed rgba(201,169,110,0.16)" }}>
+                <span className="waiting-pulse shrink-0" aria-hidden />
+                <span className="text-zinc-500 text-sm italic">
+                  等待 <span className="text-gold/80 not-italic">{currentTurnChar.name}</span> 選擇行動
+                  <span className="waiting-dots" aria-hidden />
+                </span>
+              </div>
+            ) : null
           )}
           <div ref={logEndRef} />
           </div>
