@@ -114,7 +114,16 @@ function langLabel(language?: string | null): string | null {
   return LANGUAGE_LABELS[language] ?? language;
 }
 
-export async function callAI(system: string, user: string, maxTokens: number, label = "objectives"): Promise<string> {
+export async function callAI(
+  system: string,
+  user: string,
+  maxTokens: number,
+  label = "objectives",
+  /** Sampling temperature. Defaults to 0.1 — right for classification, but far
+   *  too rigid for anything generative (it makes repeated calls with similar
+   *  inputs return near-identical text). */
+  temperature = 0.1,
+): Promise<string> {
   const provider = process.env.AI_PROVIDER ?? "deepseek";
   // Use AI_CLASSIFY_MODEL (fast non-thinking model) — objective checking is
   // a simple classification task; a reasoning model wastes time and budget here.
@@ -164,7 +173,7 @@ export async function callAI(system: string, user: string, maxTokens: number, la
         model,
         messages: [{ role: "system", content: system }, { role: "user", content: user }],
         max_tokens: maxTokens,
-        temperature: 0.1,
+        temperature,
       }),
     });
     if (!res.ok) {

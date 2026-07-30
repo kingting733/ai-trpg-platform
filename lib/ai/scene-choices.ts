@@ -31,6 +31,12 @@ export interface SceneChoicesInput {
   sceneFacts: string[];
   /** The character's most recent action text, if any (their own thread). */
   lastAction?: string | null;
+  /** The GM narration that answered that action — i.e. the last thing that
+   *  happened TO THIS CHARACTER, in their own scene. This is the richest
+   *  "what's going on right now" signal; ledger facts alone are too terse
+   *  ("取得證物X") to write choices that follow the story. Isolation-safe: it
+   *  describes THIS character's scene, never the acting player's. */
+  lastNarration?: string | null;
   /** zh skill names usable as [tags], e.g. 偵查/聆聽/心理學. */
   skillTags: string[];
 }
@@ -44,7 +50,9 @@ export function buildSceneChoicesPrompt(input: SceneChoicesInput): { system: str
 1. 只能根據下面提供的場景資訊。不要發明這裡沒提到的人物、物件或地點。
 2. 每個行動 6–15 個中文字，可在最前面加一個技能標籤，格式「[技能] 行動」。技能只能從允許清單挑選。
 3. 行動只有兩種：在此地點做一件事；或移動——移動必須寫成「前往<出口名>」，不可用其他動詞，不可附加其他子句。
-4. 三個行動要彼此不同（例如：一個調查、一個社交/聆聽、一個移動或謹慎行動），並延續「此地已發生的事」。
+4. 三個行動要彼此不同（例如：一個調查、一個社交/聆聽、一個移動或謹慎行動）。
+   **最重要**：如果有提供「眼前最新的情況」，行動必須直接回應那段敘述裡剛發生的事、剛出現的東西或剛聽到的聲音，
+   不要寫「檢查四周」這種放諸四海皆準的空泛選項。
 5. 只輸出一個 JSON 陣列，例如 ["[偵查] 檢查供桌","與王伯交談","前往走廊"]。不要任何其他文字。`;
 
   const lines: string[] = [];
@@ -55,6 +63,9 @@ export function buildSceneChoicesPrompt(input: SceneChoicesInput): { system: str
   lines.push(input.exitsOpen.length ? `可前往的出口：${input.exitsOpen.join("、")}` : "可前往的出口：無");
   if (input.sceneFacts.length) lines.push(`此地已發生的事：${input.sceneFacts.join("；")}`);
   if (input.lastAction?.trim()) lines.push(`${input.characterName} 上一個行動：${input.lastAction.trim()}`);
+  if (input.lastNarration?.trim()) {
+    lines.push(`${input.characterName} 眼前最新的情況（主持人上次對他/她敘述的內容）：\n${input.lastNarration.trim()}`);
+  }
   lines.push(`允許的技能標籤：${input.skillTags.join("、")}`);
   return { system, user: lines.join("\n") };
 }
@@ -83,10 +94,33 @@ export function parseSceneChoices(raw: string): string[] {
     .slice(0, 3);
 }
 
-/** Generate scene-locked choices. Empty array on any failure — the caller
- *  falls back to composeSceneChoices, never to nothing. */
+/**
+ * Generate scene-locked choices. Empty array on any failure — the caller falls
+ * back to composeSceneChoices, never to nothing.
+ *
+ * Budget: this used to request only 200 tokens, which is enough for the answer
+ * but NOT for a model that emits any preamble or reasoning first — those
+ * returned HTTP 200 with empty content (finish_reason "length"), so the
+ * deterministic fallback fired every single turn and the buttons looked frozen.
+ * Everything else in this codebase gives JSON calls 600–900.
+ *
+ * Temperature: deliberately well above callAI's 0.1 default — these are
+ * creative suggestions, and near-greedy sampling on a barely-changing scene
+ * produced near-identical options round after round.
+ */
 export async function generateSceneChoices(input: SceneChoicesInput): Promise<string[]> {
   const { system, user } = buildSceneChoicesPrompt(input);
-  const raw = await callAI(system, user, 200, "scene-choices");
-  return parseSceneChoices(raw);
+  const maxTokens = Number(process.env.AI_CLASSIFY_MAX_TOKENS) || 700;
+  const temperature = Number(process.env.AI_CHOICES_TEMPERATURE) || 0.8;
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const raw = await callAI(system, user, maxTokens, "scene-choices", temperature);
+    const parsed = parseSceneChoices(raw);
+    if (parsed.length > 0) return parsed;
+    console.warn(
+      `[scene-choices] attempt ${attempt}/2 produced no usable choices for ${input.characterName} @ ${input.nodeName}. ` +
+      `raw=${JSON.stringify((raw ?? "").slice(0, 300))}`
+    );
+  }
+  return [];
 }

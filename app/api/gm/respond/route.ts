@@ -1486,12 +1486,21 @@ export async function POST(request: Request) {
       .filter((e) => e.node === nextActorNode)
       .slice(-4)
       .map((e) => `[T${e.turn}] ${e.character}: ${e.fact}`);
-    const lastAction = narrativeLogs
-      .filter((l: any) => {
-        const nm = Array.isArray(l.characters) ? l.characters[0]?.name : l.characters?.name;
-        return l.entry_type === "action" && nm === nextActor.name;
-      })
-      .slice(-1)[0]?.content ?? null;
+    // The next actor's own last action, and the GM narration that answered it —
+    // the strongest "what is going on in THEIR scene right now" signal. Ledger
+    // facts alone ("取得證物X") are too terse to write story-aware choices from.
+    const nameOf = (l: any) => (Array.isArray(l.characters) ? l.characters[0]?.name : l.characters?.name);
+    let lastAction: string | null = null;
+    let lastNarration: string | null = null;
+    for (let i = narrativeLogs.length - 1; i >= 0; i--) {
+      const l: any = narrativeLogs[i];
+      if (l.entry_type === "action" && nameOf(l) === nextActor.name) {
+        lastAction = l.content ?? null;
+        const reply = narrativeLogs.slice(i + 1).find((x: any) => x.entry_type === "gm_response");
+        lastNarration = (reply as any)?.content?.slice(0, 700) ?? null;
+        break;
+      }
+    }
     sceneChoicesPromise = generateSceneChoices({
       characterName: nextActor.name,
       nodeName: locationShortName(nextNodeDef?.name ?? nextActorNode),
@@ -1501,6 +1510,7 @@ export async function POST(request: Request) {
       exitsOpen,
       sceneFacts: nextFacts,
       lastAction,
+      lastNarration,
       skillTags: PLAYER_SKILL_LIST.map((s) => s.zh),
     }).catch((e) => {
       console.error("[scene-choices] generation failed:", e?.message ?? e);
@@ -1592,8 +1602,15 @@ export async function POST(request: Request) {
             locationGraph, locState, nextActorNode, room.current_round, objProgress, npcRoster,
             (ref) => npcStateEntry(ref, npcRoster, npcStateNow)?.alive !== false,
           );
+          // Say WHY: an empty `isolated` means the AI call itself failed (see
+          // the [scene-choices] callAI error just above in the log); a non-empty
+          // one means every suggestion was rejected by validation. Without this
+          // distinction a frozen choice list looks identical in both cases.
           console.warn(
-            `[scene-choices] isolated call yielded nothing usable for ${nextActor?.name ?? "next actor"} at ${nextActorNode}; used composed fallback.`
+            `[scene-choices] composed fallback used for ${nextActor?.name ?? "next actor"} at ${nextActorNode}. ` +
+            (isolated.length === 0
+              ? "Cause: the isolated AI call returned nothing (check the [scene-choices] callAI error above)."
+              : `Cause: all ${isolated.length} suggestion(s) failed validation: ${JSON.stringify(isolated)}`)
           );
         }
       } else {
