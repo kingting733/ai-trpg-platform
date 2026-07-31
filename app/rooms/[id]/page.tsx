@@ -370,7 +370,11 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   // being narrated the spectators are staring at a "GM is writing" indicator —
   // poll faster so both that indicator and the narration itself land promptly
   // instead of up to 3s late.
-  const turnInFlight = !!pendingTurn && room?.current_turn_player_id !== currentUserId;
+  // Any turn mid-narration, regardless of whose turn it now is — the server
+  // advances the turn pointer before narrating, so keying this off "not my
+  // turn" made the NEXT player (the one waiting to act) poll slowly.
+  // The submitting player pauses polling entirely via streamingRef.
+  const turnInFlight = !!pendingTurn;
   useEffect(() => {
     fetchAll();
     const interval = setInterval(() => {
@@ -670,7 +674,15 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   const iAmInsane = (myCharacter?.san ?? 1) <= 0;
   const iAmDead = iAmDown || iAmInsane;
   // A dead/insane character cannot act; the turn flow skips them server-side.
-  const isMyTurn = room.current_turn_player_id === currentUserId && !iAmDead;
+  // The server advances current_turn_player_id BEFORE generating the previous
+  // turn's narration, so being "the current player" is not enough to act: the
+  // last scene may still be mid-write. Acting then would start a second,
+  // concurrent turn on top of an incomplete one. `pendingTurn` closes that
+  // window (it clears the moment the gm_response row lands). `gmThinking`
+  // means it is MY OWN submit in flight, which submitAction already guards.
+  const turnIsResolving = !!pendingTurn && !gmThinking;
+  const isMyTurn =
+    room.current_turn_player_id === currentUserId && !iAmDead && !turnIsResolving;
   // Choices must belong to the current turn player — guards against stale one-turn-lag choices
   const choicesAreForMe = room.current_choices_for_player_id === currentUserId;
   const sortedByDex = [...characters].sort((a, b) => b.dex - a.dex);
@@ -1075,29 +1087,33 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
             </div>
           )}
 
-          {/* SPECTATOR STATUS — for everyone who is NOT the acting player. The
-              acting player gets `gmThinking` from their own submit; without
-              this the others just watched a frozen screen and could not tell
-              whether the game was waiting on a human or on the GM. */}
-          {!isMyTurn && !gmThinking && hasStarted && !iAmDead && (
-            pendingTurn ? (
-              <div className="rounded-lg p-3.5" style={{ background: "rgba(20,16,11,0.5)", border: "1px solid rgba(201,169,110,0.10)" }}>
-                <span className="text-xs text-gold/60 font-medium uppercase tracking-wider block mb-1">GM</span>
-                <span className="gm-thinking-line text-zinc-400 text-sm italic inline-flex items-center gap-1.5">
-                  <span className="dice-roll" aria-hidden />
-                  主持人正在敘述 {pendingTurn.name} 的行動…
-                </span>
-              </div>
-            ) : currentTurnChar ? (
-              <div className="rounded-lg px-3.5 py-2.5 flex items-center gap-2.5"
-                style={{ background: "rgba(20,16,11,0.35)", border: "1px dashed rgba(201,169,110,0.16)" }}>
-                <span className="waiting-pulse shrink-0" aria-hidden />
-                <span className="text-zinc-500 text-sm italic">
-                  等待 <span className="text-gold/80 not-italic">{currentTurnChar.name}</span> 選擇行動
-                  <span className="waiting-dots" aria-hidden />
-                </span>
-              </div>
-            ) : null
+          {/* GM IS NARRATING — shown to everyone except the player who
+              submitted (they get the live streaming box instead).
+              NOT gated on isMyTurn: the server advances current_turn_player_id
+              BEFORE it generates the narration, so the *next* player already
+              sees the turn as theirs while the previous scene is still being
+              written. Gating this on !isMyTurn made it invisible to exactly the
+              person most likely to be staring at the screen. */}
+          {pendingTurn && !gmThinking && hasStarted && (
+            <div className="rounded-lg p-3.5" style={{ background: "rgba(20,16,11,0.5)", border: "1px solid rgba(201,169,110,0.10)" }}>
+              <span className="text-xs text-gold/60 font-medium uppercase tracking-wider block mb-1">GM</span>
+              <span className="gm-thinking-line text-zinc-400 text-sm italic inline-flex items-center gap-1.5">
+                <span className="dice-roll" aria-hidden />
+                主持人正在敘述 {pendingTurn.name} 的行動…
+              </span>
+            </div>
+          )}
+
+          {/* WAITING ON A HUMAN — the active player has not chosen yet. */}
+          {!pendingTurn && !isMyTurn && !gmThinking && hasStarted && !iAmDead && currentTurnChar && (
+            <div className="rounded-lg px-3.5 py-2.5 flex items-center gap-2.5"
+              style={{ background: "rgba(20,16,11,0.35)", border: "1px dashed rgba(201,169,110,0.16)" }}>
+              <span className="waiting-pulse shrink-0" aria-hidden />
+              <span className="text-zinc-500 text-sm italic">
+                等待 <span className="text-gold/80 not-italic">{currentTurnChar.name}</span> 選擇行動
+                <span className="waiting-dots" aria-hidden />
+              </span>
+            </div>
           )}
           <div ref={logEndRef} />
           </div>
@@ -1266,7 +1282,16 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
               value={actionText}
               onChange={(e) => setActionText(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && isMyTurn && !submitting) { e.preventDefault(); submitAction(); } }}
-              placeholder={isMyTurn ? "描述你的行動..." : `等待 ${currentTurnChar?.name ?? "..."} 行動...`}
+              placeholder={
+                isMyTurn
+                  ? "描述你的行動..."
+                  : turnIsResolving
+                    // It may already be THIS player's turn while the previous
+                    // scene is still being written — say that, rather than
+                    // telling them to wait for themselves.
+                    ? `主持人正在敘述 ${pendingTurn?.name ?? ""} 的行動…`
+                    : `等待 ${currentTurnChar?.name ?? "..."} 行動...`
+              }
               disabled={!isMyTurn || submitting}
               className="flex-1 min-w-0 rounded-xl px-3 sm:px-4 py-3 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-gold/50 disabled:opacity-50 transition-colors"
               style={{ background: "rgba(14,12,8,0.8)", border: "1px solid #2e2416" }}
