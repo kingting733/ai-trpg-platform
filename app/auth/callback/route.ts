@@ -30,6 +30,24 @@ export async function GET(request: Request) {
           username: fallbackUsername,
         });
       }
+
+      // Grant the free starter investigator so a brand-new account never lands
+      // on an empty roster. Atomic + idempotent (claim_starter_card), so the
+      // duplicate calls from the login page / roster page are harmless.
+      const { data: won } = await supabase.rpc("claim_starter_card", { p_user: data.user.id });
+      if (won === true) {
+        const { buildStarterCard } = await import("@/lib/cards/starter");
+        const { createAdminClient } = await import("@/lib/supabase/admin");
+        const admin = createAdminClient();
+        const { error: cardErr } = await admin
+          .from("character_cards")
+          .insert({ user_id: data.user.id, ...buildStarterCard() });
+        if (cardErr) {
+          // Release the claim so it can be retried elsewhere.
+          await admin.from("users").update({ starter_card_granted_at: null }).eq("id", data.user.id);
+          console.error("[starter] callback grant failed, claim released:", cardErr.message);
+        }
+      }
     }
   }
 

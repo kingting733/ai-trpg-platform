@@ -122,7 +122,23 @@ export default function CharactersPage() {
     }
   }
 
-  useEffect(() => { loadCards(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    // Backstop for the starter investigator: the grant normally happens at
+    // sign-up/sign-in, but this is the page a player checks when their roster
+    // looks empty, so claim it here too. The server call is atomic and
+    // idempotent — it no-ops for any account that already has one — and we
+    // only reload when a card was actually created.
+    (async () => {
+      await loadCards();
+      try {
+        const res = await fetch("/api/characters/starter", { method: "POST" });
+        const j = await res.json().catch(() => null);
+        if (j?.granted) await loadCards();
+      } catch {
+        // Offline / transient — the next visit or sign-in retries.
+      }
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const DAILY_LIMIT = 3;
   const todayCount = cards.filter((c) => isSameUtcDay(c.created_at)).length;

@@ -52,6 +52,11 @@ function LoginForm() {
           username: fallbackUsername,
         });
       }
+
+      // Free starter investigator, if this account has not been granted one.
+      // Idempotent server-side, so calling it on every sign-in is harmless and
+      // it also back-fills anyone the auth callback missed.
+      fetch("/api/characters/starter", { method: "POST" }).catch(() => {});
     }
 
     router.push(next);
