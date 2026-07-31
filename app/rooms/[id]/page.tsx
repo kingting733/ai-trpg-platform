@@ -438,13 +438,28 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 120);
   }, []);
 
-  // Follow-the-bottom auto-scroll: when the player is already at the latest
-  // message, keep pinning to the bottom as new GM text streams / logs arrive.
-  // If they've scrolled up to read, DON'T yank them down — leave them put (the
-  // "↓ 最新訊息" button lets them return on demand).
+  // Follow-the-bottom auto-scroll for NEW LOG ENTRIES only.
+  //
+  // Deliberately NOT keyed on `streamingText`: pinning to the bottom on every
+  // token yanked the page a line at a time while the player was still reading
+  // the paragraph above, which made the narration hard to follow. The text now
+  // grows downward from where it started and the player scrolls at their own
+  // pace; "↓ 最新訊息" returns them to the end whenever they want.
   useEffect(() => {
     if (atBottom) logEndRef.current?.scrollIntoView({ behavior: "auto" });
-  }, [storyLog, streamingText, gmThinking, atBottom]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storyLog, gmThinking]);
+
+  // Streaming grows the content without firing a scroll event, so `atBottom`
+  // would go stale — and the "↓ 最新訊息" button (which renders on !atBottom)
+  // would stay hidden precisely while the text is running away below the fold.
+  // Re-measure as tokens arrive. Measures only; never scrolls.
+  useEffect(() => {
+    if (streamingText == null) return;
+    const el = logContainerRef.current;
+    if (!el) return;
+    setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 120);
+  }, [streamingText]);
 
   // The ids that make up MY last scene: my most-recent action + the GM
   // response(s) that answered it (up to my next action). Marked with a
