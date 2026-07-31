@@ -307,34 +307,59 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   const [locGraph, setLocGraph] = useState<LocationGraph | null>(null);
   function toggleSkills(id: string) { setSkillsOpen((p) => ({ ...p, [id]: !p[id] })); }
 
-  const fetchAll = useCallback(async () => {
+  // Split into LOAD (pure fetch, no state) and APPLY (pure state, no awaits).
+  // The end-of-turn handoff needs to swap the streaming text for the persisted
+  // row in a SINGLE render — with state writes buried inside the fetch, the
+  // narration was hidden the moment the stream ended and only reappeared after
+  // several network round-trips, which read as a flicker/reflow.
+  type RoomSnapshot = {
+    user: { id: string; email: string | null };
+    roomData: Room;
+    rp: RoomPlayer[];
+    chars: Character[];
+    logs: StoryLogEntry[];
+  };
+
+  const loadAll = useCallback(async (): Promise<RoomSnapshot | null> => {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push("/login"); return; }
-    setCurrentUserId(user.id);
-    setCurrentUserEmail(user.email ?? null);
+    if (!user) { router.push("/login"); return null; }
 
     const { data: roomData } = await supabase.from("rooms").select("*").eq("id", params.id).single();
-    if (!roomData) { router.push("/play/hub"); return; }
-    setRoom(roomData);
+    if (!roomData) { router.push("/play/hub"); return null; }
 
-    const { data: rp } = await supabase.from("room_players").select("user_id, character_id, turn_order").eq("room_id", params.id);
-    setRoomPlayers(rp ?? []);
+    // Independent queries — run them together rather than in sequence.
+    const [{ data: rp }, { data: chars }, { data: logs }] = await Promise.all([
+      supabase.from("room_players").select("user_id, character_id, turn_order").eq("room_id", params.id),
+      supabase.from("characters").select("*").eq("room_id", params.id),
+      supabase.from("story_logs").select("*, characters(name)").eq("room_id", params.id)
+        .order("created_at", { ascending: true }),
+    ]);
 
-    const { data: chars } = await supabase.from("characters").select("*").eq("room_id", params.id);
-    const sortedChars = (chars ?? []).sort((a, b) => b.dex - a.dex);
-    setCharacters(sortedChars);
-
-    const myChar = (chars ?? []).find((c: Character) => c.user_id === user.id);
-    setMyCharacter(myChar ?? null);
-
-    const { data: logs } = await supabase
-      .from("story_logs")
-      .select("*, characters(name)")
-      .eq("room_id", params.id)
-      .order("created_at", { ascending: true });
-    setStoryLog((logs as unknown as StoryLogEntry[]) ?? []);
+    return {
+      user: { id: user.id, email: user.email ?? null },
+      roomData,
+      rp: rp ?? [],
+      chars: (chars ?? []) as Character[],
+      logs: (logs as unknown as StoryLogEntry[]) ?? [],
+    };
   }, [params.id, router]);
+
+  /** Synchronous — every setState here lands in ONE React render. */
+  const applySnapshot = useCallback((d: RoomSnapshot | null) => {
+    if (!d) return;
+    setCurrentUserId(d.user.id);
+    setCurrentUserEmail(d.user.email);
+    setRoom(d.roomData);
+    setRoomPlayers(d.rp);
+    setCharacters([...d.chars].sort((a, b) => b.dex - a.dex));
+    setMyCharacter(d.chars.find((c) => c.user_id === d.user.id) ?? null);
+    setStoryLog(d.logs);
+  }, []);
+
+  const fetchAll = useCallback(async () => {
+    applySnapshot(await loadAll());
+  }, [loadAll, applySnapshot]);
 
   // SPECTATOR TURN STATE — what the players who are NOT acting should see.
   // Derived purely from the log, so it needs no schema change and no extra
@@ -483,7 +508,12 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   // Option 2: when the turn swings back to me (with 3 other players between my
   // turns my last scene is buried far up the log), scroll it into view and
   // flash it once so I don't have to hunt. Pure client render aid — no state.
-  const myTurnActive = !!room && room.current_turn_player_id === currentUserId;
+  // NOTE the !pendingTurn guard: the server advances the turn pointer BEFORE it
+  // generates the previous turn's narration, so without it this would yank the
+  // view to a centred old scene while the new one was still streaming in.
+  // Wait until the turn has actually resolved.
+  const myTurnActive =
+    !!room && room.current_turn_player_id === currentUserId && !pendingTurn;
   useEffect(() => {
     const was = prevMyTurnRef.current;
     prevMyTurnRef.current = myTurnActive;
@@ -545,9 +575,13 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
     } catch {
       // non-blocking
     }
-    setGmThinking(false);
 
-    await fetchAll();
+    // Same atomic handoff as submitAction: load first, then drop the thinking
+    // indicator in the same commit as the opening scene appearing — otherwise
+    // there is a blank gap for the length of the fetch.
+    const snapshot = await loadAll();
+    applySnapshot(snapshot);
+    setGmThinking(false);
     setInitializing(false);
   }
 
@@ -644,10 +678,15 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
       // non-blocking — fetchAll() below still syncs whatever the server
       // actually persisted, even if the stream connection itself hiccuped.
     }
+    // ATOMIC HANDOFF. Keep the streamed narration on screen while the persisted
+    // copy loads, then swap both in one synchronous block so React commits a
+    // single render. Clearing gmThinking BEFORE the fetch (as this used to do)
+    // unmounted the text and left a blank gap for the whole round-trip, so the
+    // scene visibly vanished and popped back in.
+    const snapshot = await loadAll();
+    applySnapshot(snapshot);   // the real gm_response row is now in storyLog…
+    setStreamingText(null);    // …so the live copy can go in the same commit
     setGmThinking(false);
-
-    await fetchAll();      // load the persisted turn (streaming box already hidden above)
-    setStreamingText(null);
     setSubmitting(false);
     streamingRef.current = false; // resume background polling
   }
