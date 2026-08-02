@@ -3,6 +3,7 @@
 // creator's description directive is expanded using the actual story history.
 
 import type { ScenarioEnding } from "@/lib/game/endings";
+import { thinkingFragment } from "@/lib/ai/settings";
 import type { LedgerEntry } from "@/lib/ai/gm";
 
 // ── AI call (same pattern as objectives.ts) ───────────────────────────────────
@@ -45,9 +46,8 @@ async function callAI(system: string, user: string, maxTokens: number): Promise<
         messages: [{ role: "system", content: system }, { role: "user", content: user }],
         max_tokens: maxTokens,
         temperature: 0.7,
-        // See lib/ai/gm.ts — reasoning mode adds latency with no benefit to a
-        // short prose call like this one.
-        ...(provider === "deepseek" ? { thinking: { type: "disabled" } } : {}),
+        // Reasoning off by default; admin-toggleable at /admin.
+        ...(await thinkingFragment("ending_narration", provider)),
       }),
     });
     if (!res.ok) return "";

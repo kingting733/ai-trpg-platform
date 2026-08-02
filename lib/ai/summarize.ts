@@ -4,6 +4,8 @@
  * regardless of how long the game has been running.
  */
 
+import { thinkingFragment } from "@/lib/ai/settings";
+
 export interface LedgerEntry {
   turn: number;
   /** clue | npc_met | item | death | san_break | objective | event */
@@ -70,11 +72,10 @@ Respond with ONLY the 4 lines above, no extra text.`;
         messages: [{ role: "user", content: prompt }],
         max_tokens: 220,
         temperature: 0.3,
-        // Belt-and-suspenders alongside picking a "fast non-thinking model"
-        // above: explicitly disable DeepSeek's reasoning mode rather than
-        // relying on AI_CLASSIFY_MODEL always being a non-thinking model.
-        // 220 max_tokens leaves ~no room for hidden thinking tokens anyway.
-        ...(provider === "deepseek" ? { thinking: { type: "disabled" } } : {}),
+        // Explicit rather than relying on AI_CLASSIFY_MODEL being a
+        // non-thinking model. 220 max_tokens leaves ~no room for hidden
+        // thinking tokens anyway. Admin-toggleable at /admin.
+        ...(await thinkingFragment("summarize", provider)),
       }),
     });
     if (!res.ok) return currentSummary ?? "";

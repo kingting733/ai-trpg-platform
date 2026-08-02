@@ -1,6 +1,8 @@
 // Server-side only. Checks whether a player action + GM narration satisfies
 // one of the scenario's ending conditions.
 
+import { thinkingFragment } from "@/lib/ai/settings";
+
 export type EndingType = "best" | "normal" | "bad" | "failure";
 
 export interface EndingResult {
@@ -54,10 +56,9 @@ async function callAI(system: string, user: string): Promise<string> {
         messages: [{ role: "system", content: system }, { role: "user", content: user }],
         max_tokens: 900,
         temperature: 0.1,
-        // A JSON-classification call — reasoning buys nothing here and only
-        // burns budget/latency. See lib/ai/gm.ts for the same flag on the
-        // narration call.
-        ...(provider === "deepseek" ? { thinking: { type: "disabled" } } : {}),
+        // A JSON-classification call — reasoning is off by default and
+        // admin-toggleable per call site at /admin (lib/ai/settings.ts).
+        ...(await thinkingFragment("detect_ending", provider)),
       }),
     });
     if (!res.ok) return "{}";

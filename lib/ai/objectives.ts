@@ -22,6 +22,7 @@
 //                   (e.g. "each player confesses their own sin"). One player
 //                   doing it does NOT complete it for the others.
 import type { ScenarioObjective, ObjectiveScope } from "@/lib/game/objectives-def";
+import { thinkingFragment } from "@/lib/ai/settings";
 export type { ObjectiveScope } from "@/lib/game/objectives-def";
 
 /** A trackable objective. Same shape as the creator-defined ScenarioObjective. */
@@ -174,12 +175,15 @@ export async function callAI(
         messages: [{ role: "system", content: system }, { role: "user", content: user }],
         max_tokens: maxTokens,
         temperature,
-        // DeepSeek V4 models default to thinking (reasoning) mode, which burns
-        // the token budget and adds latency before any visible content — a
-        // pure waste for classification/JSON/suggestion calls like every use
-        // of this shared helper (objectives, summarize, scene-choices). Mirrors
-        // the same flag in lib/ai/gm.ts's narration call.
-        ...(provider === "deepseek" ? { thinking: { type: "disabled" } } : {}),
+        // Reasoning is off by default for these classification/JSON calls: the
+        // hidden tokens compete with max_tokens and can produce an HTTP 200
+        // with EMPTY content. Admin-toggleable per call site at /admin.
+        // This helper serves more than one logical call site, so the site is
+        // derived from the label the caller already passes.
+        ...(await thinkingFragment(
+          label.startsWith("scene-choices") ? "scene_choices" : "objectives",
+          provider
+        )),
       }),
     });
     if (!res.ok) {

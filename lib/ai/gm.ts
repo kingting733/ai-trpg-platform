@@ -1,4 +1,5 @@
 import type { ScenarioObjective } from "@/lib/game/objectives-def";
+import { thinkingFragment } from "@/lib/ai/settings";
 import { computeExits, locationShortName, classifyChoiceLocation, canonicalMoveChoice, type LocationGraph, type LocationState } from "@/lib/game/locations";
 
 export interface LocationEntry {
@@ -806,11 +807,12 @@ async function callOpenAICompatibleStream(
   try {
     // DeepSeek V4 models default to thinking (reasoning) mode, which delays the
     // first narration token and eats the Vercel wall. The server owns all game
-    // mechanics — the GM only narrates — so reasoning buys nothing here. Disable
-    // it via DeepSeek's request-body flag (this is NOT an OpenAI field, so only
-    // send it to DeepSeek; an OpenAI-provider request would 400 on it).
+    // mechanics — the GM only narrates — so reasoning buys nothing here, and it
+    // is disabled by default. Admins can flip it per call site at /admin
+    // (lib/ai/settings.ts); the flag is DeepSeek-only, an OpenAI request 400s.
     const provider = process.env.AI_PROVIDER ?? "deepseek";
     const reqStart = Date.now(); // for first-token latency below
+    const thinking = await thinkingFragment("gm", provider);
     const res = await fetch(`${baseUrl}/v1/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
@@ -820,7 +822,7 @@ async function callOpenAICompatibleStream(
         max_tokens: Number(process.env.AI_MAX_TOKENS) || 2000,
         temperature: 0.8,
         stream: true,
-        ...(provider === "deepseek" ? { thinking: { type: "disabled" } } : {}),
+        ...thinking,
       }),
       signal: controller.signal,
     });
@@ -841,7 +843,7 @@ async function callOpenAICompatibleStream(
       if (piece) {
         if (!firstTokenLogged) {
           firstTokenLogged = true;
-          console.log(`[gm:latency] first content token in ${Date.now() - reqStart}ms (model=${model}, thinking=${provider === "deepseek" ? "disabled" : "n/a"})`);
+          console.log(`[gm:latency] first content token in ${Date.now() - reqStart}ms (model=${model}, thinking=${provider !== "deepseek" ? "n/a" : "thinking" in thinking ? "disabled" : "enabled"})`);
         }
         full += piece;
         filter.feed(piece);

@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Check, X } from "lucide-react";
 import type { DailySeedConfig } from "@/lib/ai/daily-scenario";
+import { AI_CALL_SITES, THINKING_CACHE_TTL_MS, type AiThinkingConfig } from "@/lib/ai/settings";
 
 export interface AdminScenario {
   id: string;
@@ -59,13 +60,17 @@ export function AdminClient({
   rooms: initialRooms,
   dailyDrafts: initialDaily,
   seedConfig: initialSeed,
+  aiThinking: initialThinking,
 }: {
   scenarios: AdminScenario[];
   rooms: AdminRoom[];
   dailyDrafts: DailyDraft[];
   seedConfig: DailySeedConfig;
+  aiThinking: AiThinkingConfig;
 }) {
-  const [tab, setTab] = useState<"scenarios" | "rooms" | "daily">("scenarios");
+  const [tab, setTab] = useState<"scenarios" | "rooms" | "daily" | "ai">("scenarios");
+  const [thinking, setThinking] = useState<AiThinkingConfig>(initialThinking);
+  const [thinkingSaving, setThinkingSaving] = useState(false);
   const [scenarios, setScenarios] = useState(initialScenarios);
   const [rooms, setRooms] = useState(initialRooms);
   const [daily, setDaily] = useState(initialDaily);
@@ -173,6 +178,24 @@ export function AdminClient({
   const [generating, setGenerating] = useState(false);
 
   const pendingDaily = daily.filter((d) => d.status === "draft");
+
+  async function saveThinking() {
+    setThinkingSaving(true); setError(null); setNotice(null);
+    try {
+      const res = await fetch("/api/admin/ai-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ thinking }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) { setError(json?.error ?? "儲存失敗"); return; }
+      setNotice(`已儲存 AI 推理設定。最多約 ${Math.round(THINKING_CACHE_TTL_MS / 1000)} 秒後於所有伺服器實例生效。`);
+    } catch (e: any) {
+      setError(e?.message ?? "儲存失敗");
+    } finally {
+      setThinkingSaving(false);
+    }
+  }
 
   async function saveSeed() {
     setSeedSaving(true); setError(null); setNotice(null);
@@ -306,7 +329,7 @@ export function AdminClient({
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <div className="flex gap-2">
-          {(["scenarios", "rooms", "daily"] as const).map((t) => (
+          {(["scenarios", "rooms", "daily", "ai"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -318,6 +341,8 @@ export function AdminClient({
                 ? `劇本 (${scenarios.length})`
                 : t === "rooms"
                 ? `房間 (${rooms.length})`
+                : t === "ai"
+                ? "AI 設定"
                 : `每日劇本${pendingDaily.length > 0 ? ` · ${pendingDaily.length} 待審` : ""}`}
             </button>
           ))}
@@ -346,7 +371,14 @@ export function AdminClient({
         <div className="mb-4 bg-green-950/40 border border-green-900/50 rounded-lg px-4 py-2.5 text-sm text-green-300">{notice}</div>
       )}
 
-      {tab === "daily" ? (
+      {tab === "ai" ? (
+        <AiSettingsPanel
+          thinking={thinking}
+          setThinking={setThinking}
+          saving={thinkingSaving}
+          onSave={saveThinking}
+        />
+      ) : tab === "daily" ? (
         <DailyPanel
           pending={pendingDaily}
           published={daily.filter((d) => d.status === "published")}
@@ -444,6 +476,93 @@ type SeedForm = {
   min_players: number; max_players: number; play_time_min: number; play_time_max: number;
   today_idea: string;
 };
+
+function AiSettingsPanel({
+  thinking, setThinking, saving, onSave,
+}: {
+  thinking: AiThinkingConfig;
+  setThinking: (v: AiThinkingConfig) => void;
+  saving: boolean;
+  onSave: () => void;
+}) {
+  const anyOn = AI_CALL_SITES.some((s) => thinking[s.id]);
+  return (
+    <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-5">
+      <h2 className="text-white font-semibold mb-1">AI 推理模式（thinking）</h2>
+      <p className="text-slate-400 text-sm mb-1">
+        逐一控制每個 AI 呼叫是否允許模型「思考」。預設全部關閉 —— 推理會延後第一個字、
+        並且隱藏的思考 token 會跟 max_tokens 搶額度（可能導致回傳空白或 JSON 被截斷）。
+      </p>
+      <p className="text-slate-500 text-xs mb-4">
+        僅對 DeepSeek 供應商生效（此為 DeepSeek 專屬欄位）。儲存後最多約
+        {" "}{Math.round(THINKING_CACHE_TTL_MS / 1000)} 秒於所有伺服器實例生效。
+      </p>
+
+      {anyOn && (
+        <div className="mb-4 rounded-lg px-3 py-2 text-xs bg-amber-950/40 border border-amber-900/50 text-amber-300">
+          已有呼叫開啟推理。若之後出現「回應無法解析」、選項變成罐頭句、或匯入 JSON 被截斷，
+          先把這裡關掉再排查。
+        </div>
+      )}
+
+      <div className="divide-y divide-slate-700 border-y border-slate-700">
+        {AI_CALL_SITES.map((site) => {
+          const on = thinking[site.id];
+          return (
+            <div key={site.id} className="py-3 flex items-start gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="text-sm text-white">{site.label}</div>
+                <div className="text-xs text-slate-500 mt-0.5 leading-relaxed">{site.hint}</div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={on}
+                aria-label={site.label}
+                onClick={() => setThinking({ ...thinking, [site.id]: !on })}
+                className={`shrink-0 mt-0.5 w-12 h-6 rounded-full relative transition-colors ${
+                  on ? "bg-emerald-600" : "bg-slate-600"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${
+                    on ? "left-[26px]" : "left-0.5"
+                  }`}
+                />
+              </button>
+              <span className={`shrink-0 mt-1 text-xs w-10 text-right ${on ? "text-emerald-400" : "text-slate-500"}`}>
+                {on ? "開啟" : "關閉"}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex items-center gap-3 mt-4">
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={saving}
+          className="bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium"
+        >
+          {saving ? "儲存中…" : "儲存設定"}
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            setThinking(
+              AI_CALL_SITES.reduce((acc, s) => ({ ...acc, [s.id]: false }), {} as AiThinkingConfig)
+            )
+          }
+          disabled={saving}
+          className="text-slate-400 hover:text-white text-sm underline decoration-dotted"
+        >
+          全部關閉（建議預設）
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function DailyPanel({
   pending, published, seed, setSeed, seedSaving, generating, busy,

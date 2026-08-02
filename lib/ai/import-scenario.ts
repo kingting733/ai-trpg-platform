@@ -9,6 +9,7 @@ import { coerceScenarioObjectives, type ScenarioObjective } from "@/lib/game/obj
 // import-report only imports TYPES from this module, so the cycle is erased at
 // compile time and there is no runtime circular dependency.
 import { buildImportReport, type ImportReport } from "@/lib/ai/import-report";
+import { thinkingFragment } from "@/lib/ai/settings";
 
 export const IMPORT_GENRES = ["Fantasy", "Cyberpunk", "Horror", "Sci-Fi", "Mystery", "Historical", "Other"];
 export const IMPORT_DIFFICULTIES = ["Story", "Normal", "Hard", "Nightmare"];
@@ -337,9 +338,9 @@ async function callAI(system: string, user: string): Promise<string> {
         temperature: 0.4,
         // This call must fit a large structured JSON object inside
         // IMPORT_MAX_TOKENS; hidden thinking tokens compete with that same
-        // budget and are a likely cause of truncated JSON on long documents.
-        // See lib/ai/gm.ts for the same flag.
-        ...(provider === "deepseek" ? { thinking: { type: "disabled" } } : {}),
+        // budget and can truncate the JSON on long documents. Off by default,
+        // admin-toggleable at /admin.
+        ...(await thinkingFragment("import_scenario", provider)),
       }),
       signal: controller.signal,
     });

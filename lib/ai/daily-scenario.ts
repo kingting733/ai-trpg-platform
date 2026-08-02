@@ -10,6 +10,7 @@ import {
   normalizeImported,
   extractFirstJSON,
 } from "@/lib/ai/import-scenario";
+import { thinkingFragment } from "@/lib/ai/settings";
 
 // ── Seed configuration (mirrors the daily_seed_config DB row) ────────────────
 
@@ -320,12 +321,10 @@ async function callDailyAI(system: string, user: string): Promise<string> {
         stream: true,
         // Hidden thinking tokens compete with DAILY_MAX_TOKENS for the same
         // budget a full scenario (locations/NPCs/objectives/endings) needs to
-        // fit in, and this call already races DAILY_TIMEOUT_MS. See
-        // lib/ai/gm.ts for the same flag. If daily-scenario quality regresses
-        // without reasoning, override by setting AI_DAILY_MODEL to a model
-        // that reasons well even in non-thinking mode, rather than removing
-        // this — re-enabling thinking reopens the truncation/timeout risk.
-        ...(provider === "deepseek" ? { thinking: { type: "disabled" } } : {}),
+        // fit in, and this call already races DAILY_TIMEOUT_MS — so it is off
+        // by default. Now toggleable at /admin if you want to A/B the quality;
+        // watch for truncated JSON and timeouts when enabling it.
+        ...(await thinkingFragment("daily_scenario", provider)),
       }),
       signal: controller.signal,
     });
