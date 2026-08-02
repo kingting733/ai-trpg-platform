@@ -335,6 +335,11 @@ async function callAI(system: string, user: string): Promise<string> {
         messages: [{ role: "system", content: system }, { role: "user", content: user }],
         max_tokens: IMPORT_MAX_TOKENS,
         temperature: 0.4,
+        // This call must fit a large structured JSON object inside
+        // IMPORT_MAX_TOKENS; hidden thinking tokens compete with that same
+        // budget and are a likely cause of truncated JSON on long documents.
+        // See lib/ai/gm.ts for the same flag.
+        ...(provider === "deepseek" ? { thinking: { type: "disabled" } } : {}),
       }),
       signal: controller.signal,
     });

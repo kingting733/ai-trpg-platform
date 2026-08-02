@@ -54,6 +54,10 @@ async function callAI(system: string, user: string): Promise<string> {
         messages: [{ role: "system", content: system }, { role: "user", content: user }],
         max_tokens: 900,
         temperature: 0.1,
+        // A JSON-classification call — reasoning buys nothing here and only
+        // burns budget/latency. See lib/ai/gm.ts for the same flag on the
+        // narration call.
+        ...(provider === "deepseek" ? { thinking: { type: "disabled" } } : {}),
       }),
     });
     if (!res.ok) return "{}";

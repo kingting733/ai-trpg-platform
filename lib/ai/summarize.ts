@@ -70,6 +70,11 @@ Respond with ONLY the 4 lines above, no extra text.`;
         messages: [{ role: "user", content: prompt }],
         max_tokens: 220,
         temperature: 0.3,
+        // Belt-and-suspenders alongside picking a "fast non-thinking model"
+        // above: explicitly disable DeepSeek's reasoning mode rather than
+        // relying on AI_CLASSIFY_MODEL always being a non-thinking model.
+        // 220 max_tokens leaves ~no room for hidden thinking tokens anyway.
+        ...(provider === "deepseek" ? { thinking: { type: "disabled" } } : {}),
       }),
     });
     if (!res.ok) return currentSummary ?? "";

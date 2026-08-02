@@ -174,6 +174,12 @@ export async function callAI(
         messages: [{ role: "system", content: system }, { role: "user", content: user }],
         max_tokens: maxTokens,
         temperature,
+        // DeepSeek V4 models default to thinking (reasoning) mode, which burns
+        // the token budget and adds latency before any visible content — a
+        // pure waste for classification/JSON/suggestion calls like every use
+        // of this shared helper (objectives, summarize, scene-choices). Mirrors
+        // the same flag in lib/ai/gm.ts's narration call.
+        ...(provider === "deepseek" ? { thinking: { type: "disabled" } } : {}),
       }),
     });
     if (!res.ok) {

@@ -45,6 +45,9 @@ async function callAI(system: string, user: string, maxTokens: number): Promise<
         messages: [{ role: "system", content: system }, { role: "user", content: user }],
         max_tokens: maxTokens,
         temperature: 0.7,
+        // See lib/ai/gm.ts — reasoning mode adds latency with no benefit to a
+        // short prose call like this one.
+        ...(provider === "deepseek" ? { thinking: { type: "disabled" } } : {}),
       }),
     });
     if (!res.ok) return "";

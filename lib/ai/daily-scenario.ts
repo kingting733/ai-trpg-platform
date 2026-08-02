@@ -318,6 +318,14 @@ async function callDailyAI(system: string, user: string): Promise<string> {
         max_tokens: DAILY_MAX_TOKENS,
         temperature: 0.9,
         stream: true,
+        // Hidden thinking tokens compete with DAILY_MAX_TOKENS for the same
+        // budget a full scenario (locations/NPCs/objectives/endings) needs to
+        // fit in, and this call already races DAILY_TIMEOUT_MS. See
+        // lib/ai/gm.ts for the same flag. If daily-scenario quality regresses
+        // without reasoning, override by setting AI_DAILY_MODEL to a model
+        // that reasons well even in non-thinking mode, rather than removing
+        // this — re-enabling thinking reopens the truncation/timeout risk.
+        ...(provider === "deepseek" ? { thinking: { type: "disabled" } } : {}),
       }),
       signal: controller.signal,
     });
