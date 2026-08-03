@@ -3,7 +3,7 @@ import { Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AdminClient, AdminScenario, AdminRoom, DailyDraft } from "./AdminClient";
 import { coerceSeedConfig, type DailySeedConfig } from "@/lib/ai/daily-scenario";
-import { getThinkingConfig, type AiThinkingConfig } from "@/lib/ai/settings";
+import { getThinkingStatus, type AiThinkingConfig } from "@/lib/ai/settings";
 
 // Server-side gate: only users whose role = 'admin' may see this page. The data
 // fetch and the delete API routes are protected again by RLS + server checks.
@@ -93,7 +93,8 @@ export default async function AdminPage() {
 
   // Per-call-site AI reasoning switches. Falls back to "off everywhere" if the
   // ai_settings migration has not been applied yet, so the page still renders.
-  const aiThinking: AiThinkingConfig = await getThinkingConfig();
+  const aiStatus = await getThinkingStatus();
+  const aiThinking: AiThinkingConfig = aiStatus.config;
 
   return (
     <AdminClient
@@ -102,6 +103,7 @@ export default async function AdminPage() {
       dailyDrafts={dailyDrafts}
       seedConfig={seedConfig}
       aiThinking={aiThinking}
+      aiThinkingAvailable={aiStatus.available}
     />
   );
 }

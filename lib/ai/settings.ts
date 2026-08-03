@@ -58,17 +58,38 @@ export function coerceThinkingConfig(raw: any): AiThinkingConfig {
 // instances each hold their own copy, so an admin change propagates within
 // roughly one TTL — surfaced in the admin UI so the delay isn't a mystery.
 export const THINKING_CACHE_TTL_MS = 20_000;
-let cached: { value: AiThinkingConfig; at: number } | null = null;
+
+export interface ThinkingStatus {
+  config: AiThinkingConfig;
+  /** False when the ai_settings table is unreachable — almost always because
+   *  add_ai_settings.sql has not been run yet. Reads still work (defaults);
+   *  SAVES cannot, so the admin UI must warn up front rather than only
+   *  surfacing a raw Postgres error after the user clicks save. */
+  available: boolean;
+  reason?: string;
+}
+
+let cached: { status: ThinkingStatus; at: number } | null = null;
 
 /** Drop the in-process cache (used by the admin save route). */
 export function invalidateThinkingCache(): void {
   cached = null;
 }
 
-/** Current config. Never throws — falls back to DEFAULT_THINKING. */
-export async function getThinkingConfig(): Promise<AiThinkingConfig> {
+/** True for the "table isn't there" family of errors (PostgREST 42P01 /
+ *  "schema cache" / "does not exist"), as opposed to a real outage. */
+export function isMissingTableError(e: { code?: string; message?: string } | null | undefined): boolean {
+  if (!e) return false;
+  if (e.code === "42P01" || e.code === "PGRST205") return true;
+  const m = (e.message ?? "").toLowerCase();
+  return m.includes("schema cache") || m.includes("does not exist");
+}
+
+/** Config + whether the table is actually reachable. Never throws. */
+export async function getThinkingStatus(): Promise<ThinkingStatus> {
   const now = Date.now();
-  if (cached && now - cached.at < THINKING_CACHE_TTL_MS) return cached.value;
+  if (cached && now - cached.at < THINKING_CACHE_TTL_MS) return cached.status;
+  let status: ThinkingStatus;
   try {
     const { data, error } = await createAdminClient()
       .from("ai_settings")
@@ -76,13 +97,19 @@ export async function getThinkingConfig(): Promise<AiThinkingConfig> {
       .eq("id", 1)
       .maybeSingle();
     // A missing table / row is expected before the migration is applied.
-    const value = error ? DEFAULT_THINKING : coerceThinkingConfig(data?.thinking);
-    cached = { value, at: now };
-    return value;
-  } catch {
-    cached = { value: DEFAULT_THINKING, at: now };
-    return DEFAULT_THINKING;
+    status = error
+      ? { config: DEFAULT_THINKING, available: false, reason: error.message }
+      : { config: coerceThinkingConfig(data?.thinking), available: true };
+  } catch (e: any) {
+    status = { config: DEFAULT_THINKING, available: false, reason: e?.message ?? "unavailable" };
   }
+  cached = { status, at: now };
+  return status;
+}
+
+/** Current config. Never throws — falls back to DEFAULT_THINKING. */
+export async function getThinkingConfig(): Promise<AiThinkingConfig> {
+  return (await getThinkingStatus()).config;
 }
 
 /**

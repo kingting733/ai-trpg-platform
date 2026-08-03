@@ -61,12 +61,14 @@ export function AdminClient({
   dailyDrafts: initialDaily,
   seedConfig: initialSeed,
   aiThinking: initialThinking,
+  aiThinkingAvailable,
 }: {
   scenarios: AdminScenario[];
   rooms: AdminRoom[];
   dailyDrafts: DailyDraft[];
   seedConfig: DailySeedConfig;
   aiThinking: AiThinkingConfig;
+  aiThinkingAvailable: boolean;
 }) {
   const [tab, setTab] = useState<"scenarios" | "rooms" | "daily" | "ai">("scenarios");
   const [thinking, setThinking] = useState<AiThinkingConfig>(initialThinking);
@@ -376,6 +378,7 @@ export function AdminClient({
           thinking={thinking}
           setThinking={setThinking}
           saving={thinkingSaving}
+          available={aiThinkingAvailable}
           onSave={saveThinking}
         />
       ) : tab === "daily" ? (
@@ -478,11 +481,12 @@ type SeedForm = {
 };
 
 function AiSettingsPanel({
-  thinking, setThinking, saving, onSave,
+  thinking, setThinking, saving, available, onSave,
 }: {
   thinking: AiThinkingConfig;
   setThinking: (v: AiThinkingConfig) => void;
   saving: boolean;
+  available: boolean;
   onSave: () => void;
 }) {
   const anyOn = AI_CALL_SITES.some((s) => thinking[s.id]);
@@ -497,6 +501,16 @@ function AiSettingsPanel({
         僅對 DeepSeek 供應商生效（此為 DeepSeek 專屬欄位）。儲存後最多約
         {" "}{Math.round(THINKING_CACHE_TTL_MS / 1000)} 秒於所有伺服器實例生效。
       </p>
+
+      {!available && (
+        <div className="mb-4 rounded-lg px-3 py-2.5 text-xs bg-red-950/40 border border-red-900/60 text-red-300 leading-relaxed">
+          <span className="font-medium">尚未建立 ai_settings 資料表</span> —— 目前無法儲存設定。
+          請先在 Supabase SQL Editor 執行{" "}
+          <code className="text-red-200">supabase/migrations/add_ai_settings.sql</code>，然後重新整理此頁。
+          <br />
+          在此之前所有 AI 呼叫都會以「關閉推理」執行，遊戲功能完全不受影響。
+        </div>
+      )}
 
       {anyOn && (
         <div className="mb-4 rounded-lg px-3 py-2 text-xs bg-amber-950/40 border border-amber-900/50 text-amber-300">
@@ -542,7 +556,8 @@ function AiSettingsPanel({
         <button
           type="button"
           onClick={onSave}
-          disabled={saving}
+          disabled={saving || !available}
+          title={available ? undefined : "需要先執行 add_ai_settings.sql"}
           className="bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium"
         >
           {saving ? "儲存中…" : "儲存設定"}

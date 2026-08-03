@@ -4,7 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   coerceThinkingConfig,
   invalidateThinkingCache,
-  DEFAULT_THINKING,
+  isMissingTableError,
+  getThinkingStatus,
 } from "@/lib/ai/settings";
 
 export const runtime = "nodejs";
@@ -26,18 +27,10 @@ export async function GET() {
   if (error) return error;
 
   // Service-role: ai_settings has no client policies (server-only table).
-  try {
-    const { data, error: readErr } = await createAdminClient()
-      .from("ai_settings").select("thinking").eq("id", 1).maybeSingle();
-    if (readErr) {
-      // Table not created yet — report defaults plus the reason, so the admin
-      // UI can say "run the migration" instead of silently showing all-off.
-      return NextResponse.json({ thinking: DEFAULT_THINKING, missing: true, reason: readErr.message });
-    }
-    return NextResponse.json({ thinking: coerceThinkingConfig(data?.thinking) });
-  } catch (e: any) {
-    return NextResponse.json({ thinking: DEFAULT_THINKING, missing: true, reason: e?.message ?? "unavailable" });
-  }
+  // getThinkingStatus() also reports whether the table exists at all, so the
+  // UI can warn about a missing migration instead of silently showing all-off.
+  const { config, available, reason } = await getThinkingStatus();
+  return NextResponse.json({ thinking: config, missing: !available, reason });
 }
 
 // Save the config (full replace, coerced server-side).
@@ -56,7 +49,24 @@ export async function PATCH(request: Request) {
   const { error: upErr } = await createAdminClient()
     .from("ai_settings")
     .upsert({ id: 1, thinking, updated_at: new Date().toISOString() });
-  if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
+  if (upErr) {
+    // "Could not find the table 'public.ai_settings' in the schema cache" is
+    // not an outage — it means the migration has not been run. Say that,
+    // instead of leaking a raw PostgREST message the admin can't act on.
+    if (isMissingTableError(upErr)) {
+      return NextResponse.json(
+        {
+          error:
+            "尚未建立 ai_settings 資料表，無法儲存。請先在 Supabase SQL Editor 執行 " +
+            "supabase/migrations/add_ai_settings.sql，然後重新整理此頁。" +
+            "（在此之前所有 AI 呼叫都會以「關閉推理」執行，功能不受影響。）",
+          missing: true,
+        },
+        { status: 409 }
+      );
+    }
+    return NextResponse.json({ error: upErr.message }, { status: 500 });
+  }
 
   // Clears THIS instance's cache only — other warm serverless instances keep
   // their copy until the TTL lapses, which is why the UI advertises a delay.
