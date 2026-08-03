@@ -948,49 +948,73 @@ interface TravelCandidate {
  *  tiebreak: in Chinese, "A角落嘅B" / "從A去B" put the true destination LAST, so
  *  the latest-mentioned location wins over raw score. Ambiguity guard: a weak
  *  winner tied at the same text position as a comparable runner-up → decline. */
+/**
+ * How strongly `text` (already lower-cased) refers to `name`.
+ *
+ * SHARED by the travel resolver and the choice validator on purpose. They used
+ * to match differently — the validator required the exact full short name while
+ * the resolver accepted partial CJK — so an abbreviated choice like
+ * 「行近門口…」 was INVISIBLE to validation (never rejected, never normalized)
+ * yet still resolved at submit time, sometimes to a different node than the
+ * text implied. One scorer means they can no longer disagree.
+ */
+function scoreMention(
+  text: string,
+  name: string,
+  cjkRuns: string[]
+): { score: number; pos: number } {
+  let score = 0;
+  let pos = -1;
+  const nameLower = name.toLowerCase();
+  const sn = shortName(name).toLowerCase();
+  // Full short-name match (strong, ≥100).
+  const full = sn ? text.indexOf(sn) : -1;
+  if (full >= 0) {
+    score = sn.length + 100;
+    pos = full;
+  }
+  // Whole distinctive segment (weak).
+  if (score === 0) {
+    for (const seg of nameSegments(shortName(name))) {
+      const i = text.indexOf(seg.toLowerCase());
+      if (i >= 0 && seg.length > score) { score = seg.length; pos = i; }
+    }
+  }
+  // Partial CJK match (weak): the longest common substring (≥2 chars)
+  // between any CJK run of the NAME and the text. Subsumes both
+  // "typed chunk inside name" (神位 → 1404神位) and "name core buried in a
+  // longer typed run" (神位 in 走近客廳角落嘅神位), and also survives names
+  // whose CJK is split by digits — "14樓走廊" has run 樓走廊, whose substring
+  // 走廊 still matches "返回走廊".
+  if (score === 0 && cjkRuns.length) {
+    const nameRuns = (nameLower.match(/[㐀-鿿]+/g) ?? []).filter((r) => r.length >= 2);
+    for (const nr of nameRuns) {
+      for (let len = Math.min(nr.length, 30); len >= 2; len--) {
+        if (len <= score) break;
+        let found = false;
+        for (let i = 0; i + len <= nr.length; i++) {
+          const sub = nr.slice(i, i + len);
+          const j = text.indexOf(sub);
+          if (j >= 0) { score = len; pos = j; found = true; break; }
+        }
+        if (found) break;
+      }
+    }
+  }
+  return { score, pos };
+}
+
+/** CJK runs of ≥2 chars in the text — precomputed once per match pass. */
+function cjkRunsOf(text: string): string[] {
+  return (text.match(/[㐀-鿿]+/g) ?? []).filter((r) => r.length >= 2);
+}
+
 function matchLocationName(actionText: string, candidates: TravelCandidate[]): LocationNode | null {
   const a = actionText.toLowerCase();
-  const cjkRuns = (a.match(/[㐀-鿿]+/g) ?? []).filter((r) => r.length >= 2);
+  const cjkRuns = cjkRunsOf(a);
   const scored: { node: LocationNode; score: number; pos: number }[] = [];
   for (const cand of candidates) {
-    let score = 0;
-    let pos = -1;
-    const nameLower = cand.name.toLowerCase();
-    const sn = shortName(cand.name).toLowerCase();
-    // Full short-name match (strong, ≥100).
-    const full = sn ? a.indexOf(sn) : -1;
-    if (full >= 0) {
-      score = sn.length + 100;
-      pos = full;
-    }
-    // Whole distinctive segment (weak).
-    if (score === 0) {
-      for (const seg of nameSegments(shortName(cand.name))) {
-        const i = a.indexOf(seg.toLowerCase());
-        if (i >= 0 && seg.length > score) { score = seg.length; pos = i; }
-      }
-    }
-    // Partial CJK match (weak): the longest common substring (≥2 chars)
-    // between any CJK run of the NAME and the action text. Subsumes both
-    // "typed chunk inside name" (神位 → 1404神位) and "name core buried in a
-    // longer typed run" (神位 in 走近客廳角落嘅神位), and also survives names
-    // whose CJK is split by digits — "14樓走廊" has run 樓走廊, whose substring
-    // 走廊 still matches "返回走廊".
-    if (score === 0 && cjkRuns.length) {
-      const nameRuns = (nameLower.match(/[㐀-鿿]+/g) ?? []).filter((r) => r.length >= 2);
-      for (const nr of nameRuns) {
-        for (let len = Math.min(nr.length, 30); len >= 2; len--) {
-          if (len <= score) break;
-          let found = false;
-          for (let i = 0; i + len <= nr.length; i++) {
-            const sub = nr.slice(i, i + len);
-            const j = a.indexOf(sub);
-            if (j >= 0) { score = len; pos = j; found = true; break; }
-          }
-          if (found) break;
-        }
-      }
-    }
+    const { score, pos } = scoreMention(a, cand.name, cjkRuns);
     if (score > 0) scored.push({ node: cand.node, score, pos });
   }
   if (scored.length === 0) return null;
@@ -1169,28 +1193,42 @@ export function classifyChoiceLocation(
   const exits = computeExits(graph, state, origin);
   const reachable = new Set(exits.open.map((n) => n.id));
 
-  // Which places does this choice name? Longest name first so 「1404神位」 wins
-  // over a bare 「神位」 substring of another node.
-  const named: Array<{ node: LocationNode; name: string }> = [];
-  for (const n of graph.nodes) {
-    const sn = shortName(n.name).trim();
-    if (sn.length >= 2 && body.includes(sn)) named.push({ node: n, name: sn });
-  }
+  // Which places does this choice name? Scored with the SAME matcher the travel
+  // resolver uses, so an abbreviation («門口» for «1404門口») can no longer slip
+  // past validation only to be resolved — possibly to a different node — when
+  // the player clicks it.
+  const text = body.toLowerCase();
+  const runs = cjkRunsOf(text);
+  const best = new Map<string, { node: LocationNode; score: number; matched: string }>();
+  const consider = (node: LocationNode, name: string) => {
+    const { score } = scoreMention(text, name, runs);
+    if (score <= 0) return;
+    const prev = best.get(node.id);
+    if (!prev || score > prev.score) best.set(node.id, { node, score, matched: name });
+  };
+  for (const n of graph.nodes) consider(n, n.name);
   // A container name resolves to its entry node (「1404室」 → 1404門口).
   for (const c of graph.containers) {
-    const cn = shortName(c.name).trim();
-    if (cn.length >= 2 && body.includes(cn)) {
-      const entry = entryNodeOf(graph, c.id);
-      if (entry) named.push({ node: entry, name: cn });
-    }
+    const entry = entryNodeOf(graph, c.id);
+    if (entry) consider(entry, c.name);
   }
-  named.sort((a, b) => b.name.length - a.name.length);
 
   // Only places that are NOT the actor's own node constrain the choice.
-  const foreign = named.filter((x) => x.node.id !== origin);
+  const foreign = Array.from(best.values()).filter((x) => x.node.id !== origin);
   if (foreign.length === 0) return { kind: "ok" };
 
-  const target = foreign[0].node;
+  // MORE THAN ONE other place ⇒ unusable. The travel resolver deliberately
+  // picks the LAST-mentioned place (Chinese puts the destination last), so a
+  // two-place choice like 「行近門口，望走廊外面」 reads as one destination but
+  // moves the player to the other. There is no safe way to normalize it —
+  // decline instead of guessing.
+  if (foreign.length > 1) {
+    const worst = foreign.sort((a, b) => b.score - a.score)[0];
+    return { kind: "reject", node: worst.node };
+  }
+
+  const only = foreign[0];
+  const target = only.node;
 
   // Unknown/hidden places must never appear, in any form.
   const status = state.status[target.id] ?? "hidden";
@@ -1198,8 +1236,10 @@ export function classifyChoiceLocation(
 
   // Is this a movement? Either an explicit movement verb, or the choice is
   // essentially nothing but the place name (the click-to-fill / bare-name form).
-  const stripped = body
-    .split(foreign[0].name).join("")
+  // Strip whichever alias actually matched, so an abbreviation is measured the
+  // same way the full name would be.
+  const stripped = text
+    .split(shortName(only.matched).toLowerCase()).join("")
     .replace(/[\s，,。．.!！?？、:：;；「」『』()（）]/g, "");
   const isMovement = TRAVEL_RE.test(body) || stripped.length <= 4;
 

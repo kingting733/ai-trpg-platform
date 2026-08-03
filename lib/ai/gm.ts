@@ -375,7 +375,11 @@ SUGGESTED ACTIONS — SKILL-TAGGED, 3 DISTINCT SLOTS (STRICT):
 - KEEP IT SHORT: each choice is at most 15 Chinese words/characters (about 12 English words) and states ONLY the action itself. Do NOT add the reason for it, what it hopes to find, or its potential outcome/consequence. No "以便…", "來查明…", "which might…", "in order to…".
   Good: "[偵查] 翻找書桌抽屜", "[說服] 勸守衛讓路", "[搏鬥] 撲向襲擊者".
   Bad (too long / explains why): "[偵查] 仔細翻找書桌的抽屜，希望能找到與案件有關的線索".
-- ONE DESTINATION PER CHOICE: a choice may name AT MOST ONE location. If it moves the party or searches a place, name only that single target — do NOT also mention a second location as a landmark or origin (the travel system reads the location name from the option, and two names make the destination ambiguous). Bad: "走近客廳角落嘅神位" (two places). Good: "檢查神位的香爐".
+- LOCATIONS IN CHOICES (STRICT — the server DISCARDS any choice that breaks these):
+  · Do NOT name the character's CURRENT location at all. They are standing there; it is redundant. Write "檢查供桌" not "檢查1404神位的供桌".
+  · A choice may name AT MOST ONE location, and only as a place to MOVE TO. Two names make the destination ambiguous and the choice is thrown away. Bad: "行近門口，望走廊外面" (two places). Bad: "走近客廳角落嘅神位" (two places).
+  · When you do name a place, use its EXACT FULL NAME as written in the KNOWN LOCATIONS list — "1404門口", never the short form "門口". Abbreviations are ambiguous when several places share a word.
+  · Never describe acting on, looking into, or listening to a place the character is not standing in — they must travel there first.
 - CHOICES ARE BOUND TO THE LOCATION SYSTEM (STRICT — read the current turn's LOCATION SYSTEM block). Locations are SEPARATE scenes; the party can only act where it currently is. Every choice MUST be one of exactly two kinds:
   (1) an action performed AT the CURRENT LOCATION, or
   (2) travelling to exactly ONE place listed under 可前往. A movement choice MUST be phrased with 前往 and nothing else — write exactly "前往<地點名>" (e.g. "前往走廊"). Do NOT use 行近／走近／靠近／行埋／步向, and do NOT append extra clauses like "，仔細觀察" or "聽聽裡面嘅聲音" — a movement option is ONLY the move. (The system rewrites movement choices to this canonical form anyway; matching it yourself keeps the wording natural.)
