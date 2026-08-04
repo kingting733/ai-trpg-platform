@@ -1589,7 +1589,14 @@ export async function POST(request: Request) {
         const isolated = sceneChoicesPromise
           ? await Promise.race([
               sceneChoicesPromise,
-              new Promise<string[]>((resolve) => setTimeout(() => resolve([]), 5000)),
+              // 5s was too tight to be a safety net: generateSceneChoices makes
+              // up to TWO sequential attempts, and callAI may itself retry once
+              // with reasoning off — so a call that was going to SUCCEED could
+              // still lose the race and be thrown away for the generic
+              // fallback. This only ever needs to outlast the narration stream
+              // it runs beside, so give it real room; the guarantee we actually
+              // want is "a hung provider cannot stall the turn forever".
+              new Promise<string[]>((resolve) => setTimeout(() => resolve([]), 20000)),
             ])
           : [];
         const sanitizedIso = sanitizeChoicesWithMeta(

@@ -167,34 +167,65 @@ export async function callAI(
     const baseOverride = process.env.AI_BASE_URL?.trim().replace(/\/+$/, "").replace(/\/v1$/i, "");
     const defaultBase = provider === "deepseek" ? "https://api.deepseek.com" : "https://api.openai.com";
     const baseUrl = baseOverride ?? defaultBase;
-    const res = await fetch(`${baseUrl}/v1/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: "system", content: system }, { role: "user", content: user }],
-        max_tokens: maxTokens,
-        temperature,
-        // Reasoning is off by default for these classification/JSON calls: the
-        // hidden tokens compete with max_tokens and can produce an HTTP 200
-        // with EMPTY content. Admin-toggleable per call site at /admin.
-        // This helper serves more than one logical call site, so the site is
-        // derived from the label the caller already passes.
-        ...(await thinkingFragment(
-          label.startsWith("scene-choices") ? "scene_choices" : "objectives",
-          provider
-        )),
-      }),
-    });
+    // Reasoning is off by default for these classification/JSON calls: the
+    // hidden tokens compete with max_tokens and can produce an HTTP 200 with
+    // EMPTY content. Admin-toggleable per call site at /admin. This helper
+    // serves more than one logical call site, so the site is derived from the
+    // label the caller already passes.
+    const site = label.startsWith("scene-choices") ? "scene_choices" : "objectives";
+    const thinking = await thinkingFragment(site, provider);
+
+    // `thinking` is resolved ONCE and reused by the retry below, which flips it
+    // off. Returns the parsed body so the caller can inspect usage.
+    const post = async (frag: Record<string, unknown>) => {
+      const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "system", content: system }, { role: "user", content: user }],
+          max_tokens: maxTokens,
+          temperature,
+          ...frag,
+        }),
+      });
+      return res;
+    };
+
+    let res = await post(thinking);
     if (!res.ok) {
       console.error(`[${label}] callAI HTTP ${res.status} ${res.statusText} (model=${model}) — returning empty result.`);
       return "";
     }
-    const data = await res.json();
-    const content = data.choices?.[0]?.message?.content?.trim() ?? "";
+    let data = await res.json();
+    let content = data.choices?.[0]?.message?.content?.trim() ?? "";
+
+    // SELF-HEAL: on DeepSeek, max_tokens covers reasoning AND content, so a
+    // reasoning model can burn the entire budget thinking and return 200 with
+    // an empty string (finish_reason "length", reasoning_tokens == the whole
+    // completion). That is not a transient failure — retrying the SAME request
+    // reproduces it exactly, which is why the caller's retry loop never helped.
+    // Retry once with reasoning explicitly off, which is what these calls want
+    // anyway. This fires whatever the cause: an admin left the site's toggle
+    // on, or the provider ignored our disable flag for this model.
+    const burnedOnReasoning = Number(data.usage?.completion_tokens_details?.reasoning_tokens ?? 0);
+    if (!content && burnedOnReasoning > 0) {
+      console.warn(
+        `[${label}] callAI: reasoning consumed ${burnedOnReasoning}/${maxTokens} tokens and left no content ` +
+        `(thinking was ${Object.keys(thinking).length === 0 ? "ENABLED" : "explicitly disabled"} for site "${site}"). ` +
+        `Retrying once with reasoning forced off.`
+      );
+      const retry = await post({ thinking: { type: "disabled" } });
+      if (retry.ok) {
+        data = await retry.json();
+        content = data.choices?.[0]?.message?.content?.trim() ?? "";
+        if (content) return content;
+      }
+    }
+
     if (!content) {
       const choice = data.choices?.[0];
-      console.error(`[${label}] callAI got HTTP 200 but EMPTY content (model=${model}, provider=${provider}). finish_reason=${choice?.finish_reason} usage=${JSON.stringify(data.usage)} apiError=${JSON.stringify(data.error ?? null)}. If finish_reason="length" or this model "thinks", maxTokens=${maxTokens} is too small; if the model name is wrong the provider may return an error/empty body.`);
+      console.error(`[${label}] callAI got HTTP 200 but EMPTY content (model=${model}, provider=${provider}, thinking=${Object.keys(thinking).length === 0 ? "enabled" : "disabled"}). finish_reason=${choice?.finish_reason} usage=${JSON.stringify(data.usage)} apiError=${JSON.stringify(data.error ?? null)}. If finish_reason="length" or this model "thinks", maxTokens=${maxTokens} is too small; if the model name is wrong the provider may return an error/empty body.`);
     }
     return content;
   } catch (err) {

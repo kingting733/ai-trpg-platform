@@ -123,7 +123,12 @@ export function parseSceneChoices(raw: string): string[] {
  */
 export async function generateSceneChoices(input: SceneChoicesInput): Promise<string[]> {
   const { system, user } = buildSceneChoicesPrompt(input);
-  const maxTokens = Number(process.env.AI_CLASSIFY_MAX_TOKENS) || 700;
+  // 700 was sized for the answer alone (~60 tokens of JSON). On a provider
+  // where max_tokens also covers hidden reasoning, that is a budget a thinking
+  // model can exhaust before writing a single visible character. Headroom is
+  // nearly free here — unused tokens are not billed — and it is the difference
+  // between three story-aware buttons and the generic fallback trio.
+  const maxTokens = Number(process.env.AI_CLASSIFY_MAX_TOKENS) || 1600;
   const temperature = Number(process.env.AI_CHOICES_TEMPERATURE) || 0.8;
 
   for (let attempt = 1; attempt <= 2; attempt++) {
