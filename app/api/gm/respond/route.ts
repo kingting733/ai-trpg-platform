@@ -1404,7 +1404,7 @@ export async function POST(request: Request) {
     locationDirective,
     inventoryDirective: buildInventoryBlock(inventory),
     npcActionDirective: npcActionLines.length
-      ? `NPC ACTIONS THIS TURN (the system already resolved these hostile-NPC attacks — narrate them AS THEY HAPPENED; do NOT invent different outcomes, extra attacks, or attacks that were not listed):\n${npcActionLines.map((l) => `- ${l}`).join("\n")}`
+      ? `NPC ACTIONS THIS TURN — MANDATORY NARRATION BEATS. The system already rolled these hostile-NPC attacks and ALREADY APPLIED THE HP LOSS; the players have seen the damage lines on screen. You MUST narrate every one of them as it happened. Omitting one produces a scene where a player silently loses HP for no reason they can read. Do NOT invent different outcomes, extra attacks, or attacks that were not listed:\n${npcActionLines.map((l) => `- ${l}`).join("\n")}`
       : null,
     npcKnowledgeDirective,
     actorLastScene,
