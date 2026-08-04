@@ -17,10 +17,10 @@ export function ActiveGamePopup() {
   const [room, setRoom] = useState<ActiveRoom | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
-  // Don't show while already in the game room or lobby
-  const isInGame =
-    pathname.includes("/rooms/") ||
-    pathname.startsWith("/play/join");
+  // Don't show while already in the game room or lobby.
+  // (/play/join used to be listed here too — joining is now a modal on the hub,
+  //  so there is no join route to exclude.)
+  const isInGame = pathname.includes("/rooms/");
 
   useEffect(() => {
     // Reset dismissed state on every page navigation

@@ -3,7 +3,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, KeyRound } from "lucide-react";
+import { JoinRoomModal } from "@/components/JoinRoomModal";
 
 interface Scenario {
   id: string;
@@ -30,7 +31,7 @@ const FALLBACK_SCENARIOS: Scenario[] = [
 export default function HubPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
-  const [joinCode, setJoinCode] = useState("");
+  const [joinOpen, setJoinOpen] = useState(false);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [loadingScenarios, setLoadingScenarios] = useState(true);
   const [activeRooms, setActiveRooms] = useState<ActiveRoom[]>([]);
@@ -126,34 +127,20 @@ export default function HubPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-white mb-1">加入房間</h2>
-          <p className="text-slate-400 text-sm mb-4">輸入朋友的房間代碼</p>
-          <div className="flex gap-2">
-            <input
-              value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-              placeholder="XXXXX"
-              maxLength={6}
-              className="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 font-mono text-lg tracking-widest uppercase focus:outline-none focus:border-zinc-500"
-            />
-            <button
-              onClick={() => joinCode.trim() && router.push(`/play/join/${joinCode.trim()}`)}
-              disabled={joinCode.length < 4}
-              className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 text-white px-4 py-2 rounded-lg font-medium"
-            >
-              加入
-            </button>
-          </div>
+      <div className="flex items-end justify-between gap-4 mb-6">
+        <div>
+          <h2 className="text-xl font-semibold text-white">選擇劇本</h2>
+          <p className="text-slate-400 text-sm mt-1">選一個劇本建立房間，開始你的冒險。</p>
         </div>
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 flex flex-col justify-center">
-          <h2 className="text-lg font-semibold text-white mb-3">建立房間</h2>
-          <p className="text-slate-400 text-sm">從下方選擇劇本，開始你的冒險。</p>
-        </div>
+        <button
+          type="button"
+          onClick={() => setJoinOpen(true)}
+          className="shrink-0 inline-flex items-center gap-1.5 text-sm text-gold hover:text-gold-light border border-gold-dim hover:border-gold-muted rounded-lg px-3 py-1.5 transition-colors"
+        >
+          <KeyRound size={14} strokeWidth={2} /> 用代碼加入房間
+        </button>
       </div>
-
-      <h2 className="text-xl font-semibold text-white mb-4">選擇劇本</h2>
+      <JoinRoomModal open={joinOpen} onClose={() => setJoinOpen(false)} />
       {loadingScenarios ? (
         <div className="text-slate-500 text-sm">載入劇本中...</div>
       ) : (
