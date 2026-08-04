@@ -1318,6 +1318,24 @@ export function matchEvidence(
 
 const COMPOSE_FALLBACKS = ["[偵查] 檢查四周", "[聆聽] 留神細聽", "[潛行] 小心前進"];
 
+/** Split open exits into never-reached vs already-seen. `state.visited` is
+ *  SHARED party knowledge (first visit by anyone counts), which is the right
+ *  scope here: a place a teammate already cleared is not a new lead.
+ *
+ *  Used to bias every movement suggestion toward unexplored ground — otherwise
+ *  suggestions favour whatever exit happens to sit first in the graph, which is
+ *  usually the way the party just came from. */
+export function partitionExitsByNovelty(
+  open: LocationNode[],
+  state: LocationState
+): { fresh: LocationNode[]; seen: LocationNode[] } {
+  const visited = new Set(state.visited);
+  return {
+    fresh: open.filter((n) => !visited.has(n.id)),
+    seen: open.filter((n) => visited.has(n.id)),
+  };
+}
+
 export function composeSceneChoices(
   graph: LocationGraph,
   state: LocationState,
@@ -1344,8 +1362,12 @@ export function composeSceneChoices(
 
   // 3. Move — the first open exit (computeExits already enforces locks/paths,
   //    so this can never name a hidden or unreachable place).
+  //    Never-reached exits come first: the deterministic floor should push the
+  //    party outward, not back the way they came.
   const exits = computeExits(graph, state, nodeId);
-  if (out.length < 3 && exits.open.length) out.push(`前往${shortName(exits.open[0].name)}`);
+  const { fresh, seen } = partitionExitsByNovelty(exits.open, state);
+  const nextExit = fresh[0] ?? seen[0];
+  if (out.length < 3 && nextExit) out.push(`前往${shortName(nextExit.name)}`);
 
   for (const f of COMPOSE_FALLBACKS) {
     if (out.length >= 3) break;
@@ -1458,9 +1480,21 @@ export function buildLocationBlock(
   const unlockedOthers = exits.open;
   const discoveredLocked = exits.locked;
   const exitsParts: string[] = [];
-  if (unlockedOthers.length) exitsParts.push(`可前往：${unlockedOthers.map((n) => shortName(n.name)).join("、")}`);
+  // Split 可前往 by novelty so the GM can see, without inferring it from the
+  // history, which way is actually new — and prefer that when suggesting moves.
+  const { fresh: freshExits, seen: seenExits } = partitionExitsByNovelty(unlockedOthers, state);
+  if (freshExits.length) exitsParts.push(`可前往（未探索）：${freshExits.map((n) => shortName(n.name)).join("、")}`);
+  if (seenExits.length) exitsParts.push(`可前往（已去過）：${seenExits.map((n) => shortName(n.name)).join("、")}`);
   if (discoveredLocked.length) exitsParts.push(`已知但尚未能進入：${discoveredLocked.map((n) => shortName(n.name)).join("、")}`);
   if (exitsParts.length) lines.push(`KNOWN LOCATIONS — ${exitsParts.join(" | ")}`);
+  if (freshExits.length) {
+    lines.push(
+      `EXPLORATION BIAS: when one of your 3 choices is a move, prefer a 未探索 exit (${freshExits
+        .map((n) => shortName(n.name))
+        .join("、")}) over a 已去過 one — new ground advances the story, backtracking does not. ` +
+        `Write it as 「前往<地點全名>」 with NO skill tag: walking to a known open exit is not a skill check.`
+    );
+  }
   lines.push("Locations not listed above are UNKNOWN to the players — never name, confirm, or hint at their existence until the system announces them.");
   const mover = scene ? scene.actorName : "the party";
   lines.push(

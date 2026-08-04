@@ -1099,7 +1099,7 @@ export function sanitizeChoicesWithMeta(
     if (!c) continue;
     // Split "[技能] body" so the tag survives name-stripping and clamping.
     const m = c.match(/^\s*([\[【][^\]】]{1,12}[\]】])\s*([\s\S]*)$/);
-    const tag = m ? m[1] : "";
+    let tag = m ? m[1] : "";
     let body = (m ? m[2] : c).trim();
     // Strip a leading roster name (the prompt bans it; enforce anyway).
     for (const name of rosterNames) {
@@ -1125,7 +1125,20 @@ export function sanitizeChoicesWithMeta(
       // Normalize movement to the canonical form so the travel matcher always
       // resolves it — 「行近1404門口，仔細觀察」 previously failed both the verb
       // check and the bare-name residue guard, so clicking it did nothing.
-      if (verdict.kind === "move") body = canonicalMoveChoice(verdict.node);
+      if (verdict.kind === "move") {
+        body = canonicalMoveChoice(verdict.node);
+        // ...and DROP the skill tag. Walking to a known, open exit is not a
+        // skill check — the server rolls nothing for it — so a tag like [潛行]
+        // promised a stealth attempt that never happened. The GM attaches one
+        // habitually because two of the three choices usually carry a tag.
+        tag = "";
+      } else if (verdict.kind === "ok" && /^(前往|去|走去|前住)/.test(body)) {
+        // A 前往… that did NOT classify as a move names a place the graph does
+        // not have (an invented location), or the character's own node. Either
+        // way clicking it can never move anyone — the travel matcher has nothing
+        // to resolve — so it would be a button that silently does nothing.
+        continue;
+      }
     }
     if (body.length > 22) body = body.slice(0, 20) + "…";
     out.push(tag ? `${tag} ${body}` : body);

@@ -31,6 +31,7 @@ import {
   positionOf,
   applyActorMove,
   composeSceneChoices,
+  partitionExitsByNovelty,
   computeExits,
   eligibleCombatTargets,
   type SceneContext,
@@ -1480,7 +1481,9 @@ export async function POST(request: Request) {
     const npcsHere = evaluateNpcPlacements(locationGraph, locState, room.current_round, objProgress, nextActorNode)
       .filter((ref) => npcStateEntry(ref, npcRoster, npcStateNow)?.alive !== false)
       .map((ref) => npcDisplayName(ref, npcRoster));
-    const exitsOpen = computeExits(locationGraph, locState, nextActorNode).open
+    const openExits = computeExits(locationGraph, locState, nextActorNode).open;
+    const exitsOpen = openExits.map((n) => locationShortName(n.name));
+    const exitsUnvisited = partitionExitsByNovelty(openExits, locState).fresh
       .map((n) => locationShortName(n.name));
     const nextFacts = updatedLedger
       .filter((e) => e.node === nextActorNode)
@@ -1508,6 +1511,7 @@ export async function POST(request: Request) {
       nodeDesc: nextNodeDef?.desc ?? null,
       npcsHere,
       exitsOpen,
+      exitsUnvisited,
       sceneFacts: nextFacts,
       lastAction,
       lastNarration,

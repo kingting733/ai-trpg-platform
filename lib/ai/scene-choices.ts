@@ -27,6 +27,10 @@ export interface SceneChoicesInput {
   npcsHere: string[];
   /** Open exits FROM this node (server-computed). */
   exitsOpen: string[];
+  /** The subset of exitsOpen nobody in the party has ever entered. Movement
+   *  suggestions should prefer these — without the split, the model just picks
+   *  whichever exit is listed first, which is usually where they came from. */
+  exitsUnvisited?: string[];
   /** Ledger facts that happened AT this node — the scene's own story. */
   sceneFacts: string[];
   /** The character's most recent action text, if any (their own thread). */
@@ -51,7 +55,9 @@ export function buildSceneChoicesPrompt(input: SceneChoicesInput): { system: str
 2. 每個行動 6–15 個中文字，可在最前面加一個技能標籤，格式「[技能] 行動」。技能只能從允許清單挑選。
 3. 行動只有兩種：
    (a) 在此地點做一件事 —— 不要寫出目前所在地點的名字（角色就站在那裡，寫了是多餘的）。
-   (b) 移動 —— 必須寫成「前往<出口名>」，不可用其他動詞、不可附加任何子句。
+   (b) 移動 —— 必須寫成「前往<出口名>」，不可用其他動詞、不可附加任何子句，
+       而且**不可加技能標籤**（走去一個已知的出口不需要檢定）。
+       如果有「未去過的出口」，移動一定要優先選那些；沒有才可以選去過的地方。
    一個行動最多只能提到一個地點，而且要用出口清單上的完整名稱（例如「1404門口」，不可簡寫成「門口」）。
    提到兩個地點的行動會被系統直接丟棄（例如「行近門口，望走廊外面」）。
 4. 三個行動要彼此不同（例如：一個調查、一個社交/聆聽、一個移動或謹慎行動）。
@@ -65,6 +71,9 @@ export function buildSceneChoicesPrompt(input: SceneChoicesInput): { system: str
   if (input.nodeDesc?.trim()) lines.push(`場景描述：${input.nodeDesc.trim()}`);
   lines.push(input.npcsHere.length ? `在場 NPC：${input.npcsHere.join("、")}` : "在場 NPC：無");
   lines.push(input.exitsOpen.length ? `可前往的出口：${input.exitsOpen.join("、")}` : "可前往的出口：無");
+  if (input.exitsUnvisited?.length) {
+    lines.push(`未去過的出口（移動時優先選這些）：${input.exitsUnvisited.join("、")}`);
+  }
   if (input.sceneFacts.length) lines.push(`此地已發生的事：${input.sceneFacts.join("；")}`);
   if (input.lastAction?.trim()) lines.push(`${input.characterName} 上一個行動：${input.lastAction.trim()}`);
   if (input.lastNarration?.trim()) {
