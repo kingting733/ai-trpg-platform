@@ -26,9 +26,6 @@ export type ItemEffect =
   | { type: "interlude_growth_bonus"; value: number }
   /** 禁物 placeholder — no effect yet（效果尚未覺醒）. */
   | { type: "dormant" }
-  /** MAIN-GAME effect: +value percentage points to one skill's check target,
-   *  for the character carrying this item. Interlude numbers untouched. */
-  | { type: "skill_check_bonus"; skill: string; value: number }
   /** Mythos tome: owning it lets the player 銘刻 (bind) its spell to ONE card,
    *  irreversibly. No interlude effect — the power lives in the main game. */
   | { type: "mythos_spell"; spell: string };
@@ -82,19 +79,16 @@ export const ITEM_POOL: ItemDef[] = [
     flavor: "已經不會響了。但有些東西還是會聽見。",
     effect: { type: "failure_points_floor_bonus", value: 0.15 } },
 
-  // ── Epic / 禁物 — 禁術. Each sharpens ONE main-game skill for the investigator
-  //    carrying it. They were dormant placeholders; the skill each grants is the
-  //    one its flavour already described (read traces / go unseen / sense harm
-  //    coming), so nothing here contradicts the fiction players already read.
+  // ── Epic / 禁物 — dormant placeholders (效果尚未覺醒) ──
   { id: "blood_reading", name: "血痕解讀", rarity: "epic",
-    flavor: "禁術。讀懂乾涸血跡排列的那一刻，它也在讀你。",
-    effect: { type: "skill_check_bonus", skill: "spot_hidden", value: 10 } },
+    flavor: "禁術。讀懂乾涸血跡排列的那一刻，它也在讀你。（效果尚未覺醒）",
+    effect: { type: "dormant" } },
   { id: "door_crack_peek", name: "門縫窺視", rarity: "epic",
-    flavor: "禁術。從門縫望進去三秒以內是安全的，大概。",
-    effect: { type: "skill_check_bonus", skill: "stealth", value: 10 } },
+    flavor: "禁術。從門縫望進去三秒以內是安全的，大概。（效果尚未覺醒）",
+    effect: { type: "dormant" } },
   { id: "omen_smelling", name: "聞兆", rarity: "epic",
-    flavor: "禁術。壞事發生之前，空氣會先變甜。",
-    effect: { type: "skill_check_bonus", skill: "dodge", value: 10 } },
+    flavor: "禁術。壞事發生之前，空氣會先變甜。（效果尚未覺醒）",
+    effect: { type: "dormant" } },
 
   // ── Epic / 禁物 — Mythos tomes（禁咒書頁）. Owning one lets the player 銘刻
   //    its spell to ONE card, irreversibly (docs/design/mythos-skills-v1.md) ──
@@ -119,30 +113,6 @@ export const ITEM_POOL: ItemDef[] = [
     flavor: "印在門背，向內。不是防止什麼進來，是防止什麼出去。",
     effect: { type: "interlude_growth_bonus", value: 5 } },
 ];
-
-/** zh names for the skills an item can boost — mirrors the client SKILL_ZH maps
- *  so effect copy never shows a raw key like "spot_hidden". */
-const SKILL_ZH: Record<string, string> = {
-  spot_hidden: "偵查", listen: "聆聽", library_use: "圖書館使用", psychology: "心理學",
-  persuade: "說服", fast_talk: "話術", charm: "魅惑", intimidate: "恐嚇",
-  dodge: "閃避", first_aid: "急救", stealth: "潛行", lockpick: "開鎖",
-  drive_auto: "駕駛汽車", firearms: "射擊", occult: "神秘學", fighting: "搏鬥",
-};
-
-/**
- * Main-game check bonus this item grants for `skillKey`, or 0.
- *
- * The ONLY place an item touches main-game dice. Keeping it a lookup (rather
- * than letting the GM narrate an advantage) is what keeps "server decides"
- * true for these items.
- */
-export function itemSkillBonus(itemId: string | null | undefined, skillKey: string): number {
-  const item = itemById(itemId);
-  if (item?.effect.type === "skill_check_bonus" && item.effect.skill === skillKey) {
-    return item.effect.value;
-  }
-  return 0;
-}
 
 export function itemById(id: string | null | undefined): ItemDef | null {
   if (!id) return null;
@@ -219,8 +189,7 @@ export function computeMissionModifiers(itemId: string | null | undefined, missi
       mods.growthBonus = e.value;
       break;
     case "dormant":
-    case "mythos_spell":       // main-game power; interlude numbers untouched
-    case "skill_check_bonus":  // main-game check bonus; interlude untouched
+    case "mythos_spell": // main-game power; interlude numbers untouched
       break;
   }
   return mods;
@@ -253,8 +222,6 @@ export function effectText(item: ItemDef): string {
       return `幕間成長檢定骰 +${e.value}`;
     case "dormant":
       return "效果尚未覺醒";
-    case "skill_check_bonus":
-      return `主線故事中「${SKILL_ZH[e.skill] ?? e.skill}」檢定 +${e.value}%`;
     case "mythos_spell": {
       const spell = mythosSpellByKey(e.spell);
       return `研讀後可將禁咒「${spell?.zh ?? e.spell}」銘刻至一名調查員（不可更改）`;
@@ -271,9 +238,6 @@ export function effectText(item: ItemDef): string {
  */
 export function effectDetail(item: ItemDef): string | null {
   const e = item.effect;
-  if (e.type === "skill_check_bonus") {
-    return `只對裝備此物的調查員生效，且只影響主線故事的擲骰（幕間任務不受影響）。裝備後進入房間時鎖定。`;
-  }
   if (e.type === "dormant") {
     return "此禁物目前沒有任何遊戲效果，純為收藏；效果將於日後版本開放。";
   }

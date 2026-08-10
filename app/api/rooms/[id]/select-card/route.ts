@@ -58,9 +58,6 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       app: card.app, int: card.int, pow: card.pow, edu: card.edu,
       luck: card.luck, skills: card.skills ?? {}, occupation: card.occupation ?? null,
       cthulhu_knowledge: card.cthulhu_knowledge ?? 0, mythos_skills: card.mythos_skills ?? [],
-      // Snapshot like every other stat: re-equipping on the card mid-session
-      // must not retroactively change a run already under way.
-      equipped_item: card.equipped_item ?? null,
     })
     .select("id")
     .single();
