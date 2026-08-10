@@ -10,6 +10,7 @@ import {
   RARITY_ZH,
   itemById,
   effectText,
+  effectDetail,
   type ItemDef,
   type ItemRarity,
 } from "@/lib/game/items";
@@ -190,6 +191,9 @@ export default function PrayPage() {
               </div>
               <p className="text-xs text-zinc-500 italic leading-relaxed mb-1.5">{revealed.flavor}</p>
               <p className="text-xs" style={{ color: "#cbb890" }}>{effectText(revealed)}</p>
+              {effectDetail(revealed) && (
+                <p className="text-[11px] text-zinc-500 leading-snug mt-1">{effectDetail(revealed)}</p>
+              )}
               <button type="button" onClick={() => setRevealed(null)} className="mt-2 text-xs text-zinc-600 hover:text-zinc-400 underline decoration-dotted">收下</button>
             </div>
           </div>
@@ -228,7 +232,10 @@ export default function PrayPage() {
                       {has ? (
                         <>
                           <p className="text-[11px] text-zinc-600 italic leading-snug mb-1.5">{item.flavor}</p>
-                          <p className="text-[11px] mb-2" style={{ color: "#cbb890" }}>{effectText(item)}</p>
+                          <p className="text-[11px] mb-1" style={{ color: "#cbb890" }}>{effectText(item)}</p>
+                          {effectDetail(item) && (
+                            <p className="text-[11px] text-zinc-500 leading-snug mb-2">{effectDetail(item)}</p>
+                          )}
                           {item.effect.type === "mythos_spell" ? (() => {
                             const spellKey = item.effect.spell;
                             const zh = { shrivelling: "萎縮術", elder_sign: "遠古印記", contact_dead: "死者絮語" }[spellKey] ?? spellKey;

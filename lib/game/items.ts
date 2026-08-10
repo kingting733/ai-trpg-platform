@@ -11,6 +11,8 @@
 // is picked; an exhausted rarity spills to the nearest rarity that still has
 // unowned items). When the player owns everything, the altar refuses.
 
+import { mythosSpellByKey, MYTHOS_MP_COST, MYTHOS_BASE_SUCCESS, KNOWLEDGE_CAP } from "@/lib/game/mythos";
+
 export type ItemRarity = "common" | "rare" | "epic" | "legendary";
 
 export type ItemEffect =
@@ -221,8 +223,33 @@ export function effectText(item: ItemDef): string {
     case "dormant":
       return "效果尚未覺醒";
     case "mythos_spell": {
-      const zh: Record<string, string> = { shrivelling: "萎縮術", elder_sign: "遠古印記", contact_dead: "死者絮語" };
-      return `研讀後可將禁咒「${zh[e.spell] ?? e.spell}」銘刻至一名調查員（不可更改）`;
+      const spell = mythosSpellByKey(e.spell);
+      return `研讀後可將禁咒「${spell?.zh ?? e.spell}」銘刻至一名調查員（不可更改）`;
     }
   }
+}
+
+/**
+ * The second line under effectText: what the item ACTUALLY does once it is on
+ * a card. effectText only says a tome "can be inscribed" — it never said what
+ * the spell then does, so a player had no way to choose between three tomes,
+ * and 禁物 said only "效果尚未覺醒" without admitting that means "nothing".
+ * Returns null for items whose effectText is already the whole story.
+ */
+export function effectDetail(item: ItemDef): string | null {
+  const e = item.effect;
+  if (e.type === "dormant") {
+    return "此禁物目前沒有任何遊戲效果，純為收藏；效果將於日後版本開放。";
+  }
+  if (e.type === "mythos_spell") {
+    const spell = mythosSpellByKey(e.spell);
+    if (!spell) return null;
+    const target = spell.needsTarget ? "需指定目標" : "無需目標";
+    return (
+      `${spell.desc}` +
+      `（${target}｜每次施展消耗 1d4 理智 ＋ ${MYTHOS_MP_COST} 魔力，失敗亦照樣扣除` +
+      `｜成功率 ${MYTHOS_BASE_SUCCESS}% ＋ 該卡的克蘇魯知識，上限 ${MYTHOS_BASE_SUCCESS + KNOWLEDGE_CAP}%）`
+    );
+  }
+  return null;
 }

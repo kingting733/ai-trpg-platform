@@ -86,10 +86,14 @@ export const MYTHOS_MP_COST = 3;
 /** 克蘇魯知識 ceiling — success rate tops out at 30 + 40 = 70%. */
 export const KNOWLEDGE_CAP = 40;
 
+/** Floor of every cast, before 克蘇魯知識. Exported so player-facing copy can
+ *  quote the real number instead of restating a literal that could drift. */
+export const MYTHOS_BASE_SUCCESS = 30;
+
 /** Success chance: base 30 + 克蘇魯知識 (clamped 0..KNOWLEDGE_CAP). */
 export function mythosSuccessRate(knowledge: number | null | undefined): number {
   const k = typeof knowledge === "number" ? knowledge : 0;
-  return 30 + Math.min(KNOWLEDGE_CAP, Math.max(0, k));
+  return MYTHOS_BASE_SUCCESS + Math.min(KNOWLEDGE_CAP, Math.max(0, k));
 }
 
 export type MythosOutcome = "critical_success" | "success" | "failure" | "fumble";

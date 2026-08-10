@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { CardRollReveal, RevealCard } from "@/components/CardRollReveal";
 import { Dices, Check, Sparkles, Layers, Pencil, Trophy, Trash2, ChevronUp, ChevronDown, Drama } from "lucide-react";
+import { MYTHOS_SPELLS, mythosSuccessRate } from "@/lib/game/mythos";
+import { itemById, effectText } from "@/lib/game/items";
 
 interface CharacterCard {
   id: string;
@@ -17,6 +19,12 @@ interface CharacterCard {
   skills: Record<string, number> | null;
   occupation: string | null;
   cleared_scenarios: string[] | null;
+  /** 舊神祈願 item bound to this card (items.ts id), if any. */
+  equipped_item: string | null;
+  /** 禁咒 keys inscribed on this card (mythos.ts keys). Permanent. */
+  mythos_skills: string[] | null;
+  /** 克蘇魯知識 — raises every 禁咒's success rate. Never allocatable. */
+  cthulhu_knowledge: number | null;
   created_at: string;
 }
 
@@ -286,6 +294,8 @@ function CardView({
   onDeleted?: (id: string) => void;
 }) {
   const style = RARITY_STYLES[card.rarity];
+  const boundSpells = MYTHOS_SPELLS.filter((s) => (card.mythos_skills ?? []).includes(s.key));
+  const equipped = itemById(card.equipped_item);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(card.name);
   const [saving, setSaving] = useState(false);
@@ -471,6 +481,42 @@ function CardView({
               </div>
             ) : (
               <p className="text-zinc-600 text-xs text-center py-2">尚未分配技能點數</p>
+            )}
+          </div>
+        )}
+
+        {/* 禁咒 / 舊神祈願 — bound via /pray. These were written to the card but
+            NEVER rendered here, so inscribing a spell or equipping an item
+            looked like it had silently failed: the only place the spell showed
+            up was inside a room, after taking the card into a game. */}
+        {(boundSpells.length > 0 || equipped) && (
+          <div className="mt-3 pt-3" style={{ borderTop: "1px solid #2a2010" }}>
+            {boundSpells.length > 0 && (
+              <>
+                <p className="text-[10px] uppercase tracking-wider mb-1.5" style={{ color: "rgba(155,120,190,0.75)" }}>
+                  禁咒 · 神話法術
+                  <span className="text-zinc-600 normal-case tracking-normal ml-1.5">
+                    克蘇魯知識 {card.cthulhu_knowledge ?? 0}／成功率 {mythosSuccessRate(card.cthulhu_knowledge)}%
+                  </span>
+                </p>
+                <div className="flex flex-col gap-1 mb-2">
+                  {boundSpells.map((s) => (
+                    <div key={s.key} className="rounded px-2 py-1" style={{ background: "rgba(0,0,0,0.3)" }}>
+                      <span className="text-xs" style={{ color: "#b18cd4" }}>{s.zh}</span>
+                      <span className="text-zinc-600 text-[11px] ml-1.5">{s.desc}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            {equipped && (
+              <>
+                <p className="text-[10px] uppercase tracking-wider mb-1.5 text-gold/70">舊神祈願 · 裝備</p>
+                <div className="rounded px-2 py-1" style={{ background: "rgba(0,0,0,0.3)" }}>
+                  <span className="text-xs text-gold/90">{equipped.name}</span>
+                  <span className="text-zinc-600 text-[11px] ml-1.5">{effectText(equipped)}</span>
+                </div>
+              </>
             )}
           </div>
         )}
