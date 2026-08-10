@@ -1,3 +1,4 @@
+import { itemSkillBonus } from "@/lib/game/items";
 // Rule-based action resolution — CoC d100 roll-under system.
 // Skill-first: match action to a named skill and roll against its full stored
 // value. Raw stats are fallbacks only when no skill applies.
@@ -38,6 +39,10 @@ export interface CheckCharacter {
   str: number; con: number; siz: number; dex: number; app: number;
   int: number; pow: number; edu: number; luck: number;
   skills?: SkillPoints | null;
+  /** 舊神祈願 item carried INTO this room (items.ts id). Snapshotted onto the
+   *  characters row at select-card, exactly like stats, so re-equipping on the
+   *  card mid-session cannot change a run already in progress. */
+  equipped_item?: string | null;
 }
 
 // ─── Skill rules (checked first, in priority order) ──────────────────────────
@@ -348,7 +353,11 @@ function attackSkillValue(type: AttackType, char: CheckCharacter): number {
 /** A character's 閃避 value (stored skill, else DEX÷2). */
 export function dodgeValueOf(char: CheckCharacter): number {
   const stored = (char.skills ?? {}).dodge as number | undefined;
-  return Math.min(99, stored != null && stored > 0 ? stored : Math.floor((char.dex ?? 50) / 2));
+  const base = stored != null && stored > 0 ? stored : Math.floor((char.dex ?? 50) / 2);
+  // Dodge is rolled by the DEFENDER inside resolveAttack, never through
+  // resolveAction — so a dodge-boosting item has to be applied here too, or it
+  // would only work when a player typed "閃避" as their own action.
+  return Math.min(99, base + itemSkillBonus(char.equipped_item, "dodge"));
 }
 
 /** Base weapon damage before any damage bonus (DB). */
@@ -687,7 +696,9 @@ function matchStat(text: string): StatRule | null {
 function skillTarget(rule: SkillRule, char: CheckCharacter): number {
   const stored = (char.skills ?? {})[rule.skillKey as keyof SkillPoints] as number | undefined;
   const value = (stored != null && stored > 0) ? stored : rule.baseValue(char);
-  return Math.min(99, value);
+  // 禁物 bonus. Applied to the TARGET, not the roll, so it helps identically at
+  // every skill level and can never turn a fumble (>=95) into a success.
+  return Math.min(99, value + itemSkillBonus(char.equipped_item, rule.skillKey));
 }
 
 function decideOutcome(roll: number, target: number): Outcome {
