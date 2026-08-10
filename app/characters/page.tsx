@@ -34,12 +34,15 @@ const OCCUPATION_ICON: Record<string, string> = {
   "走私司機": "/smuggler.png",
 };
 
-// Rarity accents tuned to the occult / aged-parchment palette.
-const RARITY_STYLES: Record<CharacterCard["rarity"], { frame: string; chip: string; glow: string }> = {
-  Common:    { frame: "rgba(201,169,110,0.12)", chip: "border-zinc-600 text-zinc-400",      glow: "" },
-  Rare:      { frame: "rgba(56,189,248,0.30)",  chip: "border-sky-600/70 text-sky-300",     glow: "0 0 24px rgba(56,189,248,0.08)" },
-  Epic:      { frame: "rgba(192,132,252,0.30)", chip: "border-purple-500/70 text-purple-300", glow: "0 0 24px rgba(192,132,252,0.10)" },
-  Legendary: { frame: "rgba(201,169,110,0.45)", chip: "border-amber-500/70 text-amber-300",  glow: "0 0 28px rgba(201,169,110,0.18)" },
+// Rarity accents. The sky/purple tints these used to carry were the only
+// off-palette colours on the card and read as a stray blue outline against the
+// aged-parchment frame, so every tier now sits on gold and rarity shows purely
+// as INTENSITY — still legible at a glance, no new hues.
+const RARITY_STYLES: Record<CharacterCard["rarity"], { frame: string; glow: string }> = {
+  Common:    { frame: "rgba(201,169,110,0.12)", glow: "" },
+  Rare:      { frame: "rgba(201,169,110,0.22)", glow: "" },
+  Epic:      { frame: "rgba(201,169,110,0.32)", glow: "0 0 24px rgba(201,169,110,0.10)" },
+  Legendary: { frame: "rgba(201,169,110,0.45)", glow: "0 0 28px rgba(201,169,110,0.18)" },
 };
 
 const STAT_KEYS = ["str", "con", "siz", "dex", "app", "int", "pow", "edu", "luck"] as const;
@@ -423,7 +426,6 @@ function CardView({
               </div>
             )}
           </div>
-          <span className={`text-xs px-2 py-0.5 rounded border bg-black/30 shrink-0 ${style.chip}`}>{card.rarity}</span>
         </div>
 
         <div className="grid grid-cols-3 gap-x-4 gap-y-px">
