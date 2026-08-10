@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { buildPartyRoster, buildLanguageInstruction, ROSTER_CONSTRAINT, ScenarioGMContext, NpcEntry } from "@/lib/ai/gm";
 import { resolveScenarioObjectives } from "@/lib/game/objectives-def";
+import { thinkingFragment } from "@/lib/ai/settings";
 import {
   coerceLocationGraph,
   initLocationState,
@@ -21,6 +22,57 @@ type PartyMember = {
   str: number; con: number; siz: number; app: number;
   int: number; pow: number; edu: number; luck: number;
 };
+
+// 900 was too tight to be safe: it had to cover a 6-8 sentence scene, 3
+// choices, JSON syntax — and, on a reasoning model, the hidden thinking too.
+const OPENING_MAX_TOKENS = 2400;
+
+/** Tolerant parse: models wrap JSON in fences or prose often enough that a bare
+ *  JSON.parse of the whole string is the single biggest source of "unusable
+ *  response". Finds the outermost object and validates the shape. */
+function parseOpening(raw: string): OpeningScene | null {
+  const text = (raw ?? "").replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
+  if (!text) return null;
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  try {
+    const parsed = JSON.parse(text.slice(start, end + 1));
+    const scene = typeof parsed?.scene === "string" ? parsed.scene.trim() : "";
+    const choices = Array.isArray(parsed?.choices)
+      ? parsed.choices.filter((c: unknown): c is string => typeof c === "string" && c.trim().length > 0).map((c: string) => c.trim())
+      : [];
+    if (!scene || choices.length < 3) return null;
+    return { scene, choices: [choices[0], choices[1], choices[2]] };
+  } catch {
+    return null;
+  }
+}
+
+/** The placeholder shown when generation fails. It used to be English-only,
+ *  which in a zh-TW game announced the failure to the players in the wrong
+ *  language on the very first screen they ever see. */
+function fallbackOpening(
+  language: string | null | undefined,
+  firstCharName: string,
+  scenarioTitle: string
+): OpeningScene {
+  const isEnglish = (language ?? "").trim().toLowerCase().startsWith("en");
+  if (isEnglish) {
+    return {
+      scene: `The adventure begins. The party stands at the threshold of ${scenarioTitle}.`,
+      choices: [
+        `${firstCharName} looks around carefully, assessing the surroundings`,
+        `${firstCharName} moves forward cautiously, staying alert`,
+        `${firstCharName} speaks up, addressing the group`,
+      ],
+    };
+  }
+  return {
+    scene: `故事就此開始。眾人站在《${scenarioTitle}》的起點，空氣裡有種說不出的緊繃。`,
+    choices: ["[偵查] 檢查四周", "[聆聽] 留神細聽", "與同伴商量下一步"],
+  };
+}
 
 function buildGMContextBlock(ctx: ScenarioGMContext): string {
   const parts: string[] = [];
@@ -96,15 +148,17 @@ Respond ONLY with valid JSON in this exact format (no markdown, no extra text):
   const userMessage = "Begin the adventure.";
 
   if (!apiKey) {
-    return {
-      scene: `The adventure begins. The party stands at the threshold of their quest — ${scenarioTitle}. The air is thick with anticipation.`,
-      choices: [
-        `${firstCharName} looks around carefully and assesses the surroundings`,
-        `${firstCharName} moves forward cautiously`,
-        `${firstCharName} checks their equipment and addresses the group`,
-      ],
-    };
+    console.error("[opening] AI_API_KEY is not set — serving the placeholder opening scene.");
+    return fallbackOpening(language, firstCharName, scenarioTitle);
   }
+
+  // The opening is a GM narration, so it follows the "gm" call site's toggle.
+  // WITHOUT this the request omitted the flag entirely — and DeepSeek V4
+  // defaults reasoning ON, so the model spent the whole max_tokens budget
+  // thinking and returned an empty string. JSON.parse("") then threw straight
+  // into the silent catch below, which is why round 1 was ALWAYS the English
+  // placeholder rather than occasionally.
+  const thinking = await thinkingFragment("gm", provider);
 
   try {
     let raw = "";
@@ -120,7 +174,7 @@ Respond ONLY with valid JSON in this exact format (no markdown, no extra text):
           model,
           system: systemPrompt,
           messages: [{ role: "user", content: userMessage }],
-          max_tokens: 900,
+          max_tokens: OPENING_MAX_TOKENS,
         }),
       });
       const data = await res.json();
@@ -135,29 +189,38 @@ Respond ONLY with valid JSON in this exact format (no markdown, no extra text):
         body: JSON.stringify({
           model,
           messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userMessage }],
-          max_tokens: 900,
+          max_tokens: OPENING_MAX_TOKENS,
           temperature: 0.85,
+          ...thinking,
         }),
       });
       const data = await res.json();
       raw = data.choices?.[0]?.message?.content?.trim() ?? "";
+      if (!raw) {
+        const choice = data.choices?.[0];
+        console.error(
+          `[opening] HTTP 200 but EMPTY content (model=${model}, provider=${provider}, ` +
+          `thinking=${Object.keys(thinking).length === 0 ? "enabled" : "disabled"}). ` +
+          `finish_reason=${choice?.finish_reason} usage=${JSON.stringify(data.usage)} ` +
+          `apiError=${JSON.stringify(data.error ?? null)}. ` +
+          `reasoning_tokens at or near max_tokens=${OPENING_MAX_TOKENS} means reasoning ate the budget.`
+        );
+      }
     }
 
-    raw = raw.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
-    const parsed = JSON.parse(raw) as OpeningScene;
-    if (parsed.scene && Array.isArray(parsed.choices) && parsed.choices.length === 3) {
-      return parsed;
-    }
-    throw new Error("Invalid shape");
-  } catch {
-    return {
-      scene: `The adventure begins. The world feels alive with danger and possibility.`,
-      choices: [
-        `${firstCharName} looks around carefully, assessing the surroundings`,
-        `${firstCharName} moves forward cautiously, staying alert`,
-        `${firstCharName} speaks up, addressing the group`,
-      ],
-    };
+    const parsed = parseOpening(raw);
+    if (parsed) return parsed;
+    throw new Error(`unusable response (${raw.length} chars): ${JSON.stringify(raw.slice(0, 300))}`);
+  } catch (err) {
+    // NEVER silent: this fallback is the English placeholder players were
+    // seeing on round 1 of every game, and the old bare `catch {}` gave no
+    // way to tell an API failure from a parse failure.
+    console.error(
+      `[opening] generation failed for "${scenarioTitle}" (model=${model}, provider=${provider}) — ` +
+      `serving the placeholder opening scene. Cause:`,
+      err instanceof Error ? err.message : err
+    );
+    return fallbackOpening(language, firstCharName, scenarioTitle);
   }
 }
 
