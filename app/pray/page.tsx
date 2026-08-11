@@ -4,13 +4,13 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { ItemCard, RARITY_ACCENT } from "@/components/ItemCard";
+import { MYTHOS_ZH_BY_KEY } from "@/lib/game/mythos";
 import {
   ITEM_POOL,
   PRAY_COST,
   RARITY_ZH,
   itemById,
-  effectText,
-  effectDetail,
   type ItemDef,
   type ItemRarity,
 } from "@/lib/game/items";
@@ -19,13 +19,12 @@ import {
 // candle-lit fallback stands in otherwise.
 const ALTAR_SRC = "/pray/altar.png";
 
-const RARITY_STYLE: Record<ItemRarity, { color: string; glow: string; chip: string }> = {
-  common:    { color: "#a1a1aa", glow: "rgba(161,161,170,0.30)", chip: "border-zinc-600 text-zinc-400" },
-  rare:      { color: "#7dd3fc", glow: "rgba(125,211,252,0.35)", chip: "border-sky-600/70 text-sky-300" },
-  epic:      { color: "#c4b5fd", glow: "rgba(196,181,253,0.35)", chip: "border-purple-500/70 text-purple-300" },
-  legendary: { color: "#c9a96e", glow: "rgba(201,169,110,0.50)", chip: "border-amber-500/70 text-amber-300" },
-};
 const RARITY_ORDER: ItemRarity[] = ["legendary", "epic", "rare", "common"];
+
+// Selects sit INSIDE the card's action row, so they carry no border of their
+// own — the row already draws one.
+const selectCls =
+  "w-full bg-transparent rounded-md px-1.5 py-1 text-xs text-zinc-200 focus:outline-none disabled:opacity-50 [&>option]:bg-zinc-900";
 
 interface CardLite { id: string; name: string; equipped_item: string | null; mythos_skills: string[] | null }
 
@@ -175,30 +174,18 @@ export default function PrayPage() {
       )}
 
       {/* ── Reveal ── */}
-      {revealed && (() => {
-        const st = RARITY_STYLE[revealed.rarity];
-        return (
-          <div className="pray-reveal rounded-xl p-5 mb-6 flex items-start gap-4"
-            style={{ background: "rgba(20,16,11,0.85)", border: `1.5px solid ${st.glow}`, boxShadow: `0 0 30px ${st.glow}` }}>
-            <div className="w-14 h-14 rounded-lg shrink-0 flex items-center justify-center"
-              style={{ background: "rgba(10,8,5,0.8)", border: `1px solid ${st.glow}`, color: st.color }}>
-              <Sparkles size={22} strokeWidth={1.5} />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap mb-1">
-                <span className={`text-[10px] px-1.5 py-0.5 rounded border bg-black/30 ${st.chip}`}>{RARITY_ZH[revealed.rarity]}</span>
-                <h3 className="font-serif text-lg" style={{ color: st.color }}>{revealed.name}</h3>
-              </div>
-              <p className="text-xs text-zinc-500 italic leading-relaxed mb-1.5">{revealed.flavor}</p>
-              <p className="text-xs" style={{ color: "#cbb890" }}>{effectText(revealed)}</p>
-              {effectDetail(revealed) && (
-                <p className="text-[11px] text-zinc-500 leading-snug mt-1">{effectDetail(revealed)}</p>
-              )}
-              <button type="button" onClick={() => setRevealed(null)} className="mt-2 text-xs text-zinc-600 hover:text-zinc-400 underline decoration-dotted">收下</button>
-            </div>
-          </div>
-        );
-      })()}
+      {revealed && (
+        <div className="pray-reveal mb-6">
+          <ItemCard item={revealed} />
+          <button
+            type="button"
+            onClick={() => setRevealed(null)}
+            className="mt-2 text-xs text-zinc-600 hover:text-zinc-400 underline decoration-dotted"
+          >
+            收下
+          </button>
+        </div>
+      )}
 
       {/* ── Collection ── */}
       <div className="flex items-center justify-between mb-3">
@@ -208,76 +195,63 @@ export default function PrayPage() {
       <div className="space-y-5">
         {RARITY_ORDER.map((rarity) => {
           const items = ITEM_POOL.filter((i) => i.rarity === rarity);
-          const st = RARITY_STYLE[rarity];
           return (
             <div key={rarity}>
-              <p className="text-[11px] tracking-widest mb-2" style={{ color: st.color }}>{RARITY_ZH[rarity]}</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <p className="text-[11px] tracking-widest mb-2" style={{ color: RARITY_ACCENT[rarity] }}>{RARITY_ZH[rarity]}</p>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 {items.map((item) => {
                   const has = owned.has(item.id);
                   const wearer = has ? wearerOf(item.id) : null;
+                  const isTome = item.effect.type === "mythos_spell";
+                  const spellKey = isTome ? (item.effect as { spell: string }).spell : null;
+                  const bearer = spellKey ? spellBearerOf(spellKey) : null;
+
+                  // The tome's bind is irreversible, so once bound the control
+                  // is replaced by a plain statement — never a live select that
+                  // implies it could be moved.
+                  const action = !has ? null : isTome ? (
+                    bearer ? (
+                      <p className="inline-flex items-center gap-1.5 text-xs py-1" style={{ color: "#b18cd4" }}>
+                        <Sparkles size={12} strokeWidth={2} /> 已銘刻於 {bearer.name}（不可更改）
+                      </p>
+                    ) : (
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          const c = cards.find((x) => x.id === e.target.value);
+                          if (c && spellKey) bindSpell(item.id, c.id, c.name, MYTHOS_ZH_BY_KEY[spellKey] ?? spellKey);
+                        }}
+                        disabled={working}
+                        className={selectCls}
+                      >
+                        <option value="">銘刻至調查員…（不可更改）</option>
+                        {cards.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    )
+                  ) : (
+                    <select
+                      value={wearer?.id ?? ""}
+                      onChange={(e) => equip(item.id, e.target.value || null)}
+                      disabled={working}
+                      className={selectCls}
+                    >
+                      <option value="">未裝備</option>
+                      {cards.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}{c.equipped_item && c.equipped_item !== item.id ? `（現持${itemById(c.equipped_item)?.name ?? "物品"}）` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  );
+
                   return (
-                    <div key={item.id} className="rounded-xl p-3.5"
-                      style={{
-                        background: has ? "rgba(22,19,16,0.85)" : "rgba(14,12,9,0.6)",
-                        border: `1px solid ${has ? st.glow : "#1f1a12"}`,
-                        opacity: has ? 1 : 0.55,
-                      }}>
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded border bg-black/30 shrink-0 ${st.chip}`}>{RARITY_ZH[rarity]}</span>
-                        <h4 className="font-serif text-sm truncate" style={{ color: has ? st.color : "#52525b" }}>
-                          {has ? item.name : "？？？"}
-                        </h4>
-                      </div>
-                      {has ? (
-                        <>
-                          <p className="text-[11px] text-zinc-600 italic leading-snug mb-1.5">{item.flavor}</p>
-                          <p className="text-[11px] mb-1" style={{ color: "#cbb890" }}>{effectText(item)}</p>
-                          {effectDetail(item) && (
-                            <p className="text-[11px] text-zinc-500 leading-snug mb-2">{effectDetail(item)}</p>
-                          )}
-                          {item.effect.type === "mythos_spell" ? (() => {
-                            const spellKey = item.effect.spell;
-                            const zh = { shrivelling: "萎縮術", elder_sign: "遠古印記", contact_dead: "死者絮語" }[spellKey] ?? spellKey;
-                            const bearer = spellBearerOf(spellKey);
-                            return bearer ? (
-                              <p className="inline-flex items-center gap-1 text-[11px]" style={{ color: "#b18cd4" }}><Sparkles size={11} strokeWidth={2} /> 已銘刻於 {bearer.name}（不可更改）</p>
-                            ) : (
-                              <select
-                                value=""
-                                onChange={(e) => {
-                                  const c = cards.find((x) => x.id === e.target.value);
-                                  if (c) bindSpell(item.id, c.id, c.name, zh);
-                                }}
-                                disabled={working}
-                                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none disabled:opacity-50"
-                              >
-                                <option value="">銘刻至調查員…（不可更改）</option>
-                                {cards.map((c) => (
-                                  <option key={c.id} value={c.id}>{c.name}</option>
-                                ))}
-                              </select>
-                            );
-                          })() : (
-                          <select
-                            value={wearer?.id ?? ""}
-                            onChange={(e) => equip(item.id, e.target.value || null)}
-                            disabled={working}
-                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none disabled:opacity-50"
-                          >
-                            <option value="">未裝備</option>
-                            {cards.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.name}{c.equipped_item && c.equipped_item !== item.id ? `（現持${itemById(c.equipped_item)?.name ?? "物品"}）` : ""}
-                              </option>
-                            ))}
-                          </select>
-                          )}
-                        </>
-                      ) : (
-                        <p className="text-[11px] text-zinc-700 italic">尚未從煙霧中歸來。</p>
-                      )}
-                    </div>
+                    <ItemCard
+                      key={item.id}
+                      item={item}
+                      owned={has}
+                      action={action}
+                      actionLabel={isTome ? "銘刻對象" : "裝備至"}
+                    />
                   );
                 })}
               </div>

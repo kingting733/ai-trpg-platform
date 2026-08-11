@@ -11,7 +11,7 @@
 // is picked; an exhausted rarity spills to the nearest rarity that still has
 // unowned items). When the player owns everything, the altar refuses.
 
-import { mythosSpellByKey, MYTHOS_MP_COST, MYTHOS_BASE_SUCCESS, KNOWLEDGE_CAP } from "@/lib/game/mythos";
+import { mythosSpellByKey, mythosEffectFacts, MYTHOS_MP_COST, MYTHOS_BASE_SUCCESS, KNOWLEDGE_CAP } from "@/lib/game/mythos";
 
 export type ItemRarity = "common" | "rare" | "epic" | "legendary";
 
@@ -232,4 +232,39 @@ export function effectDetail(item: ItemDef): string | null {
     );
   }
   return null;
+}
+
+/** The detail card's content, split into the rows it actually renders. Built
+ *  here (not in the component) so the numbers stay sourced from the rules —
+ *  effectDetail() returns the same facts as one paragraph for compact callers.
+ */
+export interface ItemFacts {
+  /** Headline effect — same as effectText(). */
+  effect: string;
+  /** Extra mechanical lines under the headline. */
+  lines: string[];
+  /** Per-use cost, when the item has one (mythos tomes). */
+  cost: { san: string; mp: number } | null;
+  /** Whether using it needs a target — null when the item is never "used". */
+  targeting: string | null;
+}
+
+export function itemFacts(item: ItemDef): ItemFacts {
+  const e = item.effect;
+  if (e.type === "mythos_spell") {
+    const spell = mythosSpellByKey(e.spell);
+    if (spell) {
+      return {
+        effect: spell.desc,
+        lines: [
+          ...mythosEffectFacts(spell),
+          `成功率 ${MYTHOS_BASE_SUCCESS}% ＋ 該卡的克蘇魯知識（上限 ${MYTHOS_BASE_SUCCESS + KNOWLEDGE_CAP}%）。`,
+          "每次施展消耗理智與魔力，失敗亦照樣扣除。",
+        ],
+        cost: { san: "1d4", mp: MYTHOS_MP_COST },
+        targeting: spell.needsTarget ? "需指定目標" : "無需目標",
+      };
+    }
+  }
+  return { effect: effectText(item), lines: [], cost: null, targeting: null };
 }

@@ -143,10 +143,33 @@ export function resolveMythosCast(
   return { ok: true, outcome, roll, target, mpCost: MYTHOS_MP_COST, sanCost, extraSan, sanLoss };
 }
 
+/** Damage dice of 萎縮術, exported so player-facing copy quotes the REAL
+ *  numbers instead of restating literals that could drift out of sync. */
+export const SHRIVELLING_DICE = 2;
+export const SHRIVELLING_DIE_SIDES = 6;
+export const SHRIVELLING_CRIT_BONUS = 6;
+
 /** Damage of a successful 萎縮術: 2d6, +6 on a critical success (no dodge —
  *  the flesh itself is the battlefield). */
 export function rollShrivellingDamage(outcome: MythosOutcome, rng: () => number = Math.random): number {
   if (outcome !== "success" && outcome !== "critical_success") return 0;
-  const d6 = () => Math.min(6, Math.floor(rng() * 6) + 1);
-  return d6() + d6() + (outcome === "critical_success" ? 6 : 0);
+  let total = 0;
+  for (let i = 0; i < SHRIVELLING_DICE; i++) {
+    total += Math.min(SHRIVELLING_DIE_SIDES, Math.floor(rng() * SHRIVELLING_DIE_SIDES) + 1);
+  }
+  return total + (outcome === "critical_success" ? SHRIVELLING_CRIT_BONUS : 0);
+}
+
+/** The spell's mechanical payload, one short line per fact — what the detail
+ *  card lists under 主要效果. Empty for spells whose desc is the whole story. */
+export function mythosEffectFacts(spell: MythosSpell): string[] {
+  if (spell.key === "shrivelling") {
+    const min = SHRIVELLING_DICE;
+    const max = SHRIVELLING_DICE * SHRIVELLING_DIE_SIDES;
+    return [
+      `傷害 ${SHRIVELLING_DICE}d${SHRIVELLING_DIE_SIDES}（${min}–${max}），大成功再 +${SHRIVELLING_CRIT_BONUS}。`,
+      "目標無法閃避；未死亡的目標會轉為敵對。",
+    ];
+  }
+  return [];
 }
