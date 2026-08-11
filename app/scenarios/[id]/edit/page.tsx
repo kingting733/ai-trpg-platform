@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Lock, ArrowLeft, Map, Theater } from "lucide-react";
+import { Lock, ArrowLeft, Map, Theater, Sparkles } from "lucide-react";
 import type { NpcEntry } from "@/lib/ai/gm";
 import { CoverImageUpload } from "@/components/CoverImageUpload";
 import { LocationGraphEditor } from "@/components/LocationGraphEditor";
@@ -270,9 +270,17 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
             狀態：<span className={currentStatus === "published" ? "text-green-400" : "text-slate-400"}>{currentStatus === "published" ? "已發佈" : "草稿"}</span>
           </p>
         </div>
-        <button onClick={() => router.push("/dashboard")} className="inline-flex items-center gap-1 text-slate-400 hover:text-white text-sm">
-          <ArrowLeft size={14} strokeWidth={2} /> 返回後台
-        </button>
+        <div className="flex items-center gap-3 shrink-0">
+          <button
+            onClick={() => router.push(`/scenarios/${params.id}/export`)}
+            className="inline-flex items-center gap-1.5 text-sm rounded-lg px-3 py-1.5 transition-colors text-gold hover:text-gold-light border border-gold-dim hover:border-gold-muted"
+          >
+            <Sparkles size={14} strokeWidth={2} /> 用 AI 改進
+          </button>
+          <button onClick={() => router.push("/dashboard")} className="inline-flex items-center gap-1 text-slate-400 hover:text-white text-sm">
+            <ArrowLeft size={14} strokeWidth={2} /> 返回後台
+          </button>
+        </div>
       </div>
 
       <ScenarioFormGuide />
