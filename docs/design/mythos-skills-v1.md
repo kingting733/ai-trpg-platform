@@ -13,7 +13,7 @@ impossible to obtain. "Server decides; GM narrates" fully preserved.
 | Fumble | **roll 96–100** → extreme backlash: extra **1d6 SAN** on top of the cast cost + GM directive to narrate a dire manifestation. |
 | 克蘇魯知識 | **New single card stat** (`character_cards.cthulhu_knowledge`). Fixed **0 at creation, not point-buyable, not editable**. Grows ONLY from official-story ending rewards (`scenarios.mythos_reward`), granted once per card per scenario via the existing `cleared_scenarios` first-clear check in the growth route. PERMANENT on the card (cards persist across rooms and survive in-story death — only the in-room `characters` instance dies). |
 | Growth | **Never.** Mythos spells live in `character_cards.mythos_skills` (text[]), a namespace SEPARATE from `skills` — the ending-growth route, interlude missions, and any future growth system that reads `skills`/`SKILL_CATALOGUE` are structurally blind to them. |
-| Acquisition | (1) **Gacha, super hard**: three epic (禁物, 8% tier shared with 3 dormant items ⇒ ~1.3%/pull per tome) tome items; owning a tome lets the player **bind (銘刻)** its spell to ONE card — irreversible, one tome = one spell = at most one card per account. (2) **Official stories**: scenario-granted (author-only) via ending rewards (knowledge in v1; spell grants can join `mythos_reward` later). |
+| Acquisition | (1) **Gacha, super hard**: three epic (禁物, 8% tier — the tomes are now the WHOLE epic tier since the 3 dormant 禁物 were removed ⇒ ~2.7%/pull per tome) tome items; owning a tome lets the player **bind (銘刻)** its spell to ONE card — irreversible, one tome = one spell = at most one card per account. (2) **Official stories**: scenario-granted (author-only) via ending rewards (knowledge in v1; spell grants can join `mythos_reward` later). |
 | Visibility | Spells appear in the room skill picker ONLY when the acting card has them. Cards without spells show no Mythos UI at all. |
 
 ## The three spells (CoC canon names)
@@ -73,7 +73,7 @@ needs a subject; never waste the player's SAN on a targetless cast).
 ## Out of scope (v1)
 
 MP regen · spell learning inside a story session · spell trading · unbind ·
-awakening the 3 original dormant 禁物 · backlash HP damage · per-spell costs.
+backlash HP damage · per-spell costs.
 
 ## TDD (repo P3 — scratchpad node suites, RED first)
 

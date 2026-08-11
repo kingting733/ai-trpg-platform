@@ -3,8 +3,8 @@
 // Players burn 調查點 to pray; the Old Gods answer with a PERMANENT item that
 // can be equipped to one character card (one slot). MVP effects touch ONLY the
 // interlude mission numbers (success rate / points / failure floor / growth
-// roll) — never main-game dice. 禁物 (epic) items are dormant placeholders:
-// owned and collectible now, effects awaken in a future version.
+// roll) — never main-game dice. The 禁物 (epic) tier is the mythos tomes, whose
+// power lives in the main game rather than in the interlude numbers.
 //
 // No pity, no fragments, no duplicates: a prayer always grants an item the
 // player does NOT own (rarity is rolled, then an unowned item of that rarity
@@ -24,8 +24,6 @@ export type ItemEffect =
   | { type: "failure_points_floor_bonus"; value: number }             // value = new floor, e.g. 0.15
   /** +N to the growth-check d100 roll. */
   | { type: "interlude_growth_bonus"; value: number }
-  /** 禁物 placeholder — no effect yet（效果尚未覺醒）. */
-  | { type: "dormant" }
   /** Mythos tome: owning it lets the player 銘刻 (bind) its spell to ONE card,
    *  irreversibly. No interlude effect — the power lives in the main game. */
   | { type: "mythos_spell"; spell: string };
@@ -78,17 +76,6 @@ export const ITEM_POOL: ItemDef[] = [
   { id: "cracked_bell", name: "破裂銅鈴", rarity: "rare",
     flavor: "已經不會響了。但有些東西還是會聽見。",
     effect: { type: "failure_points_floor_bonus", value: 0.15 } },
-
-  // ── Epic / 禁物 — dormant placeholders (效果尚未覺醒) ──
-  { id: "blood_reading", name: "血痕解讀", rarity: "epic",
-    flavor: "禁術。讀懂乾涸血跡排列的那一刻，它也在讀你。（效果尚未覺醒）",
-    effect: { type: "dormant" } },
-  { id: "door_crack_peek", name: "門縫窺視", rarity: "epic",
-    flavor: "禁術。從門縫望進去三秒以內是安全的，大概。（效果尚未覺醒）",
-    effect: { type: "dormant" } },
-  { id: "omen_smelling", name: "聞兆", rarity: "epic",
-    flavor: "禁術。壞事發生之前，空氣會先變甜。（效果尚未覺醒）",
-    effect: { type: "dormant" } },
 
   // ── Epic / 禁物 — Mythos tomes（禁咒書頁）. Owning one lets the player 銘刻
   //    its spell to ONE card, irreversibly (docs/design/mythos-skills-v1.md) ──
@@ -156,7 +143,7 @@ export function pickPrayReward(ownedIds: Set<string>, rng: () => number = Math.r
 }
 
 /** The four numbers an equipped item can change on an interlude mission.
- *  Neutral when no/unknown/dormant/off-mission item. */
+ *  Neutral when no/unknown/off-mission item. */
 export interface MissionModifiers {
   /** Added to the success rate (percentage points). */
   rateBonus: number;
@@ -188,7 +175,6 @@ export function computeMissionModifiers(itemId: string | null | undefined, missi
     case "interlude_growth_bonus":
       mods.growthBonus = e.value;
       break;
-    case "dormant":
     case "mythos_spell": // main-game power; interlude numbers untouched
       break;
   }
@@ -220,8 +206,6 @@ export function effectText(item: ItemDef): string {
       return `任務失敗時改獲得 ${Math.round(e.value * 100)}% 點數（原 10%）`;
     case "interlude_growth_bonus":
       return `幕間成長檢定骰 +${e.value}`;
-    case "dormant":
-      return "效果尚未覺醒";
     case "mythos_spell": {
       const spell = mythosSpellByKey(e.spell);
       return `研讀後可將禁咒「${spell?.zh ?? e.spell}」銘刻至一名調查員（不可更改）`;
@@ -232,15 +216,11 @@ export function effectText(item: ItemDef): string {
 /**
  * The second line under effectText: what the item ACTUALLY does once it is on
  * a card. effectText only says a tome "can be inscribed" — it never said what
- * the spell then does, so a player had no way to choose between three tomes,
- * and 禁物 said only "效果尚未覺醒" without admitting that means "nothing".
+ * the spell then does, so a player had no way to choose between three tomes.
  * Returns null for items whose effectText is already the whole story.
  */
 export function effectDetail(item: ItemDef): string | null {
   const e = item.effect;
-  if (e.type === "dormant") {
-    return "此禁物目前沒有任何遊戲效果，純為收藏；效果將於日後版本開放。";
-  }
   if (e.type === "mythos_spell") {
     const spell = mythosSpellByKey(e.spell);
     if (!spell) return null;
