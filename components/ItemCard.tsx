@@ -76,9 +76,12 @@ export interface ItemCardProps {
   action?: ReactNode;
   /** Label beside the action control, e.g. 選擇目標 / 裝備至. */
   actionLabel?: string;
+  /** Rarity chip above the title. Off inside the collection, where the section
+   *  heading already names the rarity and the chip just repeats it. */
+  showRarity?: boolean;
 }
 
-export function ItemCard({ item, owned = true, action, actionLabel }: ItemCardProps) {
+export function ItemCard({ item, owned = true, action, actionLabel, showRarity = true }: ItemCardProps) {
   const accent = RARITY_ACCENT[item.rarity];
   const { a, line, faint, wash } = tones(accent);
   const facts = owned ? itemFacts(item) : null;
@@ -109,15 +112,17 @@ export function ItemCard({ item, owned = true, action, actionLabel }: ItemCardPr
         </div>
 
         <div className="min-w-0 flex-1 pt-0.5">
-          <span
-            className="inline-block text-[10px] px-2 py-0.5 rounded tracking-[0.15em]"
-            style={{ border: `1px solid ${owned ? a(0.45) : "#2a2418"}`, color: owned ? accent : "#52525b", background: "rgba(0,0,0,0.3)" }}
-          >
-            {RARITY_ZH[item.rarity]}
-          </span>
+          {showRarity && (
+            <span
+              className="inline-block text-[10px] px-2 py-0.5 rounded tracking-[0.15em]"
+              style={{ border: `1px solid ${owned ? a(0.45) : "#2a2418"}`, color: owned ? accent : "#52525b", background: "rgba(0,0,0,0.3)" }}
+            >
+              {RARITY_ZH[item.rarity]}
+            </span>
+          )}
 
           <h3
-            className="font-serif text-xl sm:text-2xl mt-1.5 truncate"
+            className={`font-serif text-xl sm:text-2xl truncate ${showRarity ? "mt-1.5" : ""}`}
             style={{ color: owned ? "#e4d8be" : "#52525b", letterSpacing: "0.04em" }}
             title={owned ? item.name : undefined}
           >

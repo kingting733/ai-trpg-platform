@@ -251,6 +251,7 @@ export default function PrayPage() {
                       owned={has}
                       action={action}
                       actionLabel={isTome ? "銘刻對象" : "裝備至"}
+                      showRarity={false}
                     />
                   );
                 })}
