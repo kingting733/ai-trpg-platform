@@ -33,11 +33,16 @@ const OCCUPATION_ICON: Record<string, string> = {
   "走私司機": "/smuggler.png",
 };
 
-const RARITY_ACCENT: Record<CharacterCard["rarity"], { frame: string; chip: string; selectedGlow: string }> = {
-  Common:    { frame: "rgba(201,169,110,0.12)", chip: "border-zinc-600 text-zinc-400",       selectedGlow: "rgba(161,161,170,0.35)" },
-  Rare:      { frame: "rgba(56,189,248,0.28)",  chip: "border-sky-600/70 text-sky-300",      selectedGlow: "rgba(56,189,248,0.35)"  },
-  Epic:      { frame: "rgba(192,132,252,0.28)", chip: "border-purple-500/70 text-purple-300", selectedGlow: "rgba(192,132,252,0.35)" },
-  Legendary: { frame: "rgba(201,169,110,0.45)", chip: "border-amber-500/70 text-amber-300",  selectedGlow: "rgba(201,169,110,0.50)" },
+// Rarity accents. Matches app/characters/page.tsx: the sky/purple tints these
+// used to carry were the only off-palette colours on the card and read as a
+// stray blue outline against the aged-parchment frame, so every tier now sits
+// on gold and rarity shows purely as INTENSITY. This page was simply missed
+// when that change landed.
+const RARITY_ACCENT: Record<CharacterCard["rarity"], { frame: string; selectedGlow: string }> = {
+  Common:    { frame: "rgba(201,169,110,0.12)", selectedGlow: "rgba(201,169,110,0.28)" },
+  Rare:      { frame: "rgba(201,169,110,0.22)", selectedGlow: "rgba(201,169,110,0.34)" },
+  Epic:      { frame: "rgba(201,169,110,0.32)", selectedGlow: "rgba(201,169,110,0.42)" },
+  Legendary: { frame: "rgba(201,169,110,0.45)", selectedGlow: "rgba(201,169,110,0.50)" },
 };
 
 const STAT_ZH: Record<string, string> = {
@@ -187,7 +192,7 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
               )}
 
               <div className="relative">
-                {/* Name + rarity chip */}
+                {/* Portrait + name */}
                 <div className="flex items-center gap-3 mb-4">
                   {card.occupation && OCCUPATION_ICON[card.occupation] ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -201,10 +206,7 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-serif text-base truncate" style={{ color: "#e4d8be" }}>{card.name}</h3>
-                      <span className={`text-xs px-2 py-0.5 rounded border bg-black/30 shrink-0 ${accent.chip}`}>{card.rarity}</span>
-                    </div>
+                    <h3 className="font-serif text-base truncate" style={{ color: "#e4d8be" }}>{card.name}</h3>
                     {card.occupation && (
                       <p className="text-sm mt-0.5" style={{ color: "rgba(201,169,110,0.65)" }}>{card.occupation}</p>
                     )}
