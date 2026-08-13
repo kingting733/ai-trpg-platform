@@ -23,6 +23,7 @@ Multiplayer AI-GM TRPG (Call of Cthulhu-style, zh-TW UI). Next.js 14 app router 
 |---|---|
 | Per-turn game engine (BIG, ~1400 lines — search, don't read whole) | `app/api/gm/respond/route.ts` |
 | GM prompt + JSON contract | `lib/ai/gm.ts` |
+| Shared prose voice (all AI narration) | `lib/ai/style.ts` |
 | Dice/combat/fuzzy NPC targeting | `lib/game/resolution.ts` |
 | Locations, travel, evidence | `lib/game/locations.ts` |
 | Objectives (defs + AI judge) | `lib/game/objectives-def.ts`, `lib/ai/objectives.ts` |
@@ -42,4 +43,5 @@ Multiplayer AI-GM TRPG (Call of Cthulhu-style, zh-TW UI). Next.js 14 app router 
 - `docs/ai-ops/04-maintenance-protocol.md` — how to update these docs + lessons log format
 - `docs/ai-ops/05-letter-to-future-sessions.md` — context, decay risks, harness limits
 - `docs/ai-ops/06-lessons.md` — append-only log of solved bugs and the rules they taught
+- `docs/ai-ops/07-narrative-voice.md` — why the GM reads as AI and the 網文 voice spec (`lib/ai/style.ts`)
 - `docs/design/security-hardening-pass.md` — **scheduled** RLS/service-role hardening pass; execute before any public test (see the doc; do not skip)

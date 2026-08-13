@@ -4,6 +4,7 @@
 
 import type { ScenarioEnding } from "@/lib/game/endings";
 import { thinkingFragment } from "@/lib/ai/settings";
+import { narrativeStyleBlock } from "@/lib/ai/style";
 import type { LedgerEntry } from "@/lib/ai/gm";
 
 // ── AI call (same pattern as objectives.ts) ───────────────────────────────────
@@ -124,7 +125,13 @@ Return ONLY valid JSON, no markdown:
 - title: use the ending's name verbatim, or a 4–7 word poetic variation of it.
 - summary: a vivid epilogue of about 300 words in flowing prose. Describe what happens AFTERWARD — the fate of each character, what becomes of the world or place, how the threads resolve. Personalise it by weaving in the specific actions, choices, and sacrifices shown in STORY FACTS and RECENT STORY. Do not invent characters or events that contradict the story facts. Do not mention game mechanics.
 
-The ENDING DIRECTIVE is the creator's intention for this epilogue — honour it, but expand and personalise it using the actual story history. It is a starting point, not a script.`;
+The ENDING DIRECTIVE is the creator's intention for this epilogue — honour it, but expand and personalise it using the actual story history. It is a starting point, not a script.
+${narrativeStyleBlock(language)}
+EPILOGUE EXCEPTION: the game is over, so unlike in-play narration you MAY state
+what characters finally understood, felt, or decided — the mystery no longer
+needs protecting. Everything else in NARRATIVE VOICE still applies: quote real
+lines of speech, keep paragraphs short and uneven, and show fates through
+concrete scenes rather than summarising them.`;
 
   const user = `ADVENTURE: ${scenarioTitle}
 ENDING REACHED: ${ending.name} (${ending.type})
