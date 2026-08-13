@@ -304,6 +304,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   // Mobile: the suggested-action list can be collapsed to free up the short
   // story window; it re-shows automatically on a new turn.
   const [choicesHidden, setChoicesHidden] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
   const [locGraph, setLocGraph] = useState<LocationGraph | null>(null);
   function toggleSkills(id: string) { setSkillsOpen((p) => ({ ...p, [id]: !p[id] })); }
 
@@ -436,6 +437,11 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   }, [lightboxSrc]);
 
   // The scenario's location graph is static for the whole game — fetch once.
+  // Collapse the 移動 list whenever the turn advances: the exits it is showing
+  // belong to the round it was opened in, and a stale open list invites a
+  // click that no longer means what the player thinks it means.
+  useEffect(() => { setMoveOpen(false); }, [room?.current_round]);
+
   useEffect(() => {
     if (!room?.scenario_id) return;
     const supabase = createClient();
@@ -748,13 +754,27 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
   // ─── Info panels, defined once and rendered in BOTH the desktop sidebar and
   // the mobile per-button popups (地點 / 物品 / 隊伍), so the JSX never diverges.
   const shortLoc = (n: string) => n.split(/[：:，,。．\.\n——–\-（(【\[]/)[0].trim().slice(0, 30);
-  const locationPanel = locGraph && room.location_state && (() => {
-    // Server-authoritative exits from MY character's own node (split-party:
-    // each character stands somewhere; positionOf falls back to the legacy
-    // party position for old rooms). Same math as the GM prompt.
+
+  // Server-authoritative exits from MY character's own node (split-party: each
+  // character stands somewhere; positionOf falls back to the legacy party
+  // position for old rooms). Same math as the GM prompt.
+  //
+  // Computed ONCE here because two surfaces need it — the 地點 panel and the
+  // 移動 button in the suggested actions. Recomputing per surface would let
+  // them disagree about where you can go, which is the worst possible bug in a
+  // control that moves your character.
+  const travel = locGraph && room.location_state ? (() => {
     const ls = coerceLocationState(room.location_state, locGraph);
     const myNode = myCharacter ? positionOf(ls, myCharacter.id, locGraph) : ls.current;
-    const exits = computeExits(locGraph, ls, myNode);
+    return { ls, myNode, exits: computeExits(locGraph, ls, myNode) };
+  })() : null;
+
+  // The 移動 button replaces the third suggestion only when there is somewhere
+  // to actually go.
+  const canMove = (travel?.exits.open.length ?? 0) > 0;
+
+  const locationPanel = locGraph && travel && (() => {
+    const { ls, myNode, exits } = travel;
     const current = locGraph.nodes.find((n) => n.id === myNode);
     const region = current?.container ? locGraph.containers.find((c) => c.id === current.container) : null;
     // Teammates elsewhere (shared party knowledge — everyone sees the map).
@@ -1199,7 +1219,13 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
             </div>
             {!choicesHidden && (
             <div className="grid grid-cols-1 gap-2">
-              {room.current_choices!.map((c, i) => {
+              {/* The third slot is the fixed 移動 button whenever this scenario
+                  actually has somewhere to go, so travel is always one click
+                  away instead of depending on the GM happening to suggest it.
+                  With no open exit (no location graph, or every way out
+                  locked) the AI's third suggestion is shown instead — losing a
+                  suggestion AND getting a dead button would be worse. */}
+              {room.current_choices!.slice(0, canMove ? 2 : 3).map((c, i) => {
                 // Split a "[技能] 行動" choice so the skill tag renders as its own chip.
                 const m = typeof c === "string" ? c.match(/^\s*[\[【]\s*([^\]】]+?)\s*[\]】]\s*([\s\S]*)$/) : null;
                 const tag = m ? m[1].trim() : null;
@@ -1224,6 +1250,67 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                   </button>
                 );
               })}
+
+              {canMove && (
+                <div className="rounded-lg overflow-hidden" style={{ background: "rgba(26,21,14,0.6)", border: "1px solid #2e2416" }}>
+                  <button
+                    type="button"
+                    onClick={() => setMoveOpen((o) => !o)}
+                    disabled={submitting}
+                    aria-expanded={moveOpen}
+                    className="group w-full flex items-center gap-3 text-left px-4 py-3 transition-all disabled:opacity-40 hover:brightness-110"
+                  >
+                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full shrink-0 text-xs text-gold"
+                      style={{ border: "1px solid rgba(201,169,110,0.35)" }}>3</span>
+                    <span className="shrink-0 text-[11px] px-2 py-0.5 rounded-full text-gold inline-flex items-center gap-1"
+                      style={{ background: "rgba(201,169,110,0.12)", border: "1px solid rgba(201,169,110,0.35)" }}>
+                      <MapPin size={11} strokeWidth={2} />移動
+                    </span>
+                    <span className="text-zinc-300 group-hover:text-zinc-100 text-sm">
+                      前往其他地點（{travel!.exits.open.length}）
+                    </span>
+                    <span className="ml-auto text-[11px] text-zinc-500 shrink-0">{moveOpen ? "▴" : "▾"}</span>
+                  </button>
+
+                  {moveOpen && (
+                    <div className="px-3 pb-3 pt-1 flex flex-col gap-1.5" style={{ borderTop: "1px solid #2e2416" }}>
+                      {travel!.exits.open.map((n) => {
+                        const visited = travel!.ls.visited.includes(n.id);
+                        return (
+                          <button
+                            key={n.id}
+                            type="button"
+                            // Submits the bare location name — the same string the
+                            // 地點 panel writes into the action box, so the server's
+                            // resolveTravelIntent sees input it already handles.
+                            onClick={() => { setMoveOpen(false); submitChoice(shortLoc(n.name)); }}
+                            disabled={submitting}
+                            title={n.name}
+                            className="flex items-center gap-2 text-left text-sm rounded-md px-3 py-2 transition-colors disabled:opacity-40 hover:brightness-125"
+                            style={{ background: "rgba(14,12,8,0.5)", border: "1px solid #2a2010" }}
+                          >
+                            <span className="shrink-0 w-4 flex items-center justify-center text-zinc-500">
+                              {visited ? <CircleCheck size={12} strokeWidth={2} /> : <Circle size={10} strokeWidth={2} />}
+                            </span>
+                            <span className={visited ? "text-zinc-500" : "text-zinc-200"}>{shortLoc(n.name)}</span>
+                            {!visited && <span className="ml-auto text-[10px] text-gold/60 shrink-0">未探索</span>}
+                          </button>
+                        );
+                      })}
+                      {/* Locked exits are shown as dead entries, exactly as the
+                          地點 panel already shows them — no new information is
+                          revealed here, and hiding them would make the list look
+                          wrong to anyone who has the panel open. */}
+                      {travel!.exits.locked.map((n) => (
+                        <div key={n.id} className="flex items-center gap-2 text-xs px-3 py-1.5 text-zinc-600">
+                          <span className="shrink-0 w-4 flex items-center justify-center"><Lock size={11} strokeWidth={2} /></span>
+                          {shortLoc(n.name)}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             )}
           </div>
