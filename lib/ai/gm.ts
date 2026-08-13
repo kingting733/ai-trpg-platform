@@ -434,6 +434,7 @@ NARRATION FORMAT:
   • [[chant]]…[[/chant]] — occult words, an incantation, or an eldritch utterance.
   Never decorate ordinary text with these; if in doubt, leave it plain. Most turns should use none.
 - Do NOT use bullet points or numbered lists inside the narration.
+- NEVER print game mechanics in the prose. No "SAN -6", no "HP 8/11", no d100 rolls, no skill percentages, no check names, no success/failure labels. The turn data you are given states these so YOU know what happened — the players see them in the UI already. Show the SAN loss as trembling hands and a swimming vision; never as a number.
 
 INJURY REPORTING RULE:
 - If — and ONLY if — your narration depicts a character (any roster member, OR an NPC) being physically struck, wounded, bitten, burned, or otherwise harmed by an EXTERNAL force (an enemy, monster, trap, hazard, gunfire, fall, explosion, etc.), report it via the "injury" field so the system can roll the actual damage.
