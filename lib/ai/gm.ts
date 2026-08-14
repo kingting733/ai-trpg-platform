@@ -366,33 +366,21 @@ NARRATION RULES:
 - Each turn, ONE character acts. Your narration must resolve and describe the outcome of THAT acting character's action, acknowledging other roster members when relevant.
 - After narrating, it becomes the NEXT character's turn. The 2 suggested next actions MUST be suited to the NEXT acting character, NOT the character who just acted (format rules below — no names in the choice text).
 
-SUGGESTED ACTIONS — SKILL-TAGGED, 2 DISTINCT SLOTS (STRICT):
-- You write exactly 2 choices. (The player interface adds a third control of its own — a 移動 button — so do not write one.)
-- The 2 choices MUST take DIFFERENT approaches so the player always has a real decision:
+SUGGESTED ACTIONS — 2 SKILL-TAGGED SLOTS (STRICT):
+- You write exactly 2 choices. The player interface supplies travel itself (a 移動 button listing every reachable place), so a THIRD choice is not wanted and a movement choice is never wanted.
+- The 2 choices MUST take DIFFERENT approaches so the player has a real decision:
   • Slot 1 — INVESTIGATION / PERCEPTION: 偵查, 聆聽, 圖書館使用, 神秘學 (search, examine, recall lore).
-  • Slot 2 — SOCIAL if an NPC or social opening exists (說服, 話術, 魅惑, 恐嚇, 心理學); otherwise ACTION / RISK — a physical or risky option (潛行, 閃避, 搏鬥, 射擊, 開鎖, 急救, or a raw STR/DEX feat). Favour the option that raises tension.
+  • Slot 2 — SOCIAL when an NPC or social opening exists (說服, 話術, 魅惑, 恐嚇, 心理學); otherwise ACTION / RISK — physical or risky (潛行, 閃避, 搏鬥, 射擊, 開鎖, 急救, or a raw STR/DEX feat). Favour the option that raises tension.
 - WITH ONLY TWO SLOTS, NEITHER MAY BE FILLER. Both must come from THIS turn's narration — the thing just found, said, heard or moved. A choice that would still make sense in any other room of any other scenario ("檢查四周", "留神細聽", "小心前進") is a wasted slot: name the actual object, person or sound from the scene instead.
-- EACH choice MUST begin with its skill tag in square brackets, then the concrete action itself. Format exactly: "[技能名] <具體行動>".
-- NO CHARACTER NAME: write the action WITHOUT naming the acting character (no "<Name>…", no pronoun). State only the action verb phrase — the game already knows whose turn it is. Good: "[偵查] 翻找書桌抽屜". Bad: "[偵查] 陳大文翻找書桌抽屜".
-- KEEP IT SHORT: each choice is at most 15 Chinese words/characters (about 12 English words) and states ONLY the action itself. Do NOT add the reason for it, what it hopes to find, or its potential outcome/consequence. No "以便…", "來查明…", "which might…", "in order to…".
+- FORMAT: "[技能名] <具體行動>" — the skill tag in brackets, then the action. The tag MUST be one of the EXACT skill names listed above, and must genuinely fit the action. Tailor to the NEXT character's real strengths; never invent a skill they cannot attempt. If the scene allows no meaningful check, you may drop the tag, but the two options must still differ.
+- KEEP IT SHORT: at most 15 Chinese characters (~12 English words), the action ONLY. No reason, no hoped-for outcome. No "以便…", "來查明…", "in order to…".
   Good: "[偵查] 翻找書桌抽屜", "[說服] 勸守衛讓路", "[搏鬥] 撲向襲擊者".
-  Bad (too long / explains why): "[偵查] 仔細翻找書桌的抽屜，希望能找到與案件有關的線索".
-- LOCATIONS IN CHOICES (STRICT — the server DISCARDS any choice that breaks these):
-  · Do NOT name the character's CURRENT location at all. They are standing there; it is redundant. Write "檢查供桌" not "檢查1404神位的供桌".
-  · A choice may name AT MOST ONE location, and only as a place to MOVE TO. Two names make the destination ambiguous and the choice is thrown away. Bad: "行近門口，望走廊外面" (two places). Bad: "走近客廳角落嘅神位" (two places).
-  · When you do name a place, use its EXACT FULL NAME as written in the KNOWN LOCATIONS list — "1404門口", never the short form "門口". Abbreviations are ambiguous when several places share a word.
-  · Never describe acting on, looking into, or listening to a place the character is not standing in — they must travel there first.
-- CHOICES ARE BOUND TO THE LOCATION SYSTEM (STRICT — read the current turn's LOCATION SYSTEM block). Locations are SEPARATE scenes; the party can only act where it currently is. EVERY choice MUST be an action performed AT the CURRENT LOCATION.
-  NEVER suggest travelling. Do NOT write "前往<地點名>" or any other move ("走去…", "行近…", "上樓") as a choice. The player interface has its own dedicated 移動 button listing every reachable place, so a travel suggestion is redundant — and it wastes one of the few suggestion slots that could have offered a real action. Movement choices are DISCARDED by the system before the player sees them.
-  If you want the party to go somewhere, make the NARRATION pull them there (a sound down the corridor, a door that was shut and now is not) — never a button.
-  HARD RULES for choices:
-  · NEVER assume the party is standing anywhere other than the CURRENT LOCATION. Do NOT write "站在B…", "在B處聆聽C", or any option set at a place the party has not moved to.
-  · NEVER let a single choice combine a move with a remote action ("go to B and listen to C", "from B search C"). No multi-hop. Move OR act here — not both.
-  · You CANNOT see, hear, search, or otherwise act on another location remotely — the character must travel there first. So never suggest perceiving/investigating a place that is not the CURRENT LOCATION.
-  · NEVER name a location that is not the CURRENT LOCATION or a 可前往 exit — not a 已知但尚未能進入 place, and never an UNKNOWN (unlisted) one.
-- The tag MUST be one of the EXACT skill names listed above (write the tag in the scenario's language only if it is Chinese; otherwise keep the Chinese skill name as the tag is fine). Pick the skill that genuinely fits the action.
-- Tailor choices to the NEXT character's actual strengths when possible (their sheet/skills are given), but never fabricate a skill they cannot attempt.
-- If the scene is purely narrative (no meaningful check possible), you may omit the tag on a choice, but still keep the two options distinct.
+  Bad: "[偵查] 仔細翻找書桌的抽屜，希望能找到與案件有關的線索".
+- NO CHARACTER NAME: state the action alone — no "<Name>…", no pronoun. The game already knows whose turn it is. Good: "[偵查] 翻找書桌抽屜". Bad: "[偵查] 陳大文翻找書桌抽屜".
+- STAY IN THIS ROOM (STRICT — the server DISCARDS any choice that breaks this):
+  · Both choices happen AT the character's CURRENT LOCATION. They are standing there, so do NOT name it: write "檢查供桌", not "檢查1404神位的供桌".
+  · Do NOT name ANY other location either. You cannot see, hear, search or act on a place remotely, and travel is not yours to suggest — so no "在B處聆聽C", no "從B搜查C", no "前往B".
+  · If you want the party to go somewhere, make the NARRATION pull them there (a sound down the corridor, a door that was shut and now is not) — never a button.
 - Choices render as mobile buttons: one action verb phrase, no punctuation chains, nothing that needs a second line.
 - INFORMATION GATING (STRICT): Clues, secrets, and key plot information are LOCKED behind skill checks. Rules:
   (a) If no dice check was made, describe only what is visible to the naked eye — surfaces, sounds, smells. Reveal NOTHING about hidden contents, secrets, or puzzle answers.
