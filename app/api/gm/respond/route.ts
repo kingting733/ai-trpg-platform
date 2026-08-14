@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateGMResponseStreaming, sanitizeChoicesWithMeta, CHOICE_COUNT, GMAIInput, ScenarioGMContext, LedgerEntry, NpcEntry } from "@/lib/ai/gm";
+import { generateGMResponseStreaming, sanitizeChoicesWithMeta, summarizeRejections, CHOICE_COUNT, GMAIInput, ScenarioGMContext, LedgerEntry, NpcEntry } from "@/lib/ai/gm";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -1615,6 +1615,14 @@ export async function POST(request: Request) {
         );
         if (sanitizedIso.kept > 0) {
           gmResponse.choices = sanitizedIso.choices;
+          if (sanitizedIso.kept < CHOICE_COUNT) {
+            console.warn(
+              `[choices:reject] split-party ${nextActor?.name ?? "next actor"} @ ${nextActorNode}: ` +
+              `kept ${sanitizedIso.kept}/${CHOICE_COUNT}, backfilled ${CHOICE_COUNT - sanitizedIso.kept}. ` +
+              `Dropped: ${summarizeRejections(sanitizedIso.rejected)}. ` +
+              `Raw: ${JSON.stringify(sanitizedIso.rejected.map((r) => r.choice))}`
+            );
+          }
         } else {
           gmResponse.choices = sceneFallbacks.slice(0, CHOICE_COUNT);
           // Say WHY: an empty `isolated` means the AI call itself failed (see
@@ -1625,11 +1633,12 @@ export async function POST(request: Request) {
             `[scene-choices] composed fallback used for ${nextActor?.name ?? "next actor"} at ${nextActorNode}. ` +
             (isolated.length === 0
               ? "Cause: the isolated AI call returned nothing (check the [scene-choices] callAI error above)."
-              : `Cause: all ${isolated.length} suggestion(s) failed validation: ${JSON.stringify(isolated)}`)
+              : `Cause: all ${isolated.length} suggestion(s) failed validation ` +
+                `(${summarizeRejections(sanitizedIso.rejected)}): ${JSON.stringify(isolated)}`)
           );
         }
       } else {
-        gmResponse.choices = sanitizeChoicesWithMeta(
+        const sanitizedSame = sanitizeChoicesWithMeta(
           gmResponse.choices,
           partyForAI.map((c) => c.name),
           locationGraph,
@@ -1643,7 +1652,19 @@ export async function POST(request: Request) {
                 6,
               )
             : [],
-        ).choices;
+        );
+        gmResponse.choices = sanitizedSame.choices;
+        // Backfill used to happen silently here: `kept` was computed and
+        // thrown away, so a turn where every suggestion was rejected looked
+        // exactly like a healthy one in the logs.
+        if (sanitizedSame.kept < CHOICE_COUNT) {
+          console.warn(
+            `[choices:reject] same-node ${nextActor?.name ?? "next actor"} @ ${choicesNode ?? "(no graph)"}: ` +
+            `kept ${sanitizedSame.kept}/${CHOICE_COUNT}, backfilled ${CHOICE_COUNT - sanitizedSame.kept}. ` +
+            `Dropped: ${summarizeRejections(sanitizedSame.rejected) || "(none — the GM returned too few)"}. ` +
+            `Raw: ${JSON.stringify(sanitizedSame.rejected.map((r) => r.choice))}`
+          );
+        }
       }
     }
 

@@ -1043,6 +1043,26 @@ const DEFAULT_CHOICES = ["[偵查] 檢查四周", "[聆聽] 留神細聽", "[潛
  *  - always return exactly 3 non-empty choices (zh-TW defaults backfill)
  * Pass graph/state as null for scenarios without a location system.
  */
+/** Why a suggested choice was thrown away. Logged per turn so the rejection
+ *  RATE and its causes are visible instead of inferred — a silently backfilled
+ *  choice list looks identical to a healthy one. */
+export type RejectReason =
+  | "empty"
+  | "roster-name"
+  | "forbidden-location"
+  | "scene-binding"
+  | "move"
+  | "phantom-travel";
+
+export interface RejectedChoice { choice: string; reason: RejectReason }
+
+/** One-line summary for logs: "move x1, roster-name x1". */
+export function summarizeRejections(rejected: RejectedChoice[]): string {
+  const counts: Record<string, number> = {};
+  for (const r of rejected) counts[r.reason] = (counts[r.reason] ?? 0) + 1;
+  return Object.entries(counts).map(([r, n]) => `${r} x${n}`).join(", ");
+}
+
 export function sanitizeChoices(
   raw: unknown,
   rosterNames: string[],
@@ -1073,7 +1093,7 @@ export function sanitizeChoicesWithMeta(
   /** Scene-derived backfill, best first (see composeSceneChoices). Preferred
    *  over the generic defaults when the GM's own choices are rejected. */
   sceneFallbacks: string[] = [],
-): { choices: string[]; kept: number } {
+): { choices: string[]; kept: number; rejected: RejectedChoice[] } {
   const list = Array.isArray(raw) ? raw.filter((c): c is string => typeof c === "string") : [];
 
   // Location names the GM may mention in a choice: the NEXT actor's node +
@@ -1104,6 +1124,8 @@ export function sanitizeChoicesWithMeta(
   }
 
   const out: string[] = [];
+  const rejected: RejectedChoice[] = [];
+  const drop = (choice: string, reason: RejectReason) => { rejected.push({ choice, reason }); };
   for (const rawChoice of list) {
     const c = rawChoice.trim();
     if (!c) continue;
@@ -1118,12 +1140,12 @@ export function sanitizeChoicesWithMeta(
         break;
       }
     }
-    if (!body) continue;
+    if (!body) { drop(c, "empty"); continue; }
     // A choice that still mentions ANY roster character is about someone else's
     // scene ("檢查阿明找到的紅紙") — choices belong to the next actor alone.
-    if (rosterNames.some((name) => name && body.includes(name))) continue;
+    if (rosterNames.some((name) => name && body.includes(name))) { drop(c, "roster-name"); continue; }
     // Choices must never point at locked/hidden/unreachable places.
-    if (forbidden.some((f) => body.includes(f))) continue;
+    if (forbidden.some((f) => body.includes(f))) { drop(c, "forbidden-location"); continue; }
     // SCENE BINDING. A choice may name another place only as a travel
     // DESTINATION — never as somewhere the character acts, searches or listens,
     // since they are not standing there. Reachability alone could not tell those
@@ -1131,7 +1153,7 @@ export function sanitizeChoicesWithMeta(
     // how split-party players ended up receiving each other's options.
     if (graph && state) {
       const verdict = classifyChoiceLocation(body, graph, state, forNode ?? state.current);
-      if (verdict.kind === "reject") continue;
+      if (verdict.kind === "reject") { drop(c, "scene-binding"); continue; }
       // Normalize movement to the canonical form so the travel matcher always
       // resolves it — 「行近1404門口，仔細觀察」 previously failed both the verb
       // check and the bare-name residue guard, so clicking it did nothing.
@@ -1140,12 +1162,14 @@ export function sanitizeChoicesWithMeta(
         // reachable place. A suggested move duplicates it and burns a slot
         // that could have carried a real action, so drop it here rather than
         // trusting the model to have obeyed the prompt.
+        drop(c, "move");
         continue;
       } else if (verdict.kind === "ok" && /^(前往|去|走去|前住)/.test(body)) {
         // A 前往… that did NOT classify as a move names a place the graph does
         // not have (an invented location), or the character's own node. Either
         // way clicking it can never move anyone — the travel matcher has nothing
         // to resolve — so it would be a button that silently does nothing.
+        drop(c, "phantom-travel");
         continue;
       }
     }
@@ -1163,5 +1187,5 @@ export function sanitizeChoicesWithMeta(
     if (f && !out.includes(f)) out.push(f);
   }
   while (out.length < CHOICE_COUNT) out.push(DEFAULT_CHOICES[out.length % DEFAULT_CHOICES.length]);
-  return { choices: out.slice(0, CHOICE_COUNT), kept };
+  return { choices: out.slice(0, CHOICE_COUNT), kept, rejected };
 }
