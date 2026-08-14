@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { currentSkillValue, SKILL_KEY_BY_ZH } from "@/lib/game/skills";
 import { endingAllowsGrowth } from "@/lib/game/endings";
 import { MYTHOS_SPELLS, MYTHOS_ZH_BY_KEY, MYTHOS_KEY_BY_ZH, MYTHOS_MP_COST, mythosSuccessRate } from "@/lib/game/mythos";
+import { CHOICE_COUNT } from "@/lib/ai/gm";
 import { coerceLocationGraph, coerceLocationState, computeExits, positionOf, type LocationGraph } from "@/lib/game/locations";
 import { ChatDrawer } from "@/components/ChatDrawer";
 import {
@@ -1205,7 +1206,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
         </div>
 
         {/* Suggested choices — only shown if they were generated FOR the current turn player */}
-        {isMyTurn && choicesAreForMe && (room.current_choices?.length ?? 0) === 3 && hasStarted && (
+        {isMyTurn && choicesAreForMe && (room.current_choices?.length ?? 0) > 0 && hasStarted && (
           <div className="flex flex-col gap-2 shrink-0">
             <div className="flex items-center justify-between">
               <p className="text-xs tracking-wider"><span className="text-gold font-medium">建議行動</span> <span className="text-zinc-600">— 或在下方輸入自己的行動</span></p>
@@ -1225,7 +1226,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                   With no open exit (no location graph, or every way out
                   locked) the AI's third suggestion is shown instead — losing a
                   suggestion AND getting a dead button would be worse. */}
-              {room.current_choices!.slice(0, canMove ? 2 : 3).map((c, i) => {
+              {room.current_choices!.slice(0, CHOICE_COUNT).map((c, i) => {
                 // Split a "[技能] 行動" choice so the skill tag renders as its own chip.
                 const m = typeof c === "string" ? c.match(/^\s*[\[【]\s*([^\]】]+?)\s*[\]】]\s*([\s\S]*)$/) : null;
                 const tag = m ? m[1].trim() : null;

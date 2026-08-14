@@ -173,7 +173,7 @@ export interface GMAIInput {
 
 export interface GMResponseWithChoices {
   narration: string;
-  choices: [string, string, string];
+  choices: string[];
   /** 0-2 short player-visible facts to persist in the story ledger (e.g. "found the key"). */
   memory?: string[];
   /**
@@ -358,19 +358,20 @@ You are not only a narrator — you are the story's engine. Your job is to move 
 STORY-GUIDING ACTIONS you may always take regardless of what the player does:
 - Have NPCs pursue their own agendas and appear when dramatically appropriate — they don't just wait for players to find them.
 - Let the environment react in small, information-free ways: a door slams, a light flickers, a smell drifts in.
-- Always ensure at least ONE of your 3 suggested choices points toward an unexplored story thread or unmet clue — guide the party's attention naturally.
+- Always ensure at least ONE of your 2 suggested choices points toward an unexplored story thread or unmet clue — guide the party's attention naturally.
 
 NARRATION RULES:
 - This is a MULTIPLAYER game. Narrate in THIRD PERSON as a neutral Game Master.
 - NEVER use "you". Refer to every character by their exact roster name.
 - Each turn, ONE character acts. Your narration must resolve and describe the outcome of THAT acting character's action, acknowledging other roster members when relevant.
-- After narrating, it becomes the NEXT character's turn. The 3 suggested next actions MUST be suited to the NEXT acting character, NOT the character who just acted (format rules below — no names in the choice text).
+- After narrating, it becomes the NEXT character's turn. The 2 suggested next actions MUST be suited to the NEXT acting character, NOT the character who just acted (format rules below — no names in the choice text).
 
-SUGGESTED ACTIONS — SKILL-TAGGED, 3 DISTINCT SLOTS (STRICT):
-- The 3 choices MUST map to three DIFFERENT approaches so players always have variety. Use these slots:
+SUGGESTED ACTIONS — SKILL-TAGGED, 2 DISTINCT SLOTS (STRICT):
+- You write exactly 2 choices. (The player interface adds a third control of its own — a 移動 button — so do not write one.)
+- The 2 choices MUST take DIFFERENT approaches so the player always has a real decision:
   • Slot 1 — INVESTIGATION / PERCEPTION: 偵查, 聆聽, 圖書館使用, 神秘學 (search, examine, recall lore).
-  • Slot 2 — SOCIAL / INSIGHT: 說服, 話術, 魅惑, 恐嚇, 心理學 (only when an NPC or social opening exists; otherwise use another investigation/perception or 急救 option).
-  • Slot 3 — ACTION / RISK: a physical or risky option — 潛行, 閃避, 搏鬥, 射擊, 開鎖, 駕駛汽車, 急救, or a raw physical feat (STR/DEX). Favour the option that raises tension.
+  • Slot 2 — SOCIAL if an NPC or social opening exists (說服, 話術, 魅惑, 恐嚇, 心理學); otherwise ACTION / RISK — a physical or risky option (潛行, 閃避, 搏鬥, 射擊, 開鎖, 急救, or a raw STR/DEX feat). Favour the option that raises tension.
+- WITH ONLY TWO SLOTS, NEITHER MAY BE FILLER. Both must come from THIS turn's narration — the thing just found, said, heard or moved. A choice that would still make sense in any other room of any other scenario ("檢查四周", "留神細聽", "小心前進") is a wasted slot: name the actual object, person or sound from the scene instead.
 - EACH choice MUST begin with its skill tag in square brackets, then the concrete action itself. Format exactly: "[技能名] <具體行動>".
 - NO CHARACTER NAME: write the action WITHOUT naming the acting character (no "<Name>…", no pronoun). State only the action verb phrase — the game already knows whose turn it is. Good: "[偵查] 翻找書桌抽屜". Bad: "[偵查] 陳大文翻找書桌抽屜".
 - KEEP IT SHORT: each choice is at most 15 Chinese words/characters (about 12 English words) and states ONLY the action itself. Do NOT add the reason for it, what it hopes to find, or its potential outcome/consequence. No "以便…", "來查明…", "which might…", "in order to…".
@@ -391,7 +392,7 @@ SUGGESTED ACTIONS — SKILL-TAGGED, 3 DISTINCT SLOTS (STRICT):
   · NEVER name a location that is not the CURRENT LOCATION or a 可前往 exit — not a 已知但尚未能進入 place, and never an UNKNOWN (unlisted) one.
 - The tag MUST be one of the EXACT skill names listed above (write the tag in the scenario's language only if it is Chinese; otherwise keep the Chinese skill name as the tag is fine). Pick the skill that genuinely fits the action.
 - Tailor choices to the NEXT character's actual strengths when possible (their sheet/skills are given), but never fabricate a skill they cannot attempt.
-- If the scene is purely narrative (no meaningful check possible), you may omit the tag on a choice, but still keep the three options distinct.
+- If the scene is purely narrative (no meaningful check possible), you may omit the tag on a choice, but still keep the two options distinct.
 - Choices render as mobile buttons: one action verb phrase, no punctuation chains, nothing that needs a second line.
 - INFORMATION GATING (STRICT): Clues, secrets, and key plot information are LOCKED behind skill checks. Rules:
   (a) If no dice check was made, describe only what is visible to the naked eye — surfaces, sounds, smells. Reveal NOTHING about hidden contents, secrets, or puzzle answers.
@@ -453,7 +454,7 @@ OUTPUT FORMAT — every turn, respond in exactly TWO parts, in this order, with 
 PART 1 — the narration ONLY: plain prose, paragraphs separated by blank lines (\\n\\n), **bold** for emphasis, exactly as described in NARRATION FORMAT above. Do NOT wrap it in JSON, quotes, or markdown fences. Do NOT prefix it with any preamble, label, or your reasoning — the FIRST character you output must be the first character of the narration itself.
 PART 2 — on its own, put the line: <<<DATA>>>
 Then, immediately after that line, ONE valid JSON object (no markdown fences) with everything EXCEPT the narration text (which you already wrote in Part 1):
-{"choices":["[技能名] <investigation/perception action>","[技能名] <social/insight action>","[技能名] <physical/risk action>"],"memory":["<0 to 2 short player-visible facts worth remembering, e.g. found a key, met an NPC. Omit if nothing notable happened.>"],"injury":{"target":"<exact roster name or NPC name>","is_npc":<true|false>,"severity":"<minor|moderate|serious|severe>","reason":"<short cause>","npc_max_hp":<only for new NPCs, omit otherwise>},"items":{"acquired":[{"name":"<item>","note":"<short where/how>"}],"consumed":["<held item name>"]},"move_to":"<EXACT name of the 可前往 location the party moves to this turn, or null>","npc_calmed":"<name of a hostile NPC your narration just turned non-hostile / made peace with, or null>" }
+{"choices":["[技能名] <investigation/perception action>","[技能名] <social, physical or risk action>"],"memory":["<0 to 2 short player-visible facts worth remembering, e.g. found a key, met an NPC. Omit if nothing notable happened.>"],"injury":{"target":"<exact roster name or NPC name>","is_npc":<true|false>,"severity":"<minor|moderate|serious|severe>","reason":"<short cause>","npc_max_hp":<only for new NPCs, omit otherwise>},"items":{"acquired":[{"name":"<item>","note":"<short where/how>"}],"consumed":["<held item name>"]},"move_to":"<EXACT name of the 可前往 location the party moves to this turn, or null>","npc_calmed":"<name of a hostile NPC your narration just turned non-hostile / made peace with, or null>" }
 Never put "<<<DATA>>>" or JSON anywhere inside the narration text itself.
 If your narration is running long, SHORTEN THE NARRATION — the <<<DATA>>> line and the complete JSON must always fit. An unfinished JSON object is a failed turn.`;
 }
@@ -466,6 +467,12 @@ If your narration is running long, SHORTEN THE NARRATION — the <<<DATA>>> line
  * into the rolling story summary, so only the recent tail needs to be sent raw.
  */
 export const LEDGER_TURN_LIMIT = 20;
+
+/** How many AI suggestions a turn asks for. Two, not three: the player UI's
+ *  third slot is the fixed 移動 button, so a third suggestion is generated,
+ *  paid for, and then thrown away. Referenced by the prompt, the response
+ *  validator and the sanitizer so they can never disagree. */
+export const CHOICE_COUNT = 2;
 
 /**
  * DYNAMIC per-turn user message — everything that changes each turn. Placed
@@ -526,7 +533,7 @@ Narrate the outcome of ${input.actingCharacterName}'s action following the NARRA
     input.npcActionDirective
       ? ` YOUR NARRATION MUST CONTAIN BOTH BEATS, IN ORDER: (1) the outcome of ${input.actingCharacterName}'s action above, then (2) EVERY attack listed in NPC ACTIONS THIS TURN. The HP has ALREADY been deducted and the players can see it — a narration that omits the NPC's attack contradicts their own screen and is a FAILED response. If a character is marked DOWN, their collapse is the final beat of the narration; never continue as though they are still standing.`
       : ""
-  } Then suggest 3 skill-tagged next actions for ${input.nextCharacterName} (whose turn is now active) per the SUGGESTED ACTIONS rules. Respond in the exact TWO-PART format specified in the system prompt: the narration prose first, then the "<<<DATA>>>" line, then the JSON object (choices, memory, injury, items, move_to, npc_calmed).`;
+  } Then suggest exactly 2 skill-tagged next actions for ${input.nextCharacterName} (whose turn is now active) per the SUGGESTED ACTIONS rules. Respond in the exact TWO-PART format specified in the system prompt: the narration prose first, then the "<<<DATA>>>" line, then the JSON object (choices, memory, injury, items, move_to, npc_calmed).`;
 }
 
 // Context-sensitive guidance for critical outcomes, keyed by stat and action text.
@@ -969,7 +976,7 @@ export async function generateGMResponseStreaming(
       // would reject a perfectly good response (and did: it threw away the whole
       // narration and surfaced the parse-failure text).
       const choicesOk = Array.isArray(parsed.choices)
-        && (input.expectChoices === false || parsed.choices.length === 3);
+        && (input.expectChoices === false || parsed.choices.length === CHOICE_COUNT);
       if (narration && choicesOk) {
         return { narration, ...parsed };
       }
@@ -1043,8 +1050,9 @@ export function sanitizeChoices(
   state: LocationState | null,
   forNode?: string | null,
   forbiddenExtra?: string[],
-): [string, string, string] {
-  return sanitizeChoicesWithMeta(raw, rosterNames, graph, state, forNode, forbiddenExtra).choices;
+  sceneFallbacks?: string[],
+): string[] {
+  return sanitizeChoicesWithMeta(raw, rosterNames, graph, state, forNode, forbiddenExtra, sceneFallbacks).choices;
 }
 
 /**
@@ -1062,7 +1070,10 @@ export function sanitizeChoicesWithMeta(
   /** Extra substrings to reject — e.g. object/evidence names that belong to a
    *  DIFFERENT character's scene, which must not leak into these choices. */
   forbiddenExtra?: string[],
-): { choices: [string, string, string]; kept: number } {
+  /** Scene-derived backfill, best first (see composeSceneChoices). Preferred
+   *  over the generic defaults when the GM's own choices are rejected. */
+  sceneFallbacks: string[] = [],
+): { choices: string[]; kept: number } {
   const list = Array.isArray(raw) ? raw.filter((c): c is string => typeof c === "string") : [];
 
   // Location names the GM may mention in a choice: the NEXT actor's node +
@@ -1140,9 +1151,17 @@ export function sanitizeChoicesWithMeta(
     }
     if (body.length > 22) body = body.slice(0, 20) + "…";
     out.push(tag ? `${tag} ${body}` : body);
-    if (out.length === 3) break;
+    if (out.length === CHOICE_COUNT) break;
   }
   const kept = out.length;
-  while (out.length < 3) out.push(DEFAULT_CHOICES[out.length]);
-  return { choices: [out[0], out[1], out[2]], kept };
+  // Backfill prefers SCENE-DERIVED options (an unsearched clue's 取得方式, an
+  // NPC standing here) over the generic trio — "留神細聽" is true in every room
+  // of every scenario, which makes it a wasted button. Generic lines remain the
+  // last resort for a scene that offers literally nothing.
+  for (const f of [...sceneFallbacks, ...DEFAULT_CHOICES]) {
+    if (out.length >= CHOICE_COUNT) break;
+    if (f && !out.includes(f)) out.push(f);
+  }
+  while (out.length < CHOICE_COUNT) out.push(DEFAULT_CHOICES[out.length % DEFAULT_CHOICES.length]);
+  return { choices: out.slice(0, CHOICE_COUNT), kept };
 }

@@ -1316,7 +1316,10 @@ export function matchEvidence(
 // unfound clue's 取得方式 when present), a placed NPC to engage, an open exit
 // to move to, backfilled with the same generic trio sanitizeChoices uses.
 
-const COMPOSE_FALLBACKS = ["[偵查] 檢查四周", "[聆聽] 留神細聽", "[潛行] 小心前進"];
+// Last-resort generic lines. Deliberately physical rather than abstract —
+// "留神細聽" is true in every room of every scenario and reads as filler;
+// something the character DOES with a surface still gives the player an image.
+const COMPOSE_FALLBACKS = ["[偵查] 翻找角落的雜物", "[聆聽] 貼著牆聽動靜", "[潛行] 貼著暗處挪動"];
 
 /** Split open exits into never-reached vs already-seen. `state.visited` is
  *  SHARED party knowledge (first visit by anyone counts), which is the right
@@ -1336,6 +1339,15 @@ export function partitionExitsByNovelty(
   };
 }
 
+/**
+ * Scene-derived suggestions, best first — used BOTH as the deterministic floor
+ * when the AI produced nothing usable, and as sanitizeChoices' backfill pool.
+ *
+ * Every entry names something that actually exists at this node (a clue the
+ * creator wrote a 取得方式 for, an NPC standing here, a clue already found), so
+ * even the fallback path says something about THIS place. Generic lines are
+ * appended only to reach the required count.
+ */
 export function composeSceneChoices(
   graph: LocationGraph,
   state: LocationState,
@@ -1344,21 +1356,31 @@ export function composeSceneChoices(
   objectiveProgress: ObjectiveProgressLike = {},
   npcRoster: NpcRef[] = [],
   npcAlive?: (ref: string) => boolean,
-): [string, string, string] {
+  count: number = 2,
+): string[] {
   const node = graph.nodes.find((n) => n.id === nodeId);
   const out: string[] = [];
+  const clip = (t: string) => (t.length > 20 ? t.slice(0, 20) + "…" : t);
 
-  // 1. Investigate — the creator's own 取得方式 for a clue still hidden here.
-  const unfoundHow = node?.evidence
+  // 1. Investigate — the creator's own 取得方式 for EVERY clue still hidden
+  //    here, not just the first: two unsearched clues means two real options.
+  for (const how of (node?.evidence ?? [])
     .filter((e) => !state.evidence_found.includes(e.id))
     .map((e) => e.how.trim())
-    .find(Boolean);
-  out.push(unfoundHow ? `[偵查] ${unfoundHow.length > 20 ? unfoundHow.slice(0, 20) + "…" : unfoundHow}` : COMPOSE_FALLBACKS[0]);
+    .filter(Boolean)) {
+    out.push(`[偵查] ${clip(how)}`);
+  }
 
   // 2. Engage — an NPC actually placed at this node (and still alive).
   const npcHere = evaluateNpcPlacements(graph, state, currentRound, objectiveProgress, nodeId)
     .filter((ref) => (npcAlive ? npcAlive(ref) : true));
-  if (npcHere.length) out.push(`與${npcDisplayName(npcHere[0], npcRoster)}交談`);
+  for (const ref of npcHere) out.push(`與${npcDisplayName(ref, npcRoster)}交談`);
+
+  // 3. Re-examine something already found HERE. Weaker than a fresh lead, but
+  //    it still names a real object from this scene rather than nothing.
+  for (const ev of (node?.evidence ?? []).filter((e) => state.evidence_found.includes(e.id))) {
+    if (ev.name?.trim()) out.push(`[偵查] 再看一次${clip(ev.name.trim())}`);
+  }
 
   // NO move option. Travel is the player UI's dedicated 移動 button, which
   // lists every reachable place; a suggested 前往 duplicates it and burns a
@@ -1367,10 +1389,10 @@ export function composeSceneChoices(
   // everything), so the rule has to be enforced right here or it leaks.
 
   for (const f of COMPOSE_FALLBACKS) {
-    if (out.length >= 3) break;
+    if (out.length >= count) break;
     if (!out.includes(f)) out.push(f);
   }
-  return [out[0], out[1], out[2]];
+  return out.slice(0, count);
 }
 
 // ── GM directive block ────────────────────────────────────────────────────────

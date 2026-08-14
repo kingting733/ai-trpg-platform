@@ -15,6 +15,7 @@
 // composeSceneChoices (deterministic, creator-authored data).
 
 import { callAI } from "@/lib/ai/objectives";
+import { CHOICE_COUNT } from "@/lib/ai/gm";
 
 export interface SceneChoicesInput {
   /** The character these 3 buttons are for. */
@@ -48,7 +49,7 @@ export interface SceneChoicesInput {
 /** Pure prompt builder — testable, and the isolation guarantee lives here:
  *  the input type simply has no field that could carry another scene. */
 export function buildSceneChoicesPrompt(input: SceneChoicesInput): { system: string; user: string } {
-  const system = `你是跑團平台的「建議行動」產生器。你只知道下面描述的這一個場景，為指定角色寫出 3 個此刻可行的建議行動按鈕。
+  const system = `你是跑團平台的「建議行動」產生器。你只知道下面描述的這一個場景，為指定角色寫出 2 個此刻可行的建議行動按鈕。
 
 規則（嚴格）：
 1. 只能根據下面提供的場景資訊。不要發明這裡沒提到的人物、物件或地點。
@@ -60,10 +61,13 @@ export function buildSceneChoicesPrompt(input: SceneChoicesInput): { system: str
    而且會白白佔掉一個本來可以給真正行動的欄位。移動建議會被系統直接丟棄。
    一個行動最多只能提到一個地點，而且要用完整名稱（例如「1404門口」，不可簡寫成「門口」）。
    提到兩個地點的行動會被系統直接丟棄（例如「行近門口，望走廊外面」）。
-4. 三個行動要彼此不同（例如：一個調查、一個社交/聆聽、一個謹慎或冒險的行動）。
+4. 兩個行動要彼此不同（例如：一個調查、一個社交或冒險的行動）。
    **最重要**：如果有提供「眼前最新的情況」，行動必須直接回應那段敘述裡剛發生的事、剛出現的東西或剛聽到的聲音，
    不要寫「檢查四周」這種放諸四海皆準的空泛選項。
-5. 只輸出一個 JSON 陣列，例如 ["[偵查] 檢查供桌","與王伯交談","[聆聽] 貼著門板細聽"]。不要任何其他文字。`;
+5. **只有兩格，兩格都不可以是廢話。**兩個行動都必須扣住「眼前最新的情況」裡剛發生的事、
+   剛出現的東西或剛聽到的聲音，並且指名那個具體的東西。像「檢查四周」「留神細聽」「小心前進」
+   這種放到任何場景都成立的選項，等於浪費一格。
+6. 只輸出一個 JSON 陣列，例如 ["[偵查] 掀開供桌下的紅布","與王伯交談"]。不要任何其他文字。`;
 
   const lines: string[] = [];
   lines.push(`角色：${input.characterName}`);
@@ -93,7 +97,7 @@ export function parseSceneChoices(raw: string): string[] {
     try {
       const arr = JSON.parse(text.slice(start, end + 1));
       if (Array.isArray(arr)) {
-        return arr.filter((x): x is string => typeof x === "string" && x.trim().length > 0).map((x) => x.trim()).slice(0, 3);
+        return arr.filter((x): x is string => typeof x === "string" && x.trim().length > 0).map((x) => x.trim()).slice(0, CHOICE_COUNT);
       }
     } catch {
       // fall through to line splitting
@@ -103,7 +107,7 @@ export function parseSceneChoices(raw: string): string[] {
     .split("\n")
     .map((l) => l.replace(/^[\s\-*\d.、]+/, "").trim())
     .filter((l) => l.length >= 2 && l.length <= 40 && !/^```/.test(l))
-    .slice(0, 3);
+    .slice(0, CHOICE_COUNT);
 }
 
 /**

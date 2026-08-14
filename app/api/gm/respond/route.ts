@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateGMResponseStreaming, sanitizeChoicesWithMeta, GMAIInput, ScenarioGMContext, LedgerEntry, NpcEntry } from "@/lib/ai/gm";
+import { generateGMResponseStreaming, sanitizeChoicesWithMeta, CHOICE_COUNT, GMAIInput, ScenarioGMContext, LedgerEntry, NpcEntry } from "@/lib/ai/gm";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -1599,20 +1599,24 @@ export async function POST(request: Request) {
               new Promise<string[]>((resolve) => setTimeout(() => resolve([]), 20000)),
             ])
           : [];
+        const sceneFallbacks = composeSceneChoices(
+          locationGraph, locState, nextActorNode, room.current_round, objProgress, npcRoster,
+          (ref) => npcStateEntry(ref, npcRoster, npcStateNow)?.alive !== false,
+          6,
+        );
         const sanitizedIso = sanitizeChoicesWithMeta(
           isolated,
           partyForAI.map((c) => c.name),
           locationGraph,
           locState,
           nextActorNode,
+          undefined,
+          sceneFallbacks,
         );
         if (sanitizedIso.kept > 0) {
           gmResponse.choices = sanitizedIso.choices;
         } else {
-          gmResponse.choices = composeSceneChoices(
-            locationGraph, locState, nextActorNode, room.current_round, objProgress, npcRoster,
-            (ref) => npcStateEntry(ref, npcRoster, npcStateNow)?.alive !== false,
-          );
+          gmResponse.choices = sceneFallbacks.slice(0, CHOICE_COUNT);
           // Say WHY: an empty `isolated` means the AI call itself failed (see
           // the [scene-choices] callAI error just above in the log); a non-empty
           // one means every suggestion was rejected by validation. Without this
@@ -1631,6 +1635,14 @@ export async function POST(request: Request) {
           locationGraph,
           locState,
           choicesNode,
+          undefined,
+          choicesNode && locationGraph && locState
+            ? composeSceneChoices(
+                locationGraph, locState, choicesNode, room.current_round, objProgress, npcRoster,
+                (ref) => npcStateEntry(ref, npcRoster, npcStateNow)?.alive !== false,
+                6,
+              )
+            : [],
         ).choices;
       }
     }
