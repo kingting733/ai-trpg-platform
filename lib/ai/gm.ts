@@ -1,7 +1,7 @@
 import type { ScenarioObjective } from "@/lib/game/objectives-def";
 import { thinkingFragment } from "@/lib/ai/settings";
 import { narrativeStyleBlock } from "@/lib/ai/style";
-import { computeExits, locationShortName, classifyChoiceLocation, canonicalMoveChoice, type LocationGraph, type LocationState } from "@/lib/game/locations";
+import { computeExits, locationShortName, classifyChoiceLocation, type LocationGraph, type LocationState } from "@/lib/game/locations";
 
 export interface LocationEntry {
   name: string;
@@ -381,9 +381,9 @@ SUGGESTED ACTIONS — SKILL-TAGGED, 3 DISTINCT SLOTS (STRICT):
   · A choice may name AT MOST ONE location, and only as a place to MOVE TO. Two names make the destination ambiguous and the choice is thrown away. Bad: "行近門口，望走廊外面" (two places). Bad: "走近客廳角落嘅神位" (two places).
   · When you do name a place, use its EXACT FULL NAME as written in the KNOWN LOCATIONS list — "1404門口", never the short form "門口". Abbreviations are ambiguous when several places share a word.
   · Never describe acting on, looking into, or listening to a place the character is not standing in — they must travel there first.
-- CHOICES ARE BOUND TO THE LOCATION SYSTEM (STRICT — read the current turn's LOCATION SYSTEM block). Locations are SEPARATE scenes; the party can only act where it currently is. Every choice MUST be one of exactly two kinds:
-  (1) an action performed AT the CURRENT LOCATION, or
-  (2) travelling to exactly ONE place listed under 可前往. A movement choice MUST be phrased with 前往 and nothing else — write exactly "前往<地點名>" (e.g. "前往走廊"). Do NOT use 行近／走近／靠近／行埋／步向, and do NOT append extra clauses like "，仔細觀察" or "聽聽裡面嘅聲音" — a movement option is ONLY the move. (The system rewrites movement choices to this canonical form anyway; matching it yourself keeps the wording natural.)
+- CHOICES ARE BOUND TO THE LOCATION SYSTEM (STRICT — read the current turn's LOCATION SYSTEM block). Locations are SEPARATE scenes; the party can only act where it currently is. EVERY choice MUST be an action performed AT the CURRENT LOCATION.
+  NEVER suggest travelling. Do NOT write "前往<地點名>" or any other move ("走去…", "行近…", "上樓") as a choice. The player interface has its own dedicated 移動 button listing every reachable place, so a travel suggestion is redundant — and it wastes one of the few suggestion slots that could have offered a real action. Movement choices are DISCARDED by the system before the player sees them.
+  If you want the party to go somewhere, make the NARRATION pull them there (a sound down the corridor, a door that was shut and now is not) — never a button.
   HARD RULES for choices:
   · NEVER assume the party is standing anywhere other than the CURRENT LOCATION. Do NOT write "站在B…", "在B處聆聽C", or any option set at a place the party has not moved to.
   · NEVER let a single choice combine a move with a remote action ("go to B and listen to C", "from B search C"). No multi-hop. Move OR act here — not both.
@@ -1125,12 +1125,11 @@ export function sanitizeChoicesWithMeta(
       // resolves it — 「行近1404門口，仔細觀察」 previously failed both the verb
       // check and the bare-name residue guard, so clicking it did nothing.
       if (verdict.kind === "move") {
-        body = canonicalMoveChoice(verdict.node);
-        // ...and DROP the skill tag. Walking to a known, open exit is not a
-        // skill check — the server rolls nothing for it — so a tag like [潛行]
-        // promised a stealth attempt that never happened. The GM attaches one
-        // habitually because two of the three choices usually carry a tag.
-        tag = "";
+        // Travel is the UI's dedicated 移動 button now, which lists every
+        // reachable place. A suggested move duplicates it and burns a slot
+        // that could have carried a real action, so drop it here rather than
+        // trusting the model to have obeyed the prompt.
+        continue;
       } else if (verdict.kind === "ok" && /^(前往|去|走去|前住)/.test(body)) {
         // A 前往… that did NOT classify as a move names a place the graph does
         // not have (an invented location), or the character's own node. Either

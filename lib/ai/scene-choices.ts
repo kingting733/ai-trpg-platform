@@ -25,11 +25,11 @@ export interface SceneChoicesInput {
   nodeDesc?: string | null;
   /** NPCs actually placed at this node (alive). */
   npcsHere: string[];
-  /** Open exits FROM this node (server-computed). */
+  /** @deprecated Unused since travel moved to the UI's dedicated 移動 button —
+   *  suggestions are now actions at the current location only. Kept so the
+   *  caller in app/api/gm/respond/route.ts still type-checks. */
   exitsOpen: string[];
-  /** The subset of exitsOpen nobody in the party has ever entered. Movement
-   *  suggestions should prefer these — without the split, the model just picks
-   *  whichever exit is listed first, which is usually where they came from. */
+  /** @deprecated Unused for the same reason as exitsOpen. */
   exitsUnvisited?: string[];
   /** Ledger facts that happened AT this node — the scene's own story. */
   sceneFacts: string[];
@@ -53,27 +53,26 @@ export function buildSceneChoicesPrompt(input: SceneChoicesInput): { system: str
 規則（嚴格）：
 1. 只能根據下面提供的場景資訊。不要發明這裡沒提到的人物、物件或地點。
 2. 每個行動 6–15 個中文字，可在最前面加一個技能標籤，格式「[技能] 行動」。技能只能從允許清單挑選。
-3. 行動只有兩種：
-   (a) 在此地點做一件事 —— 不要寫出目前所在地點的名字（角色就站在那裡，寫了是多餘的）。
-   (b) 移動 —— 必須寫成「前往<出口名>」，不可用其他動詞、不可附加任何子句，
-       而且**不可加技能標籤**（走去一個已知的出口不需要檢定）。
-       如果有「未去過的出口」，移動一定要優先選那些；沒有才可以選去過的地方。
-   一個行動最多只能提到一個地點，而且要用出口清單上的完整名稱（例如「1404門口」，不可簡寫成「門口」）。
+3. 每個行動都必須是「在目前這個地點做的一件事」。不要寫出目前所在地點的名字
+   （角色就站在那裡，寫了是多餘的）。
+   **絕對不要建議移動**：不可寫「前往<地點>」，也不可寫「走去…」「行近…」「上樓」等任何
+   移動行為。介面上已經有專用的「移動」按鈕，會列出所有可去的地點，所以移動建議是多餘的，
+   而且會白白佔掉一個本來可以給真正行動的欄位。移動建議會被系統直接丟棄。
+   一個行動最多只能提到一個地點，而且要用完整名稱（例如「1404門口」，不可簡寫成「門口」）。
    提到兩個地點的行動會被系統直接丟棄（例如「行近門口，望走廊外面」）。
-4. 三個行動要彼此不同（例如：一個調查、一個社交/聆聽、一個移動或謹慎行動）。
+4. 三個行動要彼此不同（例如：一個調查、一個社交/聆聽、一個謹慎或冒險的行動）。
    **最重要**：如果有提供「眼前最新的情況」，行動必須直接回應那段敘述裡剛發生的事、剛出現的東西或剛聽到的聲音，
    不要寫「檢查四周」這種放諸四海皆準的空泛選項。
-5. 只輸出一個 JSON 陣列，例如 ["[偵查] 檢查供桌","與王伯交談","前往走廊"]。不要任何其他文字。`;
+5. 只輸出一個 JSON 陣列，例如 ["[偵查] 檢查供桌","與王伯交談","[聆聽] 貼著門板細聽"]。不要任何其他文字。`;
 
   const lines: string[] = [];
   lines.push(`角色：${input.characterName}`);
   lines.push(`所在地點：${input.regionName ? `${input.regionName} › ` : ""}${input.nodeName}`);
   if (input.nodeDesc?.trim()) lines.push(`場景描述：${input.nodeDesc.trim()}`);
   lines.push(input.npcsHere.length ? `在場 NPC：${input.npcsHere.join("、")}` : "在場 NPC：無");
-  lines.push(input.exitsOpen.length ? `可前往的出口：${input.exitsOpen.join("、")}` : "可前往的出口：無");
-  if (input.exitsUnvisited?.length) {
-    lines.push(`未去過的出口（移動時優先選這些）：${input.exitsUnvisited.join("、")}`);
-  }
+  // Exits are deliberately NOT listed. Suggestions are actions at this location
+  // only (travel is the UI's 移動 button), so naming other places could only
+  // tempt the model into a choice the sanitizer would throw away.
   if (input.sceneFacts.length) lines.push(`此地已發生的事：${input.sceneFacts.join("；")}`);
   if (input.lastAction?.trim()) lines.push(`${input.characterName} 上一個行動：${input.lastAction.trim()}`);
   if (input.lastNarration?.trim()) {
