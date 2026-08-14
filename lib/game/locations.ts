@@ -1360,14 +1360,11 @@ export function composeSceneChoices(
     .filter((ref) => (npcAlive ? npcAlive(ref) : true));
   if (npcHere.length) out.push(`與${npcDisplayName(npcHere[0], npcRoster)}交談`);
 
-  // 3. Move — the first open exit (computeExits already enforces locks/paths,
-  //    so this can never name a hidden or unreachable place).
-  //    Never-reached exits come first: the deterministic floor should push the
-  //    party outward, not back the way they came.
-  const exits = computeExits(graph, state, nodeId);
-  const { fresh, seen } = partitionExitsByNovelty(exits.open, state);
-  const nextExit = fresh[0] ?? seen[0];
-  if (out.length < 3 && nextExit) out.push(`前往${shortName(nextExit.name)}`);
+  // NO move option. Travel is the player UI's dedicated 移動 button, which
+  // lists every reachable place; a suggested 前往 duplicates it and burns a
+  // slot. This is the ONE choice path that does not pass through
+  // sanitizeChoices (it IS the floor used when sanitizing rejected
+  // everything), so the rule has to be enforced right here or it leaks.
 
   for (const f of COMPOSE_FALLBACKS) {
     if (out.length >= 3) break;
