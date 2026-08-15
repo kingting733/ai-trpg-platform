@@ -2,8 +2,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Drama, Layers, Hourglass, Check, ArrowRight } from "lucide-react";
+import { Drama, Layers, Hourglass, Check, ArrowRight, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { MYTHOS_SPELLS } from "@/lib/game/mythos";
 
 interface CharacterCard {
   id: string;
@@ -209,6 +210,23 @@ export default function SelectCardPage({ params }: { params: { id: string } }) {
                     <h3 className="font-serif text-base truncate" style={{ color: "#e4d8be" }}>{card.name}</h3>
                     {card.occupation && (
                       <p className="text-sm mt-0.5" style={{ color: "rgba(201,169,110,0.65)" }}>{card.occupation}</p>
+                    )}
+                    {/* 禁咒 — the whole reason a player might pick one card over
+                        a statistically better one. Binding is irreversible and
+                        per-card, so this has to be visible BEFORE the choice. */}
+                    {(card.mythos_skills?.length ?? 0) > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {MYTHOS_SPELLS.filter((sp) => card.mythos_skills!.includes(sp.key)).map((sp) => (
+                          <span
+                            key={sp.key}
+                            title={sp.desc}
+                            className="text-[10px] px-1.5 py-0.5 rounded inline-flex items-center gap-1"
+                            style={{ background: "rgba(88,58,120,0.18)", border: "1px solid rgba(155,120,190,0.45)", color: "#c9b0e0" }}
+                          >
+                            <Sparkles size={9} strokeWidth={2} />{sp.zh}
+                          </span>
+                        ))}
+                      </div>
                     )}
                   </div>
                 </div>

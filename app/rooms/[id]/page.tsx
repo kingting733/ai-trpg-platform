@@ -977,6 +977,36 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                 </div>
               ))}
             </div>
+            {/* 禁咒 — bound Mythos spells were previously visible ONLY inside the
+                skill picker, so a player could not see what their own card
+                carries (nor that a teammate can cast) without opening a menu on
+                their own turn. 克蘇魯知識 rides along because it is the stat that
+                sets the cast success rate. */}
+            {(c.mythos_skills?.length ?? 0) > 0 && (
+              <div className="mt-3 pt-2.5" style={{ borderTop: "1px solid rgba(42,32,16,0.6)" }}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-[10px] tracking-wider" style={{ color: "rgba(155,120,190,0.75)" }}>禁咒 · 神話法術</p>
+                  <span className="text-[10px] text-zinc-600">
+                    克蘇魯知識 {c.cthulhu_knowledge ?? 0}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {MYTHOS_SPELLS.filter((sp) => c.mythos_skills!.includes(sp.key)).map((sp) => (
+                    <span
+                      key={sp.key}
+                      title={sp.desc}
+                      className="text-[11px] px-2 py-0.5 rounded inline-flex items-center gap-1"
+                      style={{ background: "rgba(88,58,120,0.18)", border: "1px solid rgba(155,120,190,0.45)", color: "#c9b0e0" }}
+                    >
+                      <Sparkles size={10} strokeWidth={2} />{sp.zh}
+                      <span className="text-[10px]" style={{ color: "rgba(201,176,224,0.7)" }}>
+                        {mythosSuccessRate(c.cthulhu_knowledge)}%
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
             <button
               onClick={() => toggleSkills(c.id)}
               className="mt-3 w-full text-xs text-gold/80 hover:text-gold text-left"
