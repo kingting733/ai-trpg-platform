@@ -22,7 +22,9 @@ export function PromptTabs({ tabs }: { tabs: PromptTab[] }) {
 
   return (
     <>
-      <div className="flex gap-2 mb-4 flex-wrap">
+      {/* A single-path page needs no picker — the strip only earns its place
+          when there is a real choice to make. */}
+      <div className={`flex gap-2 mb-4 flex-wrap ${tabs.length < 2 ? "hidden" : ""}`}>
         {tabs.map((t) => {
           const on = t.key === tab.key;
           return (
@@ -43,7 +45,9 @@ export function PromptTabs({ tabs }: { tabs: PromptTab[] }) {
         })}
       </div>
 
-      <p className="text-zinc-500 text-sm leading-relaxed mb-5">{tab.blurb}</p>
+      {/* With one path the page header already carries the explanation; showing
+          the tab blurb too just says the same thing twice. */}
+      {tabs.length > 1 && <p className="text-zinc-500 text-sm leading-relaxed mb-5">{tab.blurb}</p>}
 
       <ol className="rounded-xl p-5 mb-6 space-y-2" style={{ background: "rgba(22,19,16,0.8)", border: "1px solid #2a2418" }}>
         {tab.steps.map((s, i) => (

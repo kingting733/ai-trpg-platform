@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, ArrowRight } from "lucide-react";
-import { buildScenarioJsonPrompt, buildStoryBriefPrompt, PROMPT_STEPS, BRIEF_STEPS, PROMPT_VERSION } from "@/lib/ai/scenario-json-prompt";
+import { buildScenarioJsonPrompt, buildStoryBriefPrompt, PROMPT_STEPS, BRIEF_STEPS, PROMPT_VERSION, STORY_BRIEF_ENABLED } from "@/lib/ai/scenario-json-prompt";
 import { PromptTabs } from "./PromptTabs";
 
 // PUBLIC (no login) on purpose: a prompt that turns any story into a playable
@@ -10,8 +10,10 @@ import { PromptTabs } from "./PromptTabs";
 export const dynamic = "force-dynamic";
 
 export default function ScenarioPromptPage() {
+  // The interview prompt is gated (see STORY_BRIEF_ENABLED). While it is off,
+  // this page is exactly what it was before: the single story → JSON prompt.
   const tabs = [
-    {
+    ...(STORY_BRIEF_ENABLED ? [{
       key: "brief",
       label: "① 我只有一個點子",
       blurb:
@@ -20,7 +22,7 @@ export default function ScenarioPromptPage() {
         "例如每條線索都得有地點、有實體、有拿得到它的動作。",
       steps: BRIEF_STEPS,
       prompt: buildStoryBriefPrompt(),
-    },
+    }] : []),
     {
       key: "json",
       label: "② 我已經有完整故事",
@@ -49,7 +51,9 @@ export default function ScenarioPromptPage() {
           用你自己的 AI 寫劇本
         </h1>
         <p className="text-zinc-500 text-sm leading-relaxed">
-          兩段 Prompt，看你從哪裡開始。全程用你自己的 AI 額度，平台不收費、想改幾次都可以。
+          {STORY_BRIEF_ENABLED
+            ? "兩段 Prompt，看你從哪裡開始。全程用你自己的 AI 額度，平台不收費、想改幾次都可以。"
+            : "把下面這段 Prompt 貼給任何 AI，加上你的故事，它會輸出可以直接匯入本平台的 JSON。用的是你自己的 AI 額度，想改幾次都可以。"}
         </p>
       </div>
 

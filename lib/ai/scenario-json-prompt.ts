@@ -118,6 +118,21 @@ const EXAMPLE = `{
 }`;
 
 /**
+ * Gate for the phase-0 interview prompt (「我只有一個點子」).
+ *
+ * OFF deliberately. It lowers the barrier from "write a whole scenario" to
+ * "have an idea", and any creator can self-publish (app/scenarios/new sets
+ * status directly, /scenarios lists every published row) — so shipping it
+ * before a quality gate exists would fill the public list with thin scenarios
+ * faster than anyone could curate them.
+ *
+ * Flip to true once publishing is gated (review queue, or a bar on
+ * locations/evidence/endings before 發佈 is allowed). The prompt itself, its
+ * steps and its tests are all kept live so re-enabling is this one line.
+ */
+export const STORY_BRIEF_ENABLED = false;
+
+/**
  * PHASE 0 — the story-DESIGN prompt, for a creator who has an idea rather than
  * a finished story.
  *
