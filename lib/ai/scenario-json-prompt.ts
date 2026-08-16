@@ -118,6 +118,96 @@ const EXAMPLE = `{
 }`;
 
 /**
+ * PHASE 0 — the story-DESIGN prompt, for a creator who has an idea rather than
+ * a finished story.
+ *
+ * WHY THIS IS SEPARATE: buildScenarioJsonPrompt starts with 「我有一個完整的故
+ * 事」. A story written without knowing this engine's shape converts badly no
+ * matter how good it is — the converter has to invent locations, or interrogate
+ * the author for twenty answers. The failure is never bad prose; it is a story
+ * whose secrets are not attached to PLACES and ACTIONS.
+ *
+ * So this prompt does not teach the schema. It INTERVIEWS the author, asking
+ * exactly the questions whose answers make a convertible story, and emits prose
+ * plus a structured appendix. Prose (not JSON) on purpose: the appendix feeds
+ * the converter, while the prose becomes full_story, which the in-game GM reads
+ * every turn to understand the whole picture.
+ *
+ * Condition vocabulary is described in PLAIN LANGUAGE here — a fiction writer
+ * should never be handed `[["item:e1","visit:attic"]]` — but it is derived from
+ * the same UNLOCK_TERMS the engine evaluates, so the two cannot drift apart.
+ */
+export function buildStoryBriefPrompt(): string {
+  const plainTerms = UNLOCK_TERMS
+    .map(([term, desc]) => `  ・${desc}（對應 ${term}）`)
+    .join("\n");
+
+  return `你是一位 TRPG 劇本設計師，正在協助我為一個「AI 主持的克蘇魯風跑團平台」寫一個劇本。
+我現在只有一個模糊的點子，還沒有完整故事。請你用訪談的方式，一步一步幫我把它變成一個完整、
+而且「這個平台跑得動」的故事。
+
+────────────────────────
+【這個平台的故事長什麼樣子（你必須遵守的設計規則）】
+1. 故事是一張「地圖」，不是一條「時間線」。玩家一次只站在一個地點，只能在該地點行動，
+   想去別的地方要先移動。所以請把故事拆成 5–12 個可以走進去的實體地點。
+2. 每一個祕密都必須「藏在某個地點的某個東西裡，而且要有一個具體動作才拿得到」。
+   ✗ 不行：「調查員發現死者其實是被滅口的。」（沒有地點、沒有東西、沒有動作）
+   ✓ 可以：「死亡證明的副本壓在 1404 鞋櫃最底層，要把鞋子全搬開才看得到。」
+   沒有地點、沒有實體、沒有動作的線索，在這個平台上等於不存在。
+3. NPC 是「有鎖的情報庫」，不是自由發揮的角色。每個 NPC 請列出他知道的每一條情報，
+   以及每一條的解鎖條件（可以是「一問就答」）。主持人只會講你列出來的東西，不會自己編。
+4. 結局必須是「程式判斷得出來的條件」，不能是「玩家理解了真相」。
+   可用的條件只有這幾種，請用它們來描述每個結局的觸發方式：
+${plainTerms}
+   （條件可以「而且」也可以「或者」，例如「拿到剪報 而且 去過閣樓」。）
+5. 目標請寫成「一件做得完、判斷得出來的事」，避免「重複做 N 次」這種。
+
+【規模建議】
+地點 5–12、NPC 2–6、證物 4–10、目標 2–5、結局 2–4（至少一個好結局、一個壞結局）。
+上限：地點 ${GRAPH_CAPS.nodes}、證物每個地點 ${GRAPH_CAPS.evidence_per_node} 件。故事太大就砍成主線。
+
+────────────────────────
+【訪談流程：一次只問一組，等我回答再問下一組】
+請「一組一組」問，不要一次丟 20 個問題給我。每一組都先給我 2–3 個你的建議選項，
+讓我可以直接說「用第二個」或「都好，你決定」。順序如下：
+
+第 1 組 — 核心：這個故事的真相是什麼？誰做了什麼、為什麼？（一段話就好）
+第 2 組 — 舞台：故事發生在哪裡？請提出 5–12 個具體地點，並說明哪些一開始就能進去、
+         哪些要有條件才進得去、哪些是玩家一開始根本不知道存在的祕密地點。
+第 3 組 — 線索：真相要拆成哪幾件「找得到的東西」？每一件請寫：在哪個地點、是什麼東西、
+         玩家要做什麼動作才拿得到（請用玩家會打出來的動詞，例如「翻找鞋櫃」「掀開供桌的紅布」）。
+第 4 組 — 人：有哪些 NPC？各自知道什麼、隱瞞什麼、想要什麼？每條情報的解鎖條件是什麼？
+第 5 組 — 目標與結局：玩家要達成什麼？有哪幾種結局？每個結局的觸發條件是什麼
+         （用上面那幾種條件寫）？
+第 6 組 — 氣氛：開場的第一個畫面是什麼？（玩家看到的第一段文字）
+
+每一組結束時，簡短覆述我的決定，然後進到下一組。如果我的回答會讓某條規則跑不動
+（例如線索沒有地點、結局沒有可判斷的條件），請當場指出來並提出修法。
+
+────────────────────────
+【最後輸出：一份完整故事 + 一份結構附錄】
+六組都問完後，輸出下面兩段（用我的語言書寫，不要翻譯）：
+
+〈第一部分：故事原文〉
+把整個故事寫成一篇完整、好看的散文（1000–2500 字）。這一段之後會被主持人在遊玩時反覆閱讀，
+所以真相、動機、每個地點的樣子、每個 NPC 的底細都要寫清楚——這裡不需要對玩家保密。
+
+〈第二部分：結構附錄〉
+用條列寫出下面五塊，供下一步轉成平台格式時使用：
+- 地點：名稱｜一開始能不能進去｜場景描述｜從這裡可以走到哪裡
+- 證物：名稱｜在哪個地點｜玩家要做什麼才拿得到｜拿到時看到什麼
+- NPC：名字｜性格與目的｜他知道的每一條情報＋各自的解鎖條件
+- 目標：一句話一個，要判斷得出來
+- 結局：名稱｜好結局/壞結局/中性｜觸發條件（用上面那幾種）｜結局描述
+
+輸出完之後提醒我：把這兩部分一起貼進平台的「產生 JSON」Prompt，就能轉成可以匯入的格式。
+
+────────────────────────
+我的點子是：
+【把你的點子寫在這裡，一句話也可以】`;
+}
+
+/**
  * Build the full creator prompt. `phase` controls which half is emitted:
  * - "full" (default): the complete two-phase prompt.
  * - "json": only the strict JSON-output instruction, for someone who already
@@ -194,6 +284,15 @@ ${jsonSpec}
 以下是我的故事：
 【把你的故事貼在這裡】`;
 }
+
+/** Usage steps for the phase-0 story-design prompt. */
+export const BRIEF_STEPS: string[] = [
+  "複製下面整段 Prompt。",
+  "貼到任何 AI，並在最後寫上你的點子 —— 一句話也可以。",
+  "AI 會一組一組問你（真相 → 地點 → 線索 → NPC → 結局 → 開場），照著回答就好；不確定的就說「你決定」。",
+  "問完後它會輸出「故事原文 + 結構附錄」。",
+  "把那兩段一起貼進「產生 JSON 的 Prompt」，轉成可匯入的 JSON。",
+];
 
 /** Short usage steps shown next to the prompt on the creator page. */
 export const PROMPT_STEPS: string[] = [
