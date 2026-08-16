@@ -12,6 +12,7 @@ import { coerceEndings, type ScenarioEnding } from "@/lib/game/endings";
 import { newNpcId, ensureNpcIds, migrateNpcRefList, migrateNpcRefsInConditions } from "@/lib/game/npc";
 import { NpcRosterEditor } from "@/components/NpcRosterEditor";
 import { ScenarioFormGuide } from "@/components/ScenarioFormGuide";
+import type { QualityFailure } from "@/lib/game/scenario-quality";
 import { ScenarioObjectivesEditor } from "@/components/ScenarioObjectivesEditor";
 import {
   type ScenarioObjective,
@@ -24,7 +25,7 @@ const GENRES = ["Fantasy", "Cyberpunk", "Horror", "Sci-Fi", "Mystery", "Historic
 const DIFFICULTIES = ["Story", "Normal", "Hard", "Nightmare"] as const;
 type Difficulty = typeof DIFFICULTIES[number];
 type Tab = "player" | "world" | "gm";
-type Status = "draft" | "published";
+type Status = "draft" | "pending" | "published";
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
@@ -79,6 +80,8 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [qualityFailures, setQualityFailures] = useState<QualityFailure[]>([]);
+  const [reviewNote, setReviewNote] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
@@ -149,13 +152,17 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
       );
       setCoverImageUrl(data.cover_image_url ?? "");
       setCurrentStatus(data.status ?? "draft");
+      setReviewNote(typeof data.review_note === "string" ? data.review_note : null);
       setLanguage(data.language ?? "zh-TW");
       setLoading(false);
     }
     load();
   }, [params.id, router]);
 
-  async function handleSave(status: Status) {
+  // See app/scenarios/new: publishing is a REVIEW submission now, never a
+  // direct status write. Saving always writes 'draft' unless the scenario is
+  // already published (an approved scenario stays published when edited).
+  async function handleSave(status: Status, thenSubmit = false) {
     if (!title.trim()) { setActiveTab("player"); setError("標題為必填欄位。"); return; }
     if (!genre) { setActiveTab("player"); setError("類型為必填欄位。"); return; }
     if (!description.trim()) { setActiveTab("player"); setError("描述為必填欄位。"); return; }
@@ -218,15 +225,32 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
           : null,
         endings: endings.length ? endings : [],
         language,
-        status,
+        status: currentStatus === "published" ? "published" : "draft",
       })
       .eq("id", params.id)
       .eq("creator_id", user.id);
 
+    if (updateError) { setSaving(false); setError(updateError.message); return; }
+
+    if (thenSubmit) {
+      const res = await fetch(`/api/scenarios/${params.id}/submit`, { method: "POST" });
+      const json = await res.json().catch(() => null);
+      setSaving(false);
+      if (!res.ok) {
+        setQualityFailures(Array.isArray(json?.failures) ? json.failures : []);
+        setError(json?.error ?? "送審失敗。");
+        setSuccess("變更已儲存（尚未送審）。");
+        return;
+      }
+      setQualityFailures([]);
+      setCurrentStatus("pending");
+      setSuccess("已送出審核！通過後就會出現在劇本列表。");
+      setTimeout(() => router.push("/dashboard"), 1200);
+      return;
+    }
+
     setSaving(false);
-    if (updateError) { setError(updateError.message); return; }
-    setSuccess(status === "published" ? "劇本已發佈！" : "已儲存為草稿。");
-    setCurrentStatus(status);
+    setSuccess(currentStatus === "published" ? "已更新（維持發佈中）。" : "已儲存為草稿。");
     setTimeout(() => router.push("/dashboard"), 900);
   }
 
@@ -267,7 +291,9 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
         <div>
           <h1 className="text-3xl font-bold text-white">編輯劇本</h1>
           <p className="text-slate-400 mt-1">
-            狀態：<span className={currentStatus === "published" ? "text-green-400" : "text-slate-400"}>{currentStatus === "published" ? "已發佈" : "草稿"}</span>
+            狀態：<span className={currentStatus === "published" ? "text-green-400" : currentStatus === "pending" ? "text-amber-400" : "text-slate-400"}>
+              {currentStatus === "published" ? "已發佈" : currentStatus === "pending" ? "審核中" : "草稿"}
+            </span>
           </p>
         </div>
         <div className="flex items-center gap-3 shrink-0">
@@ -302,6 +328,24 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
 
       {error && <div className="mb-4 bg-red-900/30 border border-red-700 text-red-300 text-sm rounded-lg px-4 py-3">{error}</div>}
       {success && <div className="mb-4 bg-green-900/30 border border-green-700 text-green-300 text-sm rounded-lg px-4 py-3">{success}</div>}
+      {/* A rejection with no reason is indistinguishable from the scenario
+          vanishing, so the reviewer's note is shown until the next submit. */}
+      {reviewNote && currentStatus === "draft" && (
+        <div className="mb-4 rounded-lg px-4 py-3 text-sm"
+          style={{ background: "rgba(120,53,15,0.25)", border: "1px solid rgba(180,83,9,0.5)", color: "#fcd34d" }}>
+          <p className="font-medium mb-1">審核未通過</p>
+          <p className="text-[13px]" style={{ color: "#fde68a" }}>{reviewNote}</p>
+        </div>
+      )}
+      {qualityFailures.length > 0 && (
+        <div className="mb-4 rounded-lg px-4 py-3 text-sm"
+          style={{ background: "rgba(120,53,15,0.25)", border: "1px solid rgba(180,83,9,0.5)", color: "#fcd34d" }}>
+          <p className="mb-2 font-medium">送審前還差這些（都補齊後再按一次「送出審核」）：</p>
+          <ul className="space-y-1 list-disc list-inside text-[13px]" style={{ color: "#fde68a" }}>
+            {qualityFailures.map((f) => <li key={f.key}>{f.message}</li>)}
+          </ul>
+        </div>
+      )}
 
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
         {activeTab === "player" && (
@@ -458,9 +502,9 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
           className="flex-1 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white py-2.5 rounded-lg font-medium">
           {saving ? "儲存中..." : "儲存為草稿"}
         </button>
-        <button onClick={() => handleSave("published")} disabled={saving}
+        <button onClick={() => handleSave("draft", true)} disabled={saving || currentStatus === "pending"}
           className="flex-1 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white py-2.5 rounded-lg font-medium">
-          {saving ? "更新中..." : currentStatus === "published" ? "更新並保持發佈" : "發佈"}
+          {saving ? "處理中..." : currentStatus === "published" ? "更新並保持發佈" : currentStatus === "pending" ? "審核中…" : "送出審核"}
         </button>
       </div>
     </div>

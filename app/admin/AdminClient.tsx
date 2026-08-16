@@ -8,7 +8,7 @@ import { AI_CALL_SITES, THINKING_CACHE_TTL_MS, type AiThinkingConfig } from "@/l
 export interface AdminScenario {
   id: string;
   title: string;
-  status: "draft" | "published" | "archived";
+  status: "draft" | "pending" | "published" | "archived";
   genre: string;
   created_at: string;
   creatorName: string;
@@ -40,6 +40,7 @@ export interface AdminRoom {
 
 const statusLabel: Record<string, string> = {
   draft: "草稿",
+  pending: "待審核",
   published: "已發佈",
   archived: "已封存",
   waiting: "等待中",
@@ -74,6 +75,7 @@ export function AdminClient({
   const [thinking, setThinking] = useState<AiThinkingConfig>(initialThinking);
   const [thinkingSaving, setThinkingSaving] = useState(false);
   const [scenarios, setScenarios] = useState(initialScenarios);
+  const pendingCount = scenarios.filter((s) => s.status === "pending").length;
   const [rooms, setRooms] = useState(initialRooms);
   const [daily, setDaily] = useState(initialDaily);
   const [busy, setBusy] = useState<string | null>(null);
@@ -308,6 +310,46 @@ export function AdminClient({
 
   const delBtn = "text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 bg-slate-700 hover:bg-red-900/50 text-slate-300 hover:text-red-300";
 
+  // ── Review queue ────────────────────────────────────────────────────────
+  // Approve/reject live on the scenario row rather than in a separate tab: a
+  // reviewer needs the same context (creator, genre, room count) either way,
+  // and a pending scenario is just a scenario in a particular state.
+  async function reviewScenario(sc: AdminScenario, action: "approve" | "reject") {
+    let note = "";
+    if (action === "reject") {
+      note = (window.prompt(`退回「${sc.title}」的原因？（會顯示給作者，請寫得可以照著修）`) ?? "").trim();
+      if (!note) return;
+    } else if (!confirm(`核准並發佈「${sc.title}」？發佈後所有玩家都看得到。`)) {
+      return;
+    }
+    setBusy(sc.id);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/admin/scenarios/${sc.id}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, note }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        // A 422 means the scenario stopped meeting the bar after submission —
+        // show exactly which rules, not just "failed".
+        const detail = Array.isArray(json?.failures)
+          ? "：" + json.failures.map((f: { message: string }) => f.message).join("／")
+          : "";
+        setNotice((json?.error ?? "審核操作失敗。") + detail);
+        return;
+      }
+      const nextStatus = action === "approve" ? "published" : "draft";
+      setScenarios((prev) => prev.map((x) => (x.id === sc.id ? { ...x, status: nextStatus as AdminScenario["status"] } : x)));
+      setNotice(action === "approve" ? `已發佈「${sc.title}」。` : `已退回「${sc.title}」。`);
+    } catch {
+      setNotice("網路錯誤，請再試一次。");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <div>
       <div className="mb-6">
@@ -340,7 +382,7 @@ export function AdminClient({
               }`}
             >
               {t === "scenarios"
-                ? `劇本 (${scenarios.length})`
+                ? `劇本 (${scenarios.length})${pendingCount > 0 ? ` · 待審 ${pendingCount}` : ""}`
                 : t === "rooms"
                 ? `房間 (${rooms.length})`
                 : t === "ai"
@@ -422,6 +464,24 @@ export function AdminClient({
                     <Link href={`/scenarios/${s.id}`} className="text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded-lg">
                       查看
                     </Link>
+                    {s.status === "pending" && (
+                      <>
+                        <button
+                          onClick={() => reviewScenario(s, "approve")}
+                          disabled={busy === s.id}
+                          className="text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 bg-emerald-900/50 hover:bg-emerald-800/60 text-emerald-300"
+                        >
+                          {busy === s.id ? "處理中…" : "核准發佈"}
+                        </button>
+                        <button
+                          onClick={() => reviewScenario(s, "reject")}
+                          disabled={busy === s.id}
+                          className="text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 bg-slate-700 hover:bg-amber-900/50 text-slate-300 hover:text-amber-300"
+                        >
+                          退回
+                        </button>
+                      </>
+                    )}
                     <button onClick={() => deleteScenario(s)} disabled={busy === s.id} className={delBtn}>
                       {busy === s.id ? "刪除中…" : "刪除"}
                     </button>

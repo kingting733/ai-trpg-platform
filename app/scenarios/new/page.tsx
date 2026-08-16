@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Sparkles, Lock, Map, Theater } from "lucide-react";
 import Link from "next/link";
 import type { ImportedScenario } from "@/lib/ai/import-scenario";
+import type { QualityFailure } from "@/lib/game/scenario-quality";
 import type { ImportReport } from "@/lib/ai/import-report";
 import { ImportReportPanel } from "@/components/ImportReportPanel";
 import type { NpcEntry } from "@/lib/ai/gm";
@@ -88,6 +89,7 @@ export default function NewScenarioPage() {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [qualityFailures, setQualityFailures] = useState<QualityFailure[]>([]);
   const [success, setSuccess] = useState<string | null>(null);
 
   // AI Import
@@ -222,7 +224,11 @@ export default function NewScenarioPage() {
     }
   }
 
-  async function handleSave(status: Status) {
+  // Publishing is no longer something the editor can do: a scenario is saved
+  // as a draft and then SUBMITTED for review (/api/scenarios/[id]/submit,
+  // which enforces the mechanical bar). The DB trigger refuses a non-admin
+  // publish outright, so this is the only path that works.
+  async function handleSave(status: Status, thenSubmit = false) {
     if (!title.trim()) { setActiveTab("player"); setError("標題為必填項目。"); return; }
     if (!genre) { setActiveTab("player"); setError("類型為必填項目。"); return; }
     if (!difficulty) { setActiveTab("player"); setError("難度為必填項目。"); return; }
@@ -283,14 +289,33 @@ export default function NewScenarioPage() {
           : null,
         endings: endings.length ? endings : [],
         language,
-        status,
+        status: "draft",
       })
       .select("id")
       .single();
 
+    if (insertError || !data) { setSaving(false); setError(insertError?.message ?? "Failed to save"); return; }
+
+    if (thenSubmit) {
+      const res = await fetch(`/api/scenarios/${data.id}/submit`, { method: "POST" });
+      const json = await res.json().catch(() => null);
+      setSaving(false);
+      if (!res.ok) {
+        // 422 carries the specific list of what is missing — showing it is the
+        // entire value of the bar; a bare "not good enough" would be useless.
+        setQualityFailures(Array.isArray(json?.failures) ? json.failures : []);
+        setError(json?.error ?? "送審失敗。");
+        setSuccess("草稿已儲存（尚未送審）。");
+        return;
+      }
+      setQualityFailures([]);
+      setSuccess("已送出審核！通過後就會出現在劇本列表。");
+      setTimeout(() => router.push("/dashboard"), 1200);
+      return;
+    }
+
     setSaving(false);
-    if (insertError || !data) { setError(insertError?.message ?? "Failed to save"); return; }
-    setSuccess(status === "published" ? "劇本已發佈！" : "已儲存為草稿。");
+    setSuccess("已儲存為草稿。");
     setTimeout(() => router.push("/dashboard"), 900);
   }
 
@@ -401,6 +426,15 @@ export default function NewScenarioPage() {
 
       {error && <div className="mb-4 bg-red-900/30 border border-red-700 text-red-300 text-sm rounded-lg px-4 py-3">{error}</div>}
       {success && <div className="mb-4 bg-green-900/30 border border-green-700 text-green-300 text-sm rounded-lg px-4 py-3">{success}</div>}
+      {qualityFailures.length > 0 && (
+        <div className="mb-4 rounded-lg px-4 py-3 text-sm"
+          style={{ background: "rgba(120,53,15,0.25)", border: "1px solid rgba(180,83,9,0.5)", color: "#fcd34d" }}>
+          <p className="mb-2 font-medium">送審前還差這些（都補齊後再按一次「送出審核」）：</p>
+          <ul className="space-y-1 list-disc list-inside text-[13px]" style={{ color: "#fde68a" }}>
+            {qualityFailures.map((f) => <li key={f.key}>{f.message}</li>)}
+          </ul>
+        </div>
+      )}
 
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
         {activeTab === "player" && (
@@ -553,9 +587,9 @@ export default function NewScenarioPage() {
           className="flex-1 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white py-2.5 rounded-lg font-medium">
           {saving ? "儲存中..." : "儲存為草稿"}
         </button>
-        <button onClick={() => handleSave("published")} disabled={saving}
+        <button onClick={() => handleSave("draft", true)} disabled={saving}
           className="flex-1 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white py-2.5 rounded-lg font-medium">
-          {saving ? "發佈中..." : "發佈"}
+          {saving ? "送審中..." : "送出審核"}
         </button>
       </div>
     </div>

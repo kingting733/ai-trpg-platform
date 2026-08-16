@@ -13,6 +13,7 @@ Multiplayer AI-GM TRPG (Call of Cthulhu-style, zh-TW UI). Next.js 14 app router 
 ## Non-negotiables (every change)
 - `npx tsc --noEmit` clean before every commit.
 - Commit style: `fix:`/`feat:`/`tweak:`/`ui:`/`style:`/`observability:`/`docs:` prefix (this list is authoritative) + body explaining the root cause. Push with `git push -u origin <branch>` where branch = the one the session started on (`git branch --show-current`). Never push to `main` or switch branches without explicit user instruction.
+- Scenarios can no longer be self-published: 送出審核 → `pending` → admin approves. The bar is `checkScenarioQuality`; a DB trigger (`add_scenario_review.sql`) refuses any non-admin publish, so never "fix" a publish failure by writing status directly.
 - Player-facing text is zh-TW. Never leak GM-internal info to players: 證物 render as neutral `📦 物品`, no clue counts, no objective checklists in player UI.
 - Fuzzy matching must be conservative: prefer declining over guessing; use ambiguity guards (see `resolveFuzzyNpcTarget`, `resolveTravelIntent`).
 - Any `catch {}` / empty-string fallback in an AI call path must log its cause (copy `callAI` in `lib/ai/objectives.ts`).
@@ -28,6 +29,7 @@ Multiplayer AI-GM TRPG (Call of Cthulhu-style, zh-TW UI). Next.js 14 app router 
 | Locations, travel, evidence | `lib/game/locations.ts` |
 | Objectives (defs + AI judge) | `lib/game/objectives-def.ts`, `lib/ai/objectives.ts` |
 | Endings (sole game-ending authority) | `lib/game/endings.ts` |
+| 劇本審核（發佈門檻 + 待審佇列） | `lib/game/scenario-quality.ts`, `app/api/scenarios/[id]/submit`, `app/api/admin/scenarios/[id]/review` |
 | NPC identity / combat stance | `lib/game/npc.ts`, `lib/game/npc-combat.ts` |
 | Inventory (soft, party-wide) | `lib/game/inventory.ts` |
 | 幕間任務 interlude missions (24h idle, points, capped growth) | `lib/game/interlude.ts`, `app/api/interlude/*`, `components/InterludePanel.tsx` |
