@@ -97,7 +97,15 @@ export default function PrayPage() {
   // 銘刻 a Mythos tome's spell to one card — IRREVERSIBLE (no unbind exists).
   async function bindSpell(itemId: string, cardId: string, cardName: string, spellZh: string) {
     if (working) return;
-    if (!window.confirm(`將禁咒「${spellZh}」銘刻至 ${cardName}？\n\n此舉不可更改——禁咒將永久屬於這名調查員（即使在故事中身亡，卡片與禁咒依然保留）。`)) return;
+    // The snapshot rule is stated HERE because the bind is irreversible and the
+    // consequence is invisible otherwise: a room copies the card's stats at
+    // 選擇調查員 time, so a spell bound now does not exist in a game already in
+    // progress. Players were finding that out by trying to cast it.
+    if (!window.confirm(
+      `將禁咒「${spellZh}」銘刻至 ${cardName}？\n\n` +
+      `此舉不可更改——禁咒將永久屬於這名調查員（即使在故事中身亡，卡片與禁咒依然保留）。\n\n` +
+      `注意：禁咒從「下一場冒險」開始生效。已經在進行中的房間沿用選角當下的能力，不會獲得這個禁咒。`
+    )) return;
     setWorking(true); setError(null);
     try {
       const res = await fetch("/api/mythos/bind", {

@@ -260,6 +260,10 @@ export function itemFacts(item: ItemDef): ItemFacts {
           ...mythosEffectFacts(spell),
           `成功率 ${MYTHOS_BASE_SUCCESS}% ＋ 該卡的克蘇魯知識（上限 ${MYTHOS_BASE_SUCCESS + KNOWLEDGE_CAP}%）。`,
           "每次施展消耗理智與魔力，失敗亦照樣扣除。",
+          // A room snapshots the card at 選擇調查員 time, so binding mid-game
+          // does nothing for the game already running. Stated here because the
+          // bind is irreversible and the effect is otherwise invisible.
+          "銘刻後從下一場冒險開始生效；進行中的房間不會獲得此禁咒。",
         ],
         cost: { san: "1d4", mp: MYTHOS_MP_COST },
         targeting: spell.needsTarget ? "需指定目標" : "無需目標",
