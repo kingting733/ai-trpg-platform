@@ -39,7 +39,12 @@ const MISSION_ICON: Record<string, LucideIcon> = {
 // Asset paths — drop files here and they light up automatically.
 const BG_SRC = "/interlude/bg-street.png";
 const CHAR_IDLE = "/interlude/char-idle.png";
-const CHAR_WALK = "/interlude/char-walk.gif";
+// Walking is a CSS sprite sheet (8 frames) rather than a GIF: crisp alpha (GIF
+// is 1-bit, which fringes against the dark street), a third of the size, and
+// the speed is controllable from code. Both assets are cut from the same
+// uploaded sheet, so the standing and walking character are the same drawing.
+const CHAR_CELL_W = 86;   // 171x300 source cell, shown 150 tall
+const CHAR_CELL_H = 150;
 
 interface Card {
   id: string; name: string; rarity: string; occupation: string | null;
@@ -231,17 +236,25 @@ export default function InterludePage() {
               <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(180deg, rgba(8,10,16,0.35), rgba(8,10,16,0.15) 40%, rgba(8,10,16,0.55))" }} />
               <div className="absolute left-1/2 bottom-3 -translate-x-1/2 z-10">
                 {charError ? (
-                  <div className={`il-char ${walking ? "" : "il-paused"}`} style={{ height: 150, display: "flex", alignItems: "center" }}>
+                  <div className={`il-char ${walking ? "" : "il-paused"}`} style={{ height: CHAR_CELL_H, display: "flex", alignItems: "center" }}>
                     <PersonStanding size={72} strokeWidth={1.5} className="text-zinc-300" />
                   </div>
+                ) : walking ? (
+                  <div
+                    className="il-walk"
+                    role="img"
+                    aria-label="調查員行走中"
+                    style={{
+                      ["--il-walk-w" as string]: `${CHAR_CELL_W}px`,
+                      ["--il-walk-h" as string]: `${CHAR_CELL_H}px`,
+                    }}
+                  />
                 ) : (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    key={walking ? "walk" : "idle"}
-                    src={walking ? CHAR_WALK : CHAR_IDLE}
+                    src={CHAR_IDLE}
                     alt="調查員"
-                    className={`il-char ${walking ? "" : "il-paused"}`}
-                    style={{ height: 150 }}
+                    style={{ height: CHAR_CELL_H }}
                     onError={() => setCharError(true)}
                   />
                 )}

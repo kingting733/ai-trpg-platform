@@ -168,6 +168,29 @@ body {
 /* Gentle up/down bob so the character reads as walking even from a single GIF. */
 .il-char { image-rendering: pixelated; animation: il-bob 0.9s ease-in-out infinite; will-change: transform; }
 @keyframes il-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+
+/* ─── Walk cycle from a sprite sheet (8 frames, /interlude/char-walk-frames.png)
+   Every frame is baseline-aligned and anchored on the head, so no CSS bob is
+   added here — the head rise and fall is already IN the art, which reads far
+   better than a sine wave applied to a static image.
+   image-rendering stays AUTO: the art is antialiased pixel-art, and it renders
+   at ~0.5 scale, where `pixelated` turns the soft edges to gravel. */
+.il-walk {
+  --il-frames: 8;
+  width: var(--il-walk-w);
+  height: var(--il-walk-h);
+  background-image: url("/interlude/char-walk-frames.png");
+  background-repeat: no-repeat;
+  background-size: calc(var(--il-walk-w) * var(--il-frames)) 100%;
+  background-position: 0 0;
+  animation: il-walk-cycle var(--il-walk-dur, 0.8s) steps(8) infinite;
+  will-change: background-position;
+}
+@keyframes il-walk-cycle {
+  from { background-position: 0 0; }
+  to   { background-position: calc(var(--il-walk-w) * -8) 0; }
+}
+.il-walk.il-paused { animation: none; }
 /* Paused states (no active mission / arrived) — the world holds still. */
 .il-track.il-paused, .il-char.il-paused { animation: none; }
 
@@ -199,5 +222,5 @@ body {
 /* Respect users who prefer no motion. */
 @media (prefers-reduced-motion: reduce) {
   .fx-dread, .gm-dot, .gm-caret, .gm-thinking-line, .dice-roll, .dice-roll::after,
-  .il-track, .il-char, .pray-smoke, .pray-glow, .pray-reveal { animation: none; }
+  .il-track, .il-char, .il-walk, .pray-smoke, .pray-glow, .pray-reveal { animation: none; }
 }
