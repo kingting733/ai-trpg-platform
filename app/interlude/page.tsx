@@ -226,7 +226,7 @@ export default function InterludePage() {
               {bgError ? (
                 <div className="absolute inset-0" style={{ background: "linear-gradient(180deg,#12233a,#0a0d14)" }} />
               ) : (
-                <div className={`il-track ${walking ? "" : "il-paused"}`} style={{ ["--il-speed" as any]: "42s" }}>
+                <div className={`il-track ${walking ? "" : "il-paused"}`} style={{ ["--il-speed" as any]: "30s" }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={BG_SRC} alt="" className="il-tile" onError={() => setBgError(true)} />
                   {/* eslint-disable-next-line @next/next/no-img-element */}

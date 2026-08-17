@@ -183,7 +183,13 @@ body {
   background-repeat: no-repeat;
   background-size: calc(var(--il-walk-w) * var(--il-frames)) 100%;
   background-position: 0 0;
-  animation: il-walk-cycle var(--il-walk-dur, 0.8s) steps(8) infinite;
+  /* 1.8s per cycle is not a taste call — it is the speed at which the feet do
+     not slide. The world scrolls 1776px per --il-speed (30s → 59px/s), the
+     figure is ~146px tall (~83px per metre), and one cycle covers a ~1.4m
+     stride ≈ 117px. 117/59 ≈ 1.8s. The old 0.8s cycled the legs 3.4x faster
+     than the ground moved, which reads as moonwalking. Change one of the two
+     and recompute the other. */
+  animation: il-walk-cycle var(--il-walk-dur, 1.8s) steps(8) infinite;
   will-change: background-position;
 }
 @keyframes il-walk-cycle {
