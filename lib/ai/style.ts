@@ -55,7 +55,13 @@ const ZH_BANNED = `
   一股寒意順著脊椎爬上來／彷彿有什麼在暗中注視／不寒而慄／
   意識到事情並不簡單／事情遠比想像中複雜
 - 不要在動詞前面堆狀語（「緩緩地小心翼翼地伸出手」→「伸手」）。
-  一個準確的動詞勝過動詞加三個副詞。`;
+  一個準確的動詞勝過動詞加三個副詞。
+- 同一個人或東西，全段用同一個稱呼。不要為了避免重複而換詞
+  （王伯 →「老管理員」→「那名老者」）。換來換去是作文腔，不是小說腔。
+- 不要繞開「是」。「作為一個曾經風光的舊社區而存在」→「這裡以前很風光」。
+- 不要用虛假的範圍限定：在某種程度上／可以說是／某種意義上／相當程度地。
+- 不要層層加保險：也許、似乎、大概、看起來、隱約 同時出現。
+  敘事要肯定：東西就在那裡，或者不在。`;
 
 /**
  * The shared voice spec. Injected into every prose-generating system prompt.
@@ -83,6 +89,8 @@ export function narrativeStyleBlock(language: string | null | undefined): string
         antithesis: "「不是…而是…」、「與其說…不如說…」",
         simile: "「彷彿…」、「像是在低語」",
         filler: "「有什麼不對勁」、「空氣中充滿了恐懼」",
+        renaming: "王伯 →「老管理員」→「那名老者」",
+        hedges: "也許、似乎、大概、看起來",
       }
     : {
         genre: "Chinese web novel (wangwen)",
@@ -96,6 +104,8 @@ export function narrativeStyleBlock(language: string | null | undefined): string
         antithesis: '"not X, but Y", "less a … than a …"',
         simile: '"as if…", "like something whispering"',
         filler: '"something was wrong", "the silence felt alive"',
+        renaming: 'Wang → "the old caretaker" → "the elderly man"',
+        hedges: '"perhaps", "seemed to", "somewhat", "appeared to"',
       };
 
   return `
@@ -135,6 +145,10 @@ NEVER WRITE LIKE THIS:
 - Simile pile-ups: ${ex.simile}. One concrete image instead.
 - Portentous filler that names a mood instead of showing its cause:
   ${ex.filler}.
+- Do NOT rename a person or object mid-scene to avoid repeating a word
+  (${ex.renaming}). Cycling synonyms is essay habit; a novel repeats the name.
+- Do NOT stack hedges (${ex.hedges}). Narration commits: the thing is there, or
+  it is not. Hedge only when the CHARACTER genuinely cannot tell.
 - Bullet points or numbered lists inside the prose.${zh ? ZH_BANNED : ""}
 ${zh ? ZH_EXAMPLE : ""}`;
 }

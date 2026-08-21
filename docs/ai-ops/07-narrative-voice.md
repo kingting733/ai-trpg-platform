@@ -68,6 +68,29 @@ Check in this order:
    hollow prose is a *prompt* problem; do not tune temperature to fix voice
    without an A/B on real turns.
 
+## Later additions (from the Humanizer-zh-TW pattern list)
+
+[Humanizer-zh-TW](https://github.com/kevintsai1202/Humanizer-zh-TW) is an agent
+skill that REWRITES finished zh-TW text against a 24-pattern checklist. The tool
+itself was **not** adopted: GM narration is streamed, so a second pass over the
+completed text would double per-turn latency and kill streaming, and most of its
+patterns target articles (意義與影響, 挑戰與未來展望, disclaimers, flattery) that a
+GM never writes. Two of its rules would also fight this repo directly — it flags
+heavy bold and dashes, which `GmText` REQUIRES for names and `[[key]]` markup.
+
+Four patterns did apply and were folded into the prompt instead:
+
+| Pattern | Why it matters here |
+|---|---|
+| 刻意換詞 (synonym cycling) | 王伯 →「老管理員」→「那名老者」 reads as an essay dodging repetition. A novel repeats the name. **Universal — applied to every language.** |
+| 避免繫詞 (dodging 是) | 「作為…而存在」 instead of 「這裡以前很風光」. zh only. |
+| 虛假範圍限定 | 在某種程度上／可以說是. zh only. |
+| 過度修飾 (hedge stacking) | 也許＋似乎＋大概 in one sentence. Narration commits. **Universal.** |
+
+If the epilogue ever needs this treatment, `generateEndingNarration` is the one
+surface where a rewrite pass is affordable — it runs once per game and is not
+streamed. Do not put one in the turn loop.
+
 ## Sources
 
 - [去「AI味兒」大作戰 · 人人都是產品經理](https://www.woshipm.com/share/6054640.html)
