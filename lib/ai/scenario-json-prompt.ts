@@ -267,8 +267,9 @@ ${terms}
   真正的祕密處用 hidden，並讓某個地點的 discovers 陣列指向它，或給它 unlock 條件。
 - 證物的 how 是「玩家要做什麼才拿得到」。寫「搜查…」「翻查…」類的，玩家搜索成功就能拿到；
   寫特定動作（例如「撬開保險箱」）就必須做那個動作。這句話會被系統拿來比對玩家的行動文字。
-- NPC 的 knowledge 是情報庫：topic 是玩家問到什麼會觸發，content 是他會說的內容，
+- NPC 的 knowledge 是情報庫：topic 是玩家問到什麼會觸發，**info** 是他會說的內容，
   when 是解鎖條件（留空 = 一問就答）。主持人只能講出這裡列的東西，不會自己編。
+  欄位名稱一定要用 info（不是 content、不是 text）——遊玩時系統只讀 info。
 - 每個目標必須是「一件可判定的事」。避免「重複做 N 次」型目標（系統目前判定不佳），改寫成一次性動作。
 - travel_mode 用 edges 時，記得用 edges 把地點連起來，否則玩家走不到。
   同一個 container 內且 all_children_connected 為 true 的地點會自動互通，不用再拉線。

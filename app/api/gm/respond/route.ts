@@ -1374,7 +1374,22 @@ export async function POST(request: Request) {
     const available = entries.filter((k) => {
       const topic = typeof k?.topic === "string" ? k.topic.trim() : "";
       const info = typeof k?.info === "string" ? k.info.trim() : "";
-      if (!topic || !info) return false;
+      if (!topic || !info) {
+        // `info` is the canonical field (NpcKnowledge in lib/ai/gm.ts, written
+        // by NpcRosterEditor, aliased from `content` on import). A row that
+        // reached the DB with the wrong key used to vanish here without a
+        // trace — the NPC simply knew nothing, and nothing said why.
+        const wrongKey = ["content", "text", "answer", "detail"].find(
+          (key) => typeof k?.[key] === "string" && k[key].trim()
+        );
+        console.warn(
+          `[npc:knowledge] dropped an entry for ${n?.name ?? "(unnamed NPC)"}` +
+          (wrongKey
+            ? `: it uses "${wrongKey}" instead of "info". Rename the field in the scenario's NPC knowledge.`
+            : `: missing ${!topic ? "topic" : "info"}.`)
+        );
+        return false;
+      }
       const when: string[][] = Array.isArray(k?.when) ? k.when : [];
       return evalUnlockConditions(when, locState, locationGraph, room.current_round, objProgress);
     });
