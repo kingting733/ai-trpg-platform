@@ -82,7 +82,10 @@ export function coerceEndings(raw: unknown): ScenarioEnding[] {
         ? (e.type as EndingType)
         : "neutral",
       condition: coerceCondition(e.condition),
-      description: asStr(e.description),
+      // `summary` is accepted as a synonym: the creator prompt's worked example
+      // used it for a while, and an ending with no directive gives the AI
+      // epilogue nothing to work from.
+      description: asStr(e.description) || asStr(e.summary),
       priority: Number.isFinite(Number(e.priority)) ? Number(e.priority) : 0,
     }))
     .slice(0, 10)

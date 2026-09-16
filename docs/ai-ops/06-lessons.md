@@ -78,3 +78,10 @@
 - Fix: scope removed entirely (every objective is team-wide; legacy each-player lines migrate as ordinary objectives); judge gains a per-objective cumulative `note` it reads back next turn (memory only — never completes anything by itself; cleared on completion; shown to the GM as 進度, never to players); chat line deleted; dead code deleted; canonical OBJECTIVE RULE lives once in `lib/ai/gm.ts` and the per-turn tracker references it.
 - Rules: (a) any "every member must" condition needs an answer for members who become unable to act — if there is none, the condition must not exist; (b) a stateless per-turn classifier cannot judge cumulative goals; give it exactly one explicit, server-validated memory field rather than widening its context window; (c) before wiring a "judge" prompt, grep for callers — a prompt that exists but is never called still misleads whoever reads the editor hint next to it.
 - Files updated: lessons only.
+
+### 2026-09-16 — Worked example in a prompt used a field name the coercer never read
+- Context: building the story machine's validator on top of the import path.
+- Symptom: the creator prompt's EXAMPLE wrote endings with `"summary"`, but `coerceEndings` only read `description` → every ending imported from a prompt-following LLM had an empty epilogue directive, silently.
+- Fix: `coerceEndings` accepts `summary` as a synonym (same pattern as NPC knowledge `content`→`info`); example switched to `description`.
+- Rule: a worked example inside a prompt is a contract — validate it through the real coercer (the story machine's fixture test now does this for the whole shape) instead of trusting it by eye.
+- Files updated: lessons only.
