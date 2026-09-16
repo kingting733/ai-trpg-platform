@@ -7,23 +7,21 @@
 //   - multi-ending conditions      (objective:<id>)
 // The story now ends ONLY through the ending system (see lib/game/endings.ts).
 //
+// Every objective is TEAM-WIDE: any one character completing it satisfies the
+// whole party. (The former "each_player" scope — every surviving player must do
+// it personally — was removed: it could deadlock a room whenever a player who
+// had not yet completed it could no longer act, and creators never needed it.)
+//
 // Stable ids are the whole point: renaming or reordering an objective must NOT
 // break references that point at it — exactly the rename-safety we gave NPCs.
 // That's why the editor generates a random id once and keeps it, instead of the
 // old positional `obj_N` scheme that shifted whenever a line moved.
-
-export type ObjectiveScope = "party" | "each_player";
 
 export interface ScenarioObjective {
   /** Stable id, referenced by location/ending conditions as objective:<id>. */
   id: string;
   /** Player-meaningful goal text, shown as the friendly label everywhere. */
   text: string;
-  /**
-   * "party"       — any ONE player completing it satisfies the whole group.
-   * "each_player" — EVERY surviving player must complete it individually.
-   */
-  scope: ObjectiveScope;
   /** Optional/bonus objectives don't gate a "all required done" check. */
   required: boolean;
 }
@@ -32,8 +30,8 @@ export function newObjectiveId(): string {
   return `obj_${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-3)}`;
 }
 
-export function emptyObjective(scope: ObjectiveScope = "party"): ScenarioObjective {
-  return { id: newObjectiveId(), text: "", scope, required: true };
+export function emptyObjective(): ScenarioObjective {
+  return { id: newObjectiveId(), text: "", required: true };
 }
 
 export function coerceScenarioObjectives(raw: unknown): ScenarioObjective[] {
@@ -46,7 +44,6 @@ export function coerceScenarioObjectives(raw: unknown): ScenarioObjective[] {
       return {
         id: typeof o.id === "string" && o.id.trim() ? o.id.trim() : newObjectiveId(),
         text: text.slice(0, 200),
-        scope: o.scope === "each_player" ? "each_player" : "party",
         required: o.required !== false,
       };
     })
@@ -57,22 +54,21 @@ export function coerceScenarioObjectives(raw: unknown): ScenarioObjective[] {
 /**
  * Migrate a legacy scenario's free-text objective boxes into structured
  * objectives. Ids are assigned as obj_1, obj_2, … in the SAME positional order
- * the old UI used (party lines first, then each-player lines), so any existing
- * `objective:obj_N` reference in endings/location conditions keeps pointing at
- * the same goal after migration. New objectives added later get random ids.
+ * the old UI used (party lines first, then the old each-player lines), so any
+ * existing `objective:obj_N` reference in endings/location conditions keeps
+ * pointing at the same goal after migration. Old each-player lines become
+ * ordinary team objectives. New objectives added later get random ids.
  */
 export function objectivesFromLegacyText(
   winningTargets: string | null | undefined,
   eachPlayerTargets: string | null | undefined
 ): ScenarioObjective[] {
   const stripNum = (s: string) => s.replace(/^\s*\d+[.)、]\s*/, "").trim();
-  const party = (winningTargets ?? "").split("\n").map(stripNum).filter(Boolean);
-  const each = (eachPlayerTargets ?? "").split("\n").map(stripNum).filter(Boolean);
-  const out: ScenarioObjective[] = [];
-  let i = 1;
-  for (const text of party) out.push({ id: `obj_${i++}`, text: text.slice(0, 200), scope: "party", required: true });
-  for (const text of each) out.push({ id: `obj_${i++}`, text: text.slice(0, 200), scope: "each_player", required: true });
-  return out;
+  const lines = [
+    ...(winningTargets ?? "").split("\n"),
+    ...(eachPlayerTargets ?? "").split("\n"),
+  ].map(stripNum).filter(Boolean);
+  return lines.map((text, i) => ({ id: `obj_${i + 1}`, text: text.slice(0, 200), required: true }));
 }
 
 /**

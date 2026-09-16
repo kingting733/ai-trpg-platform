@@ -15,8 +15,8 @@ import { generateEndingNarration } from "@/lib/ai/ending-narration";
 import {
   decomposeObjectives,
   checkObjectiveProgress,
-  incompleteForActor,
-  applyCompletions,
+  incompleteObjectives,
+  applyVerdict,
   Objective,
   ObjectiveProgress,
 } from "@/lib/ai/objectives";
@@ -1265,24 +1265,21 @@ export async function POST(request: Request) {
   // === OBJECTIVE STATUS (GM-only) ===
   // Tell the GM which objectives are already satisfied as of the start of this
   // turn, so it never re-narrates a completed goal as still pending (e.g. a key
-  // already found). This is GM-internal — players never see a checklist (we hide
-  // 任務目標 from the UI). Lives in the per-turn message since progress changes.
+  // already found), and what partial progress the judge has recorded on
+  // multi-step goals, so narration stays consistent with it. GM-internal; the
+  // "never reveal" rule itself is canonical in the system prompt (lib/ai/gm.ts).
+  // Lives in the per-turn message since progress changes.
   const objList: Objective[] = Array.isArray(room.objectives) ? room.objectives : [];
   let objectiveDirective: string | null = null;
   if (objList.length > 0) {
-    const livingNames = sortedByDex.filter((c: any) => c.hp > 0 && c.san > 0).map((c: any) => c.name);
     const lines = objList.map((o) => {
       const entry = objProgress[o.id];
-      if (o.scope === "each_player") {
-        const doneNames = entry ? Object.keys(entry.by ?? {}) : [];
-        const allDone = entry?.done === true;
-        return `- [${allDone ? "已完成" : `進行中 ${doneNames.length}/${livingNames.length}`}] ${o.text}（每位存活玩家各自完成）`;
-      }
-      return `- [${entry?.done ? "已完成" : "未完成"}] ${o.text}`;
+      if (entry?.done) return `- [已完成] ${o.text}`;
+      return `- [未完成${entry?.note ? `｜進度：${entry.note}` : ""}] ${o.text}`;
     });
     objectiveDirective =
-      `OBJECTIVE TRACKER (GM-internal — NEVER reveal this list or its wording to players):\n${lines.join("\n")}\n` +
-      `Treat "已完成" goals as DONE: do not re-introduce them, hint they are unmet, or make players redo them. Steer the unfinished ones, but only through natural play — never announce the checklist.`;
+      `OBJECTIVE TRACKER (GM-internal, see OBJECTIVE RULE):\n${lines.join("\n")}\n` +
+      `Treat "已完成" goals as DONE: do not re-introduce them, hint they are unmet, or make players redo them. Treat recorded 進度 as having happened. Steer the unfinished ones only through natural play.`;
   }
 
   // Location directive — authoritative state + travel/stuck narration orders.
@@ -2018,48 +2015,23 @@ export async function POST(request: Request) {
       }
 
       if (sharedObjectives.length > 0) {
-        const livingPlayerNames = sortedByDex.filter((c: any) => c.hp > 0).map((c: any) => c.name);
-        const incomplete = incompleteForActor(sharedObjectives, sharedProgress, actingName);
-        const newlyDone = await checkObjectiveProgress(
-          incomplete,
+        const verdict = await checkObjectiveProgress(
+          incompleteObjectives(sharedObjectives, sharedProgress),
           storyLogSoFar,
           actionText,
           actingName,
-          gmResponse.narration
+          gmResponse.narration,
+          sharedProgress
         );
-
-        if (newlyDone.length > 0) {
-          sharedProgress = applyCompletions(
-            sharedObjectives,
-            sharedProgress,
-            newlyDone,
-            actingName,
-            room.current_round,
-            livingPlayerNames
-          );
+        const applied = applyVerdict(sharedObjectives, sharedProgress, verdict, actingName, room.current_round);
+        if (applied.changed) {
+          sharedProgress = applied.progress;
           await supabase.from("rooms").update({ objective_progress: sharedProgress }).eq("id", roomId);
-
-          for (const id of newlyDone) {
-            const obj = sharedObjectives.find((o) => o.id === id);
-            if (!obj) continue;
-            let content: string;
-            if (obj.scope === "each_player" && sharedProgress[id]?.done !== true) {
-              const done = Object.keys(sharedProgress[id]?.by ?? {}).length;
-              const total = livingPlayerNames.length;
-              content = isZh
-                ? `✓ ${actingName} 完成了個人目標：${obj.text}（${done}/${total}）`
-                : `✓ ${actingName} completed their part: ${obj.text} (${done}/${total})`;
-            } else {
-              content = isZh ? `✓ 目標達成：${obj.text}` : `✓ Objective complete: ${obj.text}`;
-            }
-            await supabase.from("story_logs").insert({
-              room_id: roomId,
-              round_number: room.current_round,
-              entry_type: "system",
-              content,
-            });
-          }
         }
+        // No player-visible "✓ 目標達成" line: objective wording is GM-internal
+        // (CLAUDE.md: never leak objective checklists to players). Completion
+        // shows up only through the fiction and the endings it unlocks; the
+        // judge already logs the verdict for observability.
       }
     }
 

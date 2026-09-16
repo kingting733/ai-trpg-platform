@@ -1,23 +1,15 @@
 "use client";
-import {
-  type ScenarioObjective,
-  type ObjectiveScope,
-  emptyObjective,
-} from "@/lib/game/objectives-def";
+import { type ScenarioObjective, emptyObjective } from "@/lib/game/objectives-def";
 
 // Structured editor for a scenario's objectives (the old 通關條件 free-text
 // boxes). Each objective is a discrete, checkable goal with a STABLE id — the
 // id never shows to the creator (friendly text is the label everywhere), and it
 // never shifts when goals are reordered, so multi-ending / location-unlock
-// references that point at "objective:<id>" stay valid.
+// references that point at "objective:<id>" stay valid. Every objective is
+// team-wide: any one player completing it counts for the whole party.
 
 const inputCls =
   "w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-zinc-500";
-
-const SCOPE_LABEL: Record<ObjectiveScope, string> = {
-  party: "任一人完成即可",
-  each_player: "每名存活玩家都要做",
-};
 
 export function ScenarioObjectivesEditor({
   objectives,
@@ -60,18 +52,6 @@ export function ScenarioObjectivesEditor({
             </button>
           </div>
           <div className="flex items-center gap-4 pl-7 flex-wrap">
-            <label className="flex items-center gap-1.5 text-xs text-slate-400">
-              範圍
-              <select
-                value={o.scope}
-                onChange={(e) => update(i, { scope: e.target.value as ObjectiveScope })}
-                className="bg-slate-800 border border-slate-600 rounded-md px-2 py-1 text-slate-200"
-              >
-                {(["party", "each_player"] as ObjectiveScope[]).map((s) => (
-                  <option key={s} value={s}>{SCOPE_LABEL[s]}</option>
-                ))}
-              </select>
-            </label>
             <label className="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -87,7 +67,7 @@ export function ScenarioObjectivesEditor({
 
       <button
         type="button"
-        onClick={() => onChange([...objectives, emptyObjective("party")])}
+        onClick={() => onChange([...objectives, emptyObjective()])}
         className="text-sm text-zinc-100 hover:text-white border border-dashed border-slate-600 hover:border-zinc-400 rounded-lg py-2 transition-colors"
       >
         + 新增目標

@@ -251,8 +251,10 @@ export default function NewScenarioPage() {
     // Structured objectives are the source of truth; mirror them into the legacy
     // winning/each-player text columns so any other reader stays in sync.
     const cleanObjectives = objectives.filter((o) => o.text.trim());
-    const partyText = cleanObjectives.filter((o) => o.scope === "party").map((o) => o.text.trim()).join("\n") || null;
-    const eachText = cleanObjectives.filter((o) => o.scope === "each_player").map((o) => o.text.trim()).join("\n") || null;
+    const partyText = cleanObjectives.map((o) => o.text.trim()).join("\n") || null;
+    // each_player_targets is retired (all objectives are team-wide); clear it so
+    // no legacy reader resurrects old per-player lines.
+    const eachText = null;
 
     const { data, error: insertError } = await supabase
       .from("scenarios")

@@ -156,8 +156,7 @@ function buildSystemPrompt(): string {
 - opening_scene：如上的開場敘述
 - locations：物件陣列 {"name","clues","items"}
 - npcs：物件陣列 {"name","hp","mp","str","con","siz","dex","app","int","pow","edu","luck","personality","goal"}，未知數值填 50
-- winning_targets：任一玩家完成即代表全隊勝利的目標，編號清單
-- each_player_targets：每位存活玩家都必須各自完成的目標，編號清單，或 null
+- winning_targets：全隊共同的勝利目標（任一玩家完成即算全隊完成），編號清單
 - failure_conditions：會導致冒險失敗的事件，編號清單
 - failure_turn_limit：回合時限整數，或 null
 - ending_conditions：其餘結局分支說明，或 null

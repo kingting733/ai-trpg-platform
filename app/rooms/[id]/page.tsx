@@ -86,8 +86,8 @@ interface Room {
   ending_type: string | null;
   ending_title: string | null;
   ending_summary: string | null;
-  objectives: { id: string; text: string; required: boolean; scope?: "party" | "each_player" }[] | null;
-  objective_progress: Record<string, { done: boolean; round: number | null; character: string | null; by?: Record<string, number> }> | null;
+  objectives: { id: string; text: string; required: boolean }[] | null;
+  objective_progress: Record<string, { done: boolean; round: number | null; character: string | null; note?: string | null }> | null;
   location_state: {
     current: string | null;
     status: Record<string, "hidden" | "discovered" | "unlocked">;
@@ -892,9 +892,6 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                   </span>
                   <div className="flex-1 min-w-0">
                     <span className={done ? "text-zinc-500 line-through" : "text-zinc-300"}>{obj.text}</span>
-                    {obj.scope === "each_player" && !done && (
-                      <span className="ml-1.5 text-[10px] text-zinc-600">（各自完成）</span>
-                    )}
                     {done && prog?.character && (
                       <span className="ml-1.5 text-[10px] text-emerald-600">by {prog.character}</span>
                     )}

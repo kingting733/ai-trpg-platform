@@ -309,11 +309,13 @@ function buildGMContextBlock(ctx: ScenarioGMContext): string {
     parts.push(`NPCs — play each consistently per their goal and secret; they lie, deflect, and act to protect their own interests:\n${npcLines}`);
   }
 
-  const partyObjectives = ctx.objectives.filter((o) => o.scope === "party");
-  const eachObjectives = ctx.objectives.filter((o) => o.scope === "each_player");
   const objLine = (o: ScenarioObjective) => `  - ${o.text}${o.required ? "" : " (optional / bonus)"}`;
-  if (partyObjectives.length) parts.push(`Victory Conditions (any ONE player completing each satisfies the whole party):\n${partyObjectives.map(objLine).join("\n")}`);
-  if (eachObjectives.length) parts.push(`Per-Player Victory Conditions (EVERY surviving player must personally complete each):\n${eachObjectives.map(objLine).join("\n")}`);
+  if (ctx.objectives.length) {
+    parts.push(
+      `Victory Conditions (team-wide — any ONE character completing each satisfies the whole party):\n${ctx.objectives.map(objLine).join("\n")}\n` +
+      `OBJECTIVE RULE: the server tracks these; you never do. Never announce, confirm, or hint that an objective is complete or incomplete, never restate an objective's wording, and never show a checklist or progress count. Progress is visible to players ONLY through the events you narrate.`
+    );
+  }
   if (ctx.failureConditions) parts.push(`Failure Conditions — steer outcomes honestly; do not contrive to avoid these:\n${ctx.failureConditions}`);
   if (ctx.failureTurnLimit != null) parts.push(`Failure Turn Limit: game ends in defeat if round reaches ${ctx.failureTurnLimit}`);
   if (ctx.endingConditions) parts.push(`Additional Ending Branches:\n${ctx.endingConditions}`);

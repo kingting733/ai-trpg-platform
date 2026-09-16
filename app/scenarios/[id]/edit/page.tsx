@@ -182,8 +182,10 @@ export default function EditScenarioPage({ params }: { params: { id: string } })
     const ept = estimatedPlayTime ? parseInt(estimatedPlayTime) : null;
 
     const cleanObjectives = objectives.filter((o) => o.text.trim());
-    const partyText = cleanObjectives.filter((o) => o.scope === "party").map((o) => o.text.trim()).join("\n") || null;
-    const eachText = cleanObjectives.filter((o) => o.scope === "each_player").map((o) => o.text.trim()).join("\n") || null;
+    const partyText = cleanObjectives.map((o) => o.text.trim()).join("\n") || null;
+    // each_player_targets is retired (all objectives are team-wide); clear it so
+    // no legacy reader resurrects old per-player lines.
+    const eachText = null;
 
     const { error: updateError } = await supabase
       .from("scenarios")

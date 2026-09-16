@@ -57,8 +57,8 @@ const EXAMPLE = `{
     }
   ],
   "objectives": [
-    { "id": "obj_1", "text": "查出 1404 室前住戶的下落", "scope": "party", "required": true },
-    { "id": "obj_2", "text": "找到能證明儀式存在的物證", "scope": "party", "required": true }
+    { "id": "obj_1", "text": "查出 1404 室前住戶的下落", "required": true },
+    { "id": "obj_2", "text": "找到能證明儀式存在的物證", "required": true }
   ],
   "endings": [
     {
@@ -251,7 +251,6 @@ ${terms}
 - genre: ${IMPORT_GENRES.join(" / ")}
 - difficulty: ${IMPORT_DIFFICULTIES.join(" / ")}
 - 地點 initial: unlocked（開放）/ discovered（已知但進不去）/ hidden（玩家還不知道它存在）
-- 目標 scope: party（任一人完成即可）/ each_player（每個人都要各自完成）
 - 結局 type: victory / failure / neutral
 - NPC disposition: friendly / neutral / hostile
 - travel_mode: free（任何已解鎖地點都能直接去）/ edges（只能沿著 edges 走，較有地圖感）

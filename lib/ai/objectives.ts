@@ -4,26 +4,22 @@
 // room, not inferred from AI memory each turn. This module provides two AI
 // helpers — both narrow, single-purpose classification calls:
 //
-//   1. decomposeObjectives() — ONCE per room, turns the creator's free-text
-//      ending_conditions into a discrete checklist of objectives.
+//   1. decomposeObjectives() — ONCE per room, turns a legacy scenario's
+//      free-text ending_conditions into a discrete checklist of objectives.
 //   2. checkObjectiveProgress() — each turn, given the CURRENTLY-INCOMPLETE
-//      objectives, returns which ones THIS action just satisfied.
+//      objectives, returns which ones THIS action just satisfied, plus a short
+//      GM-internal progress note for any objective that advanced without
+//      finishing (the judge's only memory across turns — see below).
 //
 // The "done" decision for each objective is then persisted as a permanent flag
-// by the caller. Whether the GAME ends is pure code (see allRequiredDone).
-
-// The objective definition (id/text/scope/required) now lives in a pure,
-// client-safe module so the scenario editor can share it without bundling this
-// server-only file. Re-exported here for existing callers.
+// by the caller. Whether the GAME ends is pure code (see lib/game/endings.ts).
 //
-// scope:
-//   "party"       — one character completing it satisfies the whole objective.
-//   "each_player" — EVERY player character must complete it individually
-//                   (e.g. "each player confesses their own sin"). One player
-//                   doing it does NOT complete it for the others.
-import type { ScenarioObjective, ObjectiveScope } from "@/lib/game/objectives-def";
+// The objective definition (id/text/required) lives in a pure, client-safe
+// module so the scenario editor can share it without bundling this server-only
+// file. Every objective is TEAM-WIDE: one character completing it satisfies
+// the whole party.
+import type { ScenarioObjective } from "@/lib/game/objectives-def";
 import { thinkingFragment } from "@/lib/ai/settings";
-export type { ObjectiveScope } from "@/lib/game/objectives-def";
 
 /** A trackable objective. Same shape as the creator-defined ScenarioObjective. */
 export type Objective = ScenarioObjective;
@@ -32,74 +28,72 @@ export interface ObjectiveProgressEntry {
   done: boolean;
   round: number | null;
   character: string | null;
-  // each_player scope: per-character completion. characterName -> round completed.
-  by: Record<string, number>;
+  /**
+   * Partial-progress memory for MULTI-STEP objectives ("在四個角落各放一撮米"),
+   * written by the judge and read back by it next turn — otherwise a per-turn,
+   * stateless judge can never see the earlier steps and the goal never
+   * completes. GM-internal: it is shown to the GM so narration stays
+   * consistent, never to players. Cleared once the objective is done.
+   */
+  note?: string | null;
 }
 
 export type ObjectiveProgress = Record<string, ObjectiveProgressEntry>;
 
-function emptyEntry(): ObjectiveProgressEntry {
-  return { done: false, round: null, character: null, by: {} };
+/** What the judge decided this turn. */
+export interface ObjectiveVerdict {
+  /** Objective ids completed on this turn. */
+  completed: string[];
+  /** id → cumulative progress note, for objectives that advanced but are not done. */
+  notes: Record<string, string>;
 }
 
-/** Has this specific character already completed the objective? */
-export function isDoneForCharacter(
-  obj: Objective,
-  progress: ObjectiveProgress,
-  characterName: string
-): boolean {
-  const entry = progress[obj.id];
-  if (!entry) return false;
-  if (obj.scope === "each_player") return entry.by?.[characterName] != null;
-  return entry.done === true;
+/** Hard cap on a stored progress note. Long notes are a sign the judge is narrating, not tracking. */
+export const OBJECTIVE_NOTE_MAX = 120;
+
+export function isObjectiveDone(progress: ObjectiveProgress, id: string): boolean {
+  return progress[id]?.done === true;
 }
 
-/**
- * Objectives still incomplete FOR THIS ACTOR — the only ones worth asking the
- * classifier about this turn. For party scope, that's any not-yet-done objective;
- * for each_player scope, any objective this actor personally hasn't done yet.
- */
-export function incompleteForActor(
-  objectives: Objective[],
-  progress: ObjectiveProgress,
-  actorName: string
-): Objective[] {
-  return objectives.filter((o) => !isDoneForCharacter(o, progress, actorName));
+/** Objectives still incomplete — the only ones worth asking the judge about this turn. */
+export function incompleteObjectives(objectives: Objective[], progress: ObjectiveProgress): Objective[] {
+  return objectives.filter((o) => !isObjectiveDone(progress, o.id));
 }
 
 /**
- * Apply the classifier's verdict for one actor. Returns a NEW progress object
- * with permanent flags set. For each_player objectives, records this actor's
- * personal completion and only flips `done` once every living player has done it.
+ * Apply the judge's verdict. Returns a NEW progress object (never mutates the
+ * input) plus whether anything actually changed, so the caller can skip the DB
+ * write on a no-op turn. Completion flags are permanent; a completed objective
+ * drops its note. Notes only land on objectives that are NOT done, and a note
+ * identical to the stored one is not a change.
  */
-export function applyCompletions(
+export function applyVerdict(
   objectives: Objective[],
   progress: ObjectiveProgress,
-  completedIds: string[],
+  verdict: ObjectiveVerdict,
   actorName: string,
-  round: number,
-  livingPlayerNames: string[]
-): ObjectiveProgress {
+  round: number
+): { progress: ObjectiveProgress; changed: boolean } {
+  const known = new Set(objectives.map((o) => o.id));
   const next: ObjectiveProgress = { ...progress };
-  for (const id of completedIds) {
-    const obj = objectives.find((o) => o.id === id);
-    if (!obj) continue;
-    const entry = next[id] ? { ...next[id], by: { ...next[id].by } } : emptyEntry();
+  let changed = false;
 
-    if (obj.scope === "each_player") {
-      if (entry.by[actorName] == null) entry.by[actorName] = round;
-      // Done only when every currently-living player has personally completed it.
-      const needed = livingPlayerNames.length > 0 ? livingPlayerNames : Object.keys(entry.by);
-      entry.done = needed.every((n) => entry.by[n] != null);
-      if (entry.done && entry.round == null) entry.round = round;
-    } else {
-      entry.done = true;
-      entry.round = round;
-      entry.character = actorName;
-    }
-    next[id] = entry;
+  for (const id of verdict.completed) {
+    if (!known.has(id) || next[id]?.done === true) continue;
+    next[id] = { done: true, round, character: actorName, note: null };
+    changed = true;
   }
-  return next;
+
+  for (const [id, rawNote] of Object.entries(verdict.notes)) {
+    if (!known.has(id) || next[id]?.done === true) continue;
+    const note = rawNote.trim().slice(0, OBJECTIVE_NOTE_MAX);
+    if (!note || note === (next[id]?.note ?? null)) continue;
+    const prev = next[id] ?? { done: false, round: null, character: null };
+    next[id] = { ...prev, note };
+    changed = true;
+  }
+
+  return { progress: next, changed };
 }
 
 const LANGUAGE_LABELS: Record<string, string> = {
@@ -267,6 +261,7 @@ export async function decomposeObjectives(
   const system = `You break a tabletop RPG scenario's victory/ending conditions into a checklist of discrete, independently-checkable objectives.
 ${langRule}
 
+Every objective is TEAM-WIDE (any one character completing it counts for the whole party).
 Each objective must be a single concrete, observable accomplishment that can be judged true/false from the story (e.g. "Retrieve the Sunstone from the altar", "Defeat the gatekeeper", "All survivors escape through the north gate").
 
 REQUIRED vs OPTIONAL — this is critical:
@@ -274,9 +269,6 @@ REQUIRED vs OPTIONAL — this is critical:
 - Only set "required": false when the source text EXPLICITLY marks it as optional, bonus, secondary, "for extra credit", "if you want", or similar. If in doubt, it is REQUIRED.
 - Never downgrade a core win condition to optional just because it seems hard or secondary.
 
-SCOPE — party vs each_player:
-- "scope": "each_player" when the condition requires EVERY player/character to do it individually — signalled by wording like "each player", "every character", "both players", "everyone must", "each must confess / pay their own debt / complete their own ritual step". One player doing it does NOT satisfy it for the others.
-- "scope": "party" when a single character accomplishing it satisfies the whole group (the default for most objectives).
 
 Other rules:
 - Split compound conditions ("do X and Y") into SEPARATE objectives.
@@ -284,7 +276,7 @@ Other rules:
 - Do NOT invent objectives not implied by the conditions.
 
 Return ONLY valid JSON, no markdown:
-{"objectives":[{"text":"...","required":true,"scope":"party"},{"text":"...","required":true,"scope":"each_player"}]}`;
+{"objectives":[{"text":"...","required":true},{"text":"...","required":false}]}`;
 
   const user = `ENDING / VICTORY CONDITIONS:\n${endingConditions}\n\nBreak these into a checklist.`;
 
@@ -301,7 +293,6 @@ Return ONLY valid JSON, no markdown:
           id: `obj_${i + 1}`,
           text: text.slice(0, 200),
           required: o?.required !== false, // default required
-          scope: o?.scope === "each_player" ? "each_player" : "party",
         };
       })
       .filter((o: Objective | null): o is Objective => o !== null)
@@ -312,118 +303,62 @@ Return ONLY valid JSON, no markdown:
 }
 
 /**
- * Decompose ONE free-text box into objectives with a FORCED scope. Because the
- * creator already put these lines under "anyone can do it" (party) or "every
- * player must do it" (each_player), we don't let the AI guess the scope — we
- * just split the text into discrete, checkable lines and stamp the scope.
- */
-async function decomposeWithScope(
-  text: string,
-  scope: ObjectiveScope,
-  language?: string | null
-): Promise<Array<{ text: string; required: boolean }>> {
-  if (!text.trim()) return [];
-  const label = langLabel(language);
-  const langRule = label ? `\nWrite each objective's "text" in ${label}.` : "";
-
-  const system = `You split a tabletop RPG scenario's victory goals into a checklist of discrete, independently-checkable objectives.${langRule}
-
-Each objective must be a single concrete, observable accomplishment judgeable true/false from the story.
-- Split compound goals ("do X and Y") into SEPARATE objectives.
-- Default EVERY objective to "required": true. Only mark "required": false when the text EXPLICITLY says optional/bonus/secondary.
-- Produce 1-6 objectives, each one short sentence. Do NOT invent goals not implied by the text.
-
-Return ONLY valid JSON, no markdown:
-{"objectives":[{"text":"...","required":true}]}`;
-
-  const user = `VICTORY GOALS:\n${text}\n\nSplit these into a checklist.`;
-  const raw = await callAI(system, user, 600);
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(extractJSON(raw));
-    const list = Array.isArray(parsed?.objectives) ? parsed.objectives : [];
-    return list
-      .map((o: any) => {
-        const t = typeof o?.text === "string" ? o.text.trim() : "";
-        if (!t) return null;
-        return { text: t.slice(0, 200), required: o?.required !== false };
-      })
-      .filter((o: any): o is { text: string; required: boolean } => o !== null);
-  } catch {
-    return [];
-  }
-}
-
-/**
- * Build the objective checklist from the creator's STRUCTURED boxes. Each box
- * has an unambiguous scope, so completion tracking is reliable:
- *   partyText      → "party"       (any one player completing it satisfies all)
- *   eachPlayerText → "each_player" (EVERY surviving player must do it personally)
- * Called ONCE per room. Returns [] if both boxes are blank.
- */
-export async function decomposeStructuredObjectives(
-  partyText: string,
-  eachPlayerText: string,
-  language?: string | null
-): Promise<Objective[]> {
-  const [party, each] = await Promise.all([
-    decomposeWithScope(partyText, "party", language),
-    decomposeWithScope(eachPlayerText, "each_player", language),
-  ]);
-
-  const combined: Objective[] = [
-    ...party.map((o) => ({ ...o, scope: "party" as ObjectiveScope })),
-    ...each.map((o) => ({ ...o, scope: "each_player" as ObjectiveScope })),
-  ]
-    .slice(0, 8)
-    .map((o, i) => ({ id: `obj_${i + 1}`, text: o.text, required: o.required, scope: o.scope }));
-
-  return combined;
-}
-
-/**
  * Given the objectives that are STILL INCOMPLETE, decide which ones the latest
- * action + GM narration just satisfied. Returns the list of newly-completed
- * objective ids. The caller persists these as permanent flags.
+ * action + GM narration just satisfied, and record partial progress on the
+ * ones that advanced without finishing.
  *
- * This is intentionally a per-action classification — it never has to remember
- * earlier turns, because completed objectives are already flagged in state and
- * are NOT passed in here.
+ * This is a per-action classification: completed objectives are already
+ * flagged in state and are NOT passed in, so the judge never has to remember
+ * which goals are done. The ONE thing it must remember is partial progress on
+ * multi-step goals — that is what the progress note is for: the judge reads
+ * last turn's note and writes back a cumulative one. A note is memory only; it
+ * never completes anything by itself.
  */
 export async function checkObjectiveProgress(
-  incompleteObjectives: Objective[],
+  incomplete: Objective[],
   recentLog: string[],
   playerAction: string,
   actingCharacter: string,
-  gmNarration: string
-): Promise<string[]> {
-  if (incompleteObjectives.length === 0) return [];
+  gmNarration: string,
+  progress: ObjectiveProgress
+): Promise<ObjectiveVerdict> {
+  const none: ObjectiveVerdict = { completed: [], notes: {} };
+  if (incomplete.length === 0) return none;
 
-  const checklist = incompleteObjectives
-    .map((o) => `- ${o.id}: ${o.text}${o.scope === "each_player" ? " [must be done by THIS character personally]" : ""}`)
+  const checklist = incomplete
+    .map((o) => {
+      const note = progress[o.id]?.note;
+      return `- ${o.id}: ${o.text}${note ? `\n    PROGRESS SO FAR: ${note}` : ""}`;
+    })
     .join("\n");
 
-  const system = `You are an objective-completion judge for a multiplayer RPG. You are given the CURRENTLY-INCOMPLETE objectives, plus ${actingCharacter}'s most recent action and the GM's narration of its outcome. Decide which objectives — if any — were JUST and ACTUALLY completed by ${actingCharacter} on THIS turn.
+  const system = `You are an objective-completion judge for a multiplayer RPG. You are given the CURRENTLY-INCOMPLETE objectives (each with any PROGRESS SO FAR recorded on earlier turns), plus ${actingCharacter}'s most recent action and the GM's narration of its outcome. Every objective is team-wide: any character completing it counts for the whole party. Decide (a) which objectives were JUST and ACTUALLY completed on THIS turn, and (b) for multi-step objectives that advanced but did not finish, what the cumulative progress now is.
 
 Mark an objective COMPLETE when ALL of these hold:
-1. ${actingCharacter} actually CARRIED OUT the accomplishment in the fiction this turn — not merely planned, suggested, proposed, agreed, intended, promised, or said they would do it later.
+1. The accomplishment was actually CARRIED OUT in the fiction this turn — not merely planned, suggested, proposed, agreed, intended, promised, or said they would do it later.
 2. The GM NARRATION describes events in which the attempt SUCCEEDS. IMPORTANT: the GM is forbidden from naming or announcing objectives, so do NOT wait for the GM to say a goal is "complete" or to restate the objective's wording. Judge from the concrete events the narration describes: if those events amount to the objective being achieved, it counts. It does NOT count only when a dice check explicitly FAILED, or the narration shows the attempt blocked, interrupted, refused, undone, or left unresolved.
 3. The accomplishment matches the objective's concrete meaning — not a vaguely related or symbolic gesture.
+4. For a multi-step objective, PROGRESS SO FAR plus this turn's events together cover EVERY step. Earlier steps recorded in PROGRESS SO FAR count as done; do not require them to be re-shown this turn.
 
 DO NOT mark complete for any of these (common false positives):
 - Only talking about, planning, or deciding to do the objective (with no narrated success this turn).
-- Another character doing it (for [must be done by THIS character personally] objectives, only ${actingCharacter}'s OWN completion counts).
 - The GM merely mentioning, foreshadowing, or describing the objective's existence without it actually happening.
-- Being near, on the way to, or only partway through it.
+- Being near, on the way to, or only partway through it (record that in "progress" instead).
 - A dice check for the action FAILED, or the narration says the attempt did not work.
 
-Be fair, not paranoid: when ${actingCharacter}'s action plainly does the thing and the narration shows it working out, CREDIT it — do not withhold completion just because the GM phrased the success indirectly. But never invent a success the narration does not support. Completing ZERO objectives on a turn is normal and fine.
+PROGRESS NOTES — for objectives NOT completed this turn:
+- Add an entry in "progress" ONLY when this turn made concrete, narrated headway on a multi-step objective (e.g. one of several items placed, two of three witnesses questioned). No entry for plans, intentions, or failed attempts.
+- The note is CUMULATIVE: merge PROGRESS SO FAR with this turn's headway into one short factual line (under 60 characters, same language as the objective). Example: "已放米：東北角、西南角（2/4）".
+- Omit an objective from "progress" to keep its existing note unchanged. Never write a note for an objective you list in "completed".
+- A note is memory only. It never makes an objective complete.
+
+Be fair, not paranoid: when the action plainly does the thing and the narration shows it working out, CREDIT it — do not withhold completion just because the GM phrased the success indirectly. But never invent a success the narration does not support. Completing ZERO objectives on a turn is normal and fine.
 Never invent objective ids. Only use ids from the list.
 
 Return ONLY valid JSON, no markdown:
-{"completed":["obj_id", ...]}  // empty array if none`;
+{"completed":["obj_id", ...],"progress":{"obj_id":"cumulative note", ...}}  // both may be empty`;
 
-  const user = `INCOMPLETE OBJECTIVES (for ${actingCharacter} this turn):
+  const user = `INCOMPLETE OBJECTIVES:
 ${checklist}
 
 RECENT STORY (context only — do NOT judge completion from this):
@@ -433,14 +368,14 @@ THIS TURN —
 ${actingCharacter}'s ACTION: ${playerAction}
 GM NARRATION OF OUTCOME: ${gmNarration}
 
-Which objectives did ${actingCharacter} ACTUALLY complete THIS turn? Be strict.`;
+Which objectives were ACTUALLY completed THIS turn, and which multi-step ones advanced? Be strict.`;
 
   // Observability: every no-completion turn should explain WHY (model error vs.
   // bad JSON vs. ids filtered out vs. a genuine "nothing done"), so a creator
   // reporting "objectives never fire" can be diagnosed from logs instead of
   // guessing. Keyed by acting character + the objective ids it was asked about.
-  const askedIds = incompleteObjectives.map((o) => o.id).join(",");
-  const tag = `objectives:check room-actor=${actingCharacter} asked=[${askedIds}] action=${JSON.stringify(playerAction.slice(0, 120))} narration=${JSON.stringify(gmNarration.slice(0, 400))}`;
+  const askedIds = incomplete.map((o) => o.id).join(",");
+  const tag = `objectives:check actor=${actingCharacter} asked=[${askedIds}] action=${JSON.stringify(playerAction.slice(0, 120))} narration=${JSON.stringify(gmNarration.slice(0, 400))}`;
 
   // 800 (not ~50 the JSON needs): if AI_CLASSIFY_MODEL is a reasoning model,
   // hidden thinking tokens are drawn from this budget BEFORE any visible JSON is
@@ -448,196 +383,34 @@ Which objectives did ${actingCharacter} ACTUALLY complete THIS turn? Be strict.`
   const raw = await callAI(system, user, Number(process.env.AI_CLASSIFY_MAX_TOKENS) || 800, "objectives:check");
   if (!raw) {
     console.warn(`[${tag}] no verdict — callAI returned empty (model error or AI disabled). Treating as none completed.`);
-    return [];
+    return none;
   }
   try {
     const parsed = JSON.parse(extractJSON(raw));
+    const validIds = new Set(incomplete.map((o) => o.id));
+
     const ids = Array.isArray(parsed?.completed) ? parsed.completed : [];
-    const validIds = new Set(incompleteObjectives.map((o) => o.id));
-    const accepted = ids.filter((id: any): id is string => typeof id === "string" && validIds.has(id));
-    const rejected = ids.filter((id: any) => !(typeof id === "string" && validIds.has(id)));
+    const completed = ids.filter((id: unknown): id is string => typeof id === "string" && validIds.has(id));
+    const rejected = ids.filter((id: unknown) => !(typeof id === "string" && validIds.has(id)));
     if (rejected.length > 0) {
       console.warn(`[${tag}] judge returned ids not on the incomplete list (ignored): ${JSON.stringify(rejected)}`);
     }
-    console.info(`[${tag}] verdict completed=${JSON.stringify(accepted)}${accepted.length === 0 ? " (genuine none)" : ""}`);
-    return accepted;
+
+    const notes: Record<string, string> = {};
+    const rawNotes = parsed?.progress && typeof parsed.progress === "object" ? parsed.progress : {};
+    for (const [id, v] of Object.entries(rawNotes)) {
+      if (!validIds.has(id) || completed.includes(id) || typeof v !== "string" || !v.trim()) continue;
+      notes[id] = v.trim().slice(0, OBJECTIVE_NOTE_MAX);
+    }
+
+    console.info(
+      `[${tag}] verdict completed=${JSON.stringify(completed)}` +
+      `${Object.keys(notes).length ? ` progress=${JSON.stringify(notes)}` : ""}` +
+      `${completed.length === 0 && Object.keys(notes).length === 0 ? " (genuine none)" : ""}`
+    );
+    return { completed, notes };
   } catch (err) {
     console.error(`[${tag}] could not parse judge JSON — treating as none completed. error=${err instanceof Error ? err.message : err} raw=${JSON.stringify(raw.slice(0, 300))}`);
-    return [];
+    return none;
   }
 }
-
-/**
- * Pure code: are all REQUIRED objectives flagged done?
- * For each_player objectives, "done" already means every living player completed
- * it (see applyCompletions), so checking the flag is sufficient here.
- */
-export function allRequiredDone(objectives: Objective[], progress: ObjectiveProgress): boolean {
-  const required = objectives.filter((o) => o.required);
-  if (required.length === 0) return false; // nothing to satisfy → never auto-ends here
-  return required.every((o) => progress[o.id]?.done === true);
-}
-
-/** Count of completed objectives, for UI / logging. */
-export function completedCount(objectives: Objective[], progress: ObjectiveProgress): number {
-  return objectives.filter((o) => progress[o.id]?.done === true).length;
-}
-
-/**
- * Once the deterministic check confirms all required objectives are done,
- * generate a closing title + summary in the scenario language. Has a safe
- * fallback so the ending always fires even if the AI call fails.
- */
-export async function generateVictoryNarration(
-  scenarioTitle: string,
-  objectives: Objective[],
-  recentLog: string[],
-  language?: string | null
-): Promise<{ type: "best" | "normal" | "bad"; title: string; summary: string }> {
-  const isZh = language === "zh-TW" || language === "zh-CN";
-  const fallback = isZh
-    ? { type: "normal" as const, title: "任務達成", summary: "隊伍齊心協力，完成了所有目標，冒險就此圓滿落幕。" }
-    : { type: "normal" as const, title: "The Quest Complete", summary: "Through their combined efforts, the party achieved every objective and brought the adventure to a triumphant close." };
-
-  const label = langLabel(language);
-  const langRule = label ? `\nWrite "title" and "summary" in ${label}.` : "";
-  const goalList = objectives.filter((o) => o.required).map((o) => `- ${o.text}`).join("\n");
-
-  const system = `You write the closing screen for a completed multiplayer RPG adventure. The party has just accomplished ALL required objectives, so this is a WINNING ending.${langRule}
-
-Return ONLY valid JSON, no markdown:
-{"type":"best"|"normal"|"bad","title":string,"summary":string}
-- type: "best" = flawless/ideal victory, "normal" = solid success, "bad" = costly/bittersweet victory. Default "normal".
-- title: 4-7 word ending title.
-- summary: a vivid epilogue of about 300 words, written in flowing prose, describing what happens AFTERWARD as a direct consequence of the specific choices and actions the players took during the adventure — the fate of each character, what becomes of the world/place, and how the loose threads resolve. Ground every beat in the actual events shown in RECENT STORY; do not invent characters or events that contradict it.`;
-
-  const user = `ADVENTURE: ${scenarioTitle}
-COMPLETED OBJECTIVES:
-${goalList}
-
-RECENT STORY (what the players actually did — base the epilogue on this):
-${recentLog.slice(-14).join("\n")}
-
-Write the victory closing screen with a ~300-word epilogue.`;
-
-  const raw = await callAI(system, user, 900);
-  if (!raw) return fallback;
-  try {
-    const parsed = JSON.parse(extractJSON(raw));
-    const type = parsed?.type === "best" || parsed?.type === "bad" ? parsed.type : "normal";
-    return {
-      type,
-      title: typeof parsed?.title === "string" && parsed.title.trim() ? parsed.title.trim().slice(0, 80) : fallback.title,
-      summary: typeof parsed?.summary === "string" && parsed.summary.trim() ? parsed.summary.trim().slice(0, 4000) : fallback.summary,
-    };
-  } catch {
-    return fallback;
-  }
-}
-
-/**
- * Each turn, decide whether the latest action + narration just TRIGGERED one of
- * the creator's failure conditions. Like checkObjectiveProgress, this is a
- * strict, per-turn classification — its default answer is "no failure".
- * Returns the matched failure description, or null when nothing triggered.
- */
-export async function checkFailureTriggered(
-  failureConditions: string,
-  recentLog: string[],
-  playerAction: string,
-  actingCharacter: string,
-  gmNarration: string
-): Promise<string | null> {
-  if (!failureConditions.trim()) return null;
-
-  const system = `You are a STRICT failure-condition judge for a multiplayer RPG. Your default answer is that NO failure has occurred. Only report a failure when the evidence is unambiguous.
-
-You are given the scenario's FAILURE CONDITIONS, plus ${actingCharacter}'s most recent action and the GM's narration of its outcome. Decide whether any failure condition has JUST and ACTUALLY been triggered THIS turn.
-
-REPORT A FAILURE ONLY IF:
-1. The GM NARRATION explicitly confirms an event matching a failure condition actually happened this turn.
-2. It is the real, concrete event — not a threat, foreshadowing, near-miss, plan, or worry about it.
-
-DO NOT report failure for: tension, danger approaching, a failed dice roll that did not itself cause the failure event, or merely discussing the risk.
-It is normal and expected for NO failure to occur on a turn. When unsure, report none.
-
-Return ONLY valid JSON, no markdown:
-{"failed":false,"condition":null}  // or {"failed":true,"condition":"<the failure condition that triggered>"}`;
-
-  const user = `FAILURE CONDITIONS:
-${failureConditions}
-
-RECENT STORY (context only):
-${recentLog.slice(-6).join("\n")}
-
-THIS TURN —
-${actingCharacter}'s ACTION: ${playerAction}
-GM NARRATION OF OUTCOME: ${gmNarration}
-
-Did a failure condition ACTUALLY trigger this turn? Be strict.`;
-
-  const raw = await callAI(system, user, 150);
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(extractJSON(raw));
-    if (parsed?.failed === true) {
-      const c = typeof parsed?.condition === "string" ? parsed.condition.trim() : "";
-      return c || "A failure condition was met.";
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Generate the closing screen for a FAILURE ending. Safe fallback so the ending
- * always fires even if the AI call fails.
- */
-export async function generateFailureNarration(
-  scenarioTitle: string,
-  failedCondition: string,
-  recentLog: string[],
-  language?: string | null
-): Promise<{ type: "failure"; title: string; summary: string }> {
-  const isZh = language === "zh-TW" || language === "zh-CN";
-  const fallback = {
-    type: "failure" as const,
-    title: isZh ? "任務失敗" : "The Quest Fails",
-    summary: isZh
-      ? "局勢急轉直下，無法挽回的結局降臨，這場冒險就此以失敗告終。"
-      : "Events spiral beyond saving, and the adventure ends in failure.",
-  };
-
-  const label = langLabel(language);
-  const langRule = label ? `\nWrite "title" and "summary" in ${label}.` : "";
-
-  const system = `You write the closing screen for a FAILED multiplayer RPG adventure. A failure condition has just been triggered, ending the game in defeat.${langRule}
-
-Return ONLY valid JSON, no markdown:
-{"title":string,"summary":string}
-- title: 4-7 word failure ending title.
-- summary: a vivid epilogue of about 300 words, written in flowing prose, describing what happens AFTERWARD as a direct consequence of the specific choices and actions the players took — the grim fate of each character, what becomes of the world/place left behind, and how the unresolved threads curdle. Ground every beat in the actual events shown in RECENT STORY; do not invent characters or events that contradict it.`;
-
-  const user = `ADVENTURE: ${scenarioTitle}
-FAILURE THAT TRIGGERED: ${failedCondition}
-
-RECENT STORY (what the players actually did — base the epilogue on this):
-${recentLog.slice(-14).join("\n")}
-
-Write the failure closing screen with a ~300-word epilogue.`;
-
-  const raw = await callAI(system, user, 900);
-  if (!raw) return fallback;
-  try {
-    const parsed = JSON.parse(extractJSON(raw));
-    return {
-      type: "failure",
-      title: typeof parsed?.title === "string" && parsed.title.trim() ? parsed.title.trim().slice(0, 80) : fallback.title,
-      summary: typeof parsed?.summary === "string" && parsed.summary.trim() ? parsed.summary.trim().slice(0, 4000) : fallback.summary,
-    };
-  } catch {
-    return fallback;
-  }
-}
-

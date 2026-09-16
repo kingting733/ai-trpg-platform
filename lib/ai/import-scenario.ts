@@ -242,8 +242,7 @@ LANGUAGE: Detect the document's language and write ALL text fields in that same 
 DEPTH REQUIREMENTS — the most important part. For these fields, PRESERVE the source's detail instead of summarizing it away:
 - locations: array of objects {"name": "...", "clues": "...", "items": "..."}. For each location give a vivid description in the name field, what clues can be discovered there in clues, and what items can be found in items.
 - npcs: array of objects {"name": "...", "hp": 10, "mp": 5, "str": 50, "con": 50, "siz": 50, "dex": 50, "app": 50, "int": 50, "pow": 50, "edu": 50, "luck": 50, "personality": "...", "goal": "..."}. ONE rich entry per important NPC. Set stats based on the character's described capabilities — default all stats to 50 if not given. personality: their role, how they speak/behave. goal: their motivation, what they want, what secret they hide.
-- winning_targets: VICTORY goals that any ONE player completing satisfies for the whole party, as a numbered list (e.g. "1. 取回聖石並逃出神廟\n2. 消滅守門者"). Do NOT include failure conditions here. null if none.
-- each_player_targets: victory goals that EVERY surviving player must complete individually (signalled by "each player", "everyone must", "both must"), as a numbered list. null if none.
+- winning_targets: ALL victory goals, as a numbered list (e.g. "1. 取回聖石並逃出神廟\n2. 消滅守門者"). Every goal is team-wide (any one player completing it counts for the party) — if the source says "each player must…", still list it here once. Do NOT include failure conditions here. null if none.
 - failure_conditions: events that should END the adventure in DEFEAT (e.g. "聖石被敵人奪走", "神廟在隊伍逃出前坍塌"), as a numbered list. null if none.
 - failure_turn_limit: if the story specifies a time limit in rounds/turns (e.g. "players have 20 rounds"), extract the integer here; otherwise null.
 - ending_conditions: any remaining ending nuance/branch notes not captured above, or null.
@@ -263,8 +262,7 @@ Required JSON keys:
 - opening_scene: vivid opening narration or null
 - locations: array of location objects {name, clues, items}
 - npcs: array of NPC objects {name, hp, mp, str, con, siz, dex, app, int, pow, edu, luck, personality, goal}
-- winning_targets: numbered list of party victory goals (any one player can complete), or null
-- each_player_targets: numbered list of goals every surviving player must do individually, or null
+- winning_targets: numbered list of team victory goals, or null
 - failure_conditions: numbered list of events that end the game in defeat, or null
 - failure_turn_limit: integer round limit that triggers auto-failure, or null
 - ending_conditions: remaining ending notes, or null

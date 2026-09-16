@@ -83,11 +83,8 @@ function buildGMContextBlock(ctx: ScenarioGMContext): string {
     }).join("\n");
     parts.push(`NPCs:\n${npcLines}`);
   }
-  const partyObjectives = ctx.objectives.filter((o) => o.scope === "party");
-  const eachObjectives = ctx.objectives.filter((o) => o.scope === "each_player");
-  if (partyObjectives.length) parts.push(`Winning Targets — any ONE player completing each satisfies it:\n${partyObjectives.map((o) => `  - ${o.text}`).join("\n")}`);
-  if (eachObjectives.length) parts.push(`Per-Player Targets — EVERY surviving player must personally complete each:\n${eachObjectives.map((o) => `  - ${o.text}`).join("\n")}`);
-  if (ctx.failureConditions) parts.push(`Failure Conditions — if any occurs, the adventure ends in defeat:\n${ctx.failureConditions}`);
+  if (ctx.objectives.length) parts.push(`Winning Targets — team-wide, any ONE character completing each satisfies it (never name or announce these to players):\n${ctx.objectives.map((o) => `  - ${o.text}`).join("\n")}`);
+  if (ctx.failureConditions) parts.push(`Failure Conditions — narrative guidance only (the server does not enforce these; defeat comes from the ending system or the turn limit):\n${ctx.failureConditions}`);
   if (ctx.failureTurnLimit != null) parts.push(`Failure Turn Limit: Game ends in defeat if round reaches ${ctx.failureTurnLimit}`);
   if (ctx.endingConditions) parts.push(`Additional Ending Notes:\n${ctx.endingConditions}`);
   if (ctx.gmNotes) parts.push(`Additional GM Notes:\n${ctx.gmNotes}`);
