@@ -277,6 +277,49 @@ export function validateScenarioJson(raw: unknown): MachineReport {
     if (md) warnings.push(`地點「${node.name}」的瀏覽描述像在下結論（「${md[0]}」）——玩家還沒調查就看得到的文字，只能寫外觀。`);
   }
 
+  // ── objectives: hygiene the text checks cannot see ──────────────────
+  // Mirrors docs/creator-guide/objectives.md rules 3 and 5 plus "every
+  // objective must matter": the judge evaluates each one every turn, so an
+  // objective nothing references is pure cost.
+  {
+    const objs: any[] = (normalized as any).objectives ?? [];
+    const refs = new Map<string, Set<string>>();
+    const add = (id: string, src: string) => { if (!refs.has(id)) refs.set(id, new Set()); refs.get(id)!.add(src); };
+    const scan = (when: unknown, src: string) => {
+      for (const grp of (Array.isArray(when) ? when : [])) for (const t of (Array.isArray(grp) ? grp : [grp])) {
+        const s = String(t); if (s.startsWith("objective:")) add(s.slice(10), src);
+      }
+    };
+    (normalized as any).endings?.forEach((e: any) => scan(e.condition, "結局"));
+    nodesArr.forEach((n: any) => scan(n.unlock, "解鎖"));
+    ((graph as any)?.npc_placements ?? []).forEach((p: any) => scan(p.when, "NPC位置"));
+    ((graph as any)?.npc_encounters ?? []).forEach((e: any) => scan(e.when, "觸發"));
+    (normalized as any).npcs?.forEach((p: any) => (p.knowledge ?? []).forEach((k: any) => scan(k.when, "情報")));
+    const evNames = nodesArr.flatMap((n: any) => (n.evidence ?? []).map((e: any) => String(e.name ?? ""))).filter(Boolean);
+    const nodeNames = nodesArr.map((n: any) => String(n.name ?? "")).filter(Boolean);
+    objs.forEach((o: any, i: number) => {
+      const t = String(o.text ?? ""), where = `目標 ${i + 1}「${t}」`;
+      if (!refs.has(o.id) && !o.required) {
+        warnings.push(`${where} 沒有被任何結局、解鎖、NPC 位置、觸發事件或情報引用——裁判每回合都會判它，但完成與否不影響任何事。讓某個結局或門檻引用它，或刪掉。`);
+      }
+      if (/(取得|拿到|找到|獲得|得到|搜出)/.test(t) && evNames.some((n) => n && t.includes(n))) {
+        warnings.push(`${where} 是「拿到某件證物」——系統本來就知道，不必交給裁判。改在結局或解鎖條件用 item:<證物id>（指南規則 5）。`);
+      }
+      if (/(抵達|到達|進入|前往|來到)/.test(t) && nodeNames.some((n) => n && t.includes(n)) && !/(交|說|答應|下令|交出|攤)/.test(t)) {
+        warnings.push(`${where} 是「到過某個地點」——改用 visit:<地點id>（指南規則 5）。`);
+      }
+      if (/(那個|某個|某人|那位|這位)/.test(t)) {
+        warnings.push(`${where} 用了「那個／某個」這類指稱——用劇本裡的正式名字（指南規則 3），裁判才對得上。`);
+      }
+      if (refs.get(o.id) && Array.from(refs.get(o.id)!).every((s) => s === "結局") &&
+          ((normalized as any).endings ?? []).filter((e: any) => JSON.stringify(e.condition ?? []).includes(`objective:${o.id}`)).every((e: any) => e.type === "failure")) {
+        warnings.push(`${where} 只被 failure 結局引用——若這個失敗其實是「時間到」或「某 NPC 死了」，直接在 failure 結局用 round:／npc_dead:；只有裁判才判得出來的事件才需要目標（指南第四節）。`);
+      }
+    });
+    const required = objs.filter((o: any) => o.required).length;
+    if (objs.length > 6) warnings.push(`目標共 ${objs.length} 條（必要 ${required}）——指南建議必要 2–4 條、總數精簡。當門檻用的加分目標可以留，但每一條都要有人引用。`);
+  }
+
   // ── encounters need a plausible place / time ───────────────────────
   // The engine fires an encounter the turn its condition holds, anywhere.
   // One keyed on an item/objective with no `at`/`delay` therefore pops the
