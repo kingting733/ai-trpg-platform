@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   resolveAction, rollInjuryDamage, rollFirstAidHeal, InjurySeverity,
   resolveAttack, dodgeValueOf, NPC_DEFAULT_DODGE, AttackResult,
-  detectAttackTypeForTargets, resolveFuzzyNpcTarget, resolveSanCheck,
+  detectAttackTypeForTargets, resolveFuzzyNpcTarget, findNamedNonCandidate, isBareNameLike, resolveSanCheck,
   PLAYER_SKILL_LIST,
 } from "@/lib/game/resolution";
 import { generateSceneChoices } from "@/lib/ai/scene-choices";
@@ -187,6 +187,17 @@ export async function POST(request: Request) {
   // Picker key wins; otherwise detect a typed cast (「對屍鬼施展萎縮術」/
   // bare name / [tag]) among the spells this actor actually owns — without
   // this, free-text casts would fall through to costless pure narration.
+  // Every name the engine knows in this room: roster NPCs, NPCs tracked in
+  // state (GM-invented ones included), and player characters. Used to strip
+  // names before attack-verb detection, and by the target fallbacks below to
+  // notice when the player named someone who is NOT a valid target here.
+  const combatantNames = [
+    ...scenarioNpcs.map((n) => n.name),
+    ...Object.keys(npcStateNow).map((k) => npcDisplayName(k, npcRoster)),
+    ...sortedByDex.map((c: any) => c.name),
+  ];
+  const namesOtherThanActor = combatantNames.filter((n) => n !== resolvedActor?.name);
+
   const mythosSpell =
     (forcedSkill ? mythosSpellByKey(forcedSkill) : null) ??
     mythosSpellByKey(detectMythosCastIntent(actionText, resolvedActor?.mythos_skills));
@@ -226,7 +237,21 @@ export async function POST(request: Request) {
       mythosTargetName =
         candidates.find((name) => actionText.includes(name)) ??
         resolveFuzzyNpcTarget(actionText, candidates) ??
-        (candidates.length === 1 ? candidates[0] : null);
+        null;
+      if (!mythosTargetName) {
+        // The player named someone who is not a valid target here (elsewhere
+        // on the map, a player character, dead). Say so — never redirect the
+        // spell onto whoever happens to be the only creature in the scene.
+        const absent = findNamedNonCandidate(actionText, candidates, namesOtherThanActor);
+        if (absent) {
+          return NextResponse.json({
+            error: `「${absent}」無法作為「${mythosSpell.zh}」的目標——不在此處，或不是可施術的對象。`,
+          }, { status: 400 });
+        }
+        // Sole-candidate fallback is for unnamed casts (a bare cast, 「對她」);
+        // a bare name that matched nobody is a miss, not a wildcard.
+        if (candidates.length === 1 && !isBareNameLike(actionText)) mythosTargetName = candidates[0];
+      }
       if (!mythosTargetName) {
         return NextResponse.json({
           error: mythosSpell.effect === "calm"
@@ -245,14 +270,6 @@ export async function POST(request: Request) {
     mythosCast = cast;
   }
 
-  // Attack detection strips known combatant names first — an NPC called 殺人犯
-  // or 刺青師傅 must not turn every mention of them into an attack (the name
-  // still matters for TARGETING, which runs on the original text below).
-  const combatantNames = [
-    ...scenarioNpcs.map((n) => n.name),
-    ...Object.keys(npcStateNow).map((k) => npcDisplayName(k, npcRoster)),
-    ...sortedByDex.map((c: any) => c.name),
-  ];
   const attackType = resolvedActor && !mythosCast
     ? detectAttackTypeForTargets(actionText, combatantNames)
     : null;
@@ -312,7 +329,16 @@ export async function POST(request: Request) {
             .filter((name) => npcStateEntry(name, npcRoster, npcStateNow)?.alive !== false)
         ));
       }
-      if (candidates.length === 1) targetNpcName = candidates[0];
+      // Same guard as spells: 「攻擊郭一山」 with 郭一山 elsewhere must not swing
+      // at the one NPC who happens to be here. With no target the turn falls
+      // through to an ordinary check and the GM narrates the miss/confusion.
+      if (
+        candidates.length === 1 &&
+        !findNamedNonCandidate(actionText, candidates, namesOtherThanActor) &&
+        !isBareNameLike(actionText)
+      ) {
+        targetNpcName = candidates[0];
+      }
     }
   }
 

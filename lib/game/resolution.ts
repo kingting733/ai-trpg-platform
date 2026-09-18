@@ -555,6 +555,53 @@ export function resolveFuzzyNpcTarget(actionText: string, candidateNames: string
   return best.name;
 }
 
+/**
+ * Guard for the "sole candidate present → use them" fallback that attacks and
+ * targeted spells share. That fallback exists for UNNAMED targets ("attack
+ * her", a bare cast with one creature in the room). It must never fire when
+ * the player explicitly named someone who is NOT a valid target here — that
+ * turned 「萎縮術 → 郭一山」 into a burn on the only NPC standing nearby.
+ *
+ * Returns the known name the action mentions that is not among `candidates`
+ * (so the caller can say WHO could not be targeted), or null when the text
+ * names nobody outside the candidate set.
+ */
+export function findNamedNonCandidate(
+  actionText: string,
+  candidates: string[],
+  knownNames: string[]
+): string | null {
+  const text = actionText.trim();
+  if (!text) return null;
+  const cand = new Set(candidates);
+  // Longest names first so 「林秀瑤」 is reported rather than a 2-char prefix
+  // some other roster entry happens to share.
+  const others = Array.from(new Set(knownNames))
+    .filter((n) => n && n.trim().length >= 2 && !cand.has(n))
+    .sort((a, b) => b.length - a.length);
+  return others.find((n) => text.includes(n)) ?? null;
+}
+
+const TARGET_PRONOUN_RE = /^(她|他|牠|它|祂|那個?人?|那傢伙|那東西|對方|目標|敵人|怪物|那隻|這隻|那位|這位)$/;
+const TARGET_VERB_RE = /(攻擊|打|揍|殺|射|砍|刺|踢|撞|施展|施放|發動|使用|吟唱|唸|念|詠唱|唱誦|對|向|朝|把|將|搜|查|看|問|說|走|去|進|退|逃)/;
+
+/**
+ * True when the action reads as nothing but a name — 「郭一山」, "Reyes" —
+ * with no verb and no pronoun. Such a turn is naming a target; if nobody
+ * present matched it, the right answer is to decline, not to pick whoever
+ * happens to be the only creature in the scene. A pronoun (「她」) or a verb
+ * phrase (「施放」) is NOT a bare name and may still use the fallback.
+ */
+export function isBareNameLike(actionText: string): boolean {
+  const text = actionText.trim();
+  if (!text || text.length > 8) return false;
+  if (TARGET_PRONOUN_RE.test(text)) return false;
+  if (TARGET_VERB_RE.test(text)) return false;
+  // Han (same range the name scorer uses), Latin letters, digits, and the
+  // separators that appear inside names. No `u` flag: tsc checks at ES5.
+  return /^[㐀-鿿A-Za-z0-9·・.\-\s]+$/.test(text);
+}
+
 /** First-aid heal amount — tied to the 急救 skill check outcome. */
 export function rollFirstAidHeal(outcome: Outcome): number {
   if (outcome === "critical_success") return rollDiceN(1, 3) + 1;

@@ -93,3 +93,11 @@
 - Fix: `fix_publish_gate_service_role.sql` — gate also passes when the request's JWT role is `service_role` (`is_service_role()`); the browser can never present that role, so the creator-side guarantee is intact.
 - Rule: any DB-side authorization check (`is_admin()`, `auth.uid() = …`) that a service-role route will hit needs an explicit service-role allowance, or the route needs a user-client write plus an RLS policy. Decide which at design time; test the admin path with the admin's real client, not just the creator path.
 - Files updated: lessons only.
+
+### 2026-09-18 — "Sole candidate" fallback redirected a named spell onto a bystander
+- Context: player picked 萎縮術 and typed the target 「郭一山」; the spell burned 林秀瑤.
+- Symptom: explicit target ignored; the only NPC present took the hit and retaliated.
+- Root cause: target chain was exact → fuzzy → "if exactly one candidate present, use them". 郭一山 was not a valid target in that scene (elsewhere / not an NPC), fuzzy scored 0, and the fallback — written for 「攻擊她」 — fired on a turn that clearly named someone else. Same chain in the attack path.
+- Fix: `findNamedNonCandidate()` — if the text names any known character who is not a candidate, decline with that name in the error; `isBareNameLike()` — a bare name that matched nobody is a miss, not a wildcard. Both fallbacks guarded.
+- Rule: a "pick the only option" fallback must first prove the input is UNNAMED. Any known name in the text that is not among the options means the player asked for something you cannot do — say which, do not substitute.
+- Files updated: lessons only.
