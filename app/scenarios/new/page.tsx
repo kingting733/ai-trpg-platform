@@ -505,7 +505,7 @@ export default function NewScenarioPage() {
                 <p className="text-xs text-slate-500 mt-1">目前長度：{sourceDocument.length.toLocaleString()} 字元</p>
               )}
             </Field>
-            <Field label="目標（Objective Tracker）" hint="劇情中可判定「完成 / 未完成」的具體目標。系統會逐一追蹤完成狀態，並供「多重結局」與「地點解鎖」以此作為條件。故事的結束由結局系統決定——若未自訂任何結局，系統會在所有必要目標達成時自動以勝利結束。">
+            <Field label="目標（Objective Tracker）" hint="每一條是一件主持人會在敘事裡明寫出來的事（全隊共有）。系統逐一追蹤完成狀態，供「多重結局」與「地點解鎖」引用。若未自訂結局，所有必要目標達成時自動以勝利結束。寫法規則見下方。">
               <ScenarioObjectivesEditor objectives={objectives} onChange={setObjectives} />
             </Field>
             <div className="flex flex-col gap-3">

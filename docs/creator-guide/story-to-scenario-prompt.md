@@ -7,6 +7,7 @@
 > 產生器：`lib/ai/scenario-json-prompt.ts`。
 >
 > 這份文件仍然有用：當你想自己看著填、或想理解每個欄位的語意時。
+> 任務目標的寫法有獨立指南：`docs/creator-guide/objectives.md`（一條目標 = 一件主持人會明寫的事）。
 
 有完整故事但覺得劇本編輯器欄位太多、不知道填什麼？把下面整段 Prompt 貼給任何
 AI（ChatGPT / Claude / DeepSeek 都可以），最後貼上你的故事，AI 會輸出一份
