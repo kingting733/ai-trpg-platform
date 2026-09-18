@@ -125,6 +125,14 @@ export interface NpcEncounter {
   when: UnlockTerm[][];
   /** GM directive describing how the NPC arrives / what they want. */
   beat: string;
+  /** Optional place gate: once `when` holds, wait until the party is AT this
+   *  node (or inside this container) before firing. Without it the NPC
+   *  "arrives regardless of location" the same turn the condition is met —
+   *  fine for a phone call or a haunting, wrong for the mayor turning up in
+   *  a sea cave the moment you pocket her journal. */
+  at?: string;
+  /** Optional delay: minimum rounds between `when` first holding and firing. */
+  delay?: number;
 }
 
 export interface LocationGraph {
@@ -158,6 +166,9 @@ export interface LocationState {
   stuck_counter: number;
   /** Keys of NpcEncounters already fired (format "enc:<index>"). */
   encounters_fired: string[];
+  /** Round on which each encounter's `when` first held (for `delay`/`at`
+   *  gates, which may fire later). Key format "enc:<index>". */
+  encounters_armed: Record<string, number>;
 }
 
 // ── Coercion / validation ─────────────────────────────────────────────────────
@@ -222,11 +233,13 @@ function coerceNpcEncounters(v: unknown): NpcEncounter[] {
   if (!Array.isArray(v)) return [];
   return v
     .filter((e) => e && typeof e === "object" && asStr((e as any).npc) && Array.isArray((e as any).when) && (e as any).when.length > 0)
-    .map((e: any) => ({
-      npc: asStr(e.npc),
-      when: coerceUnlock(e.when),
-      beat: asStr(e.beat),
-    }))
+    .map((e: any) => {
+      const enc: NpcEncounter = { npc: asStr(e.npc), when: coerceUnlock(e.when), beat: asStr(e.beat) };
+      if (asStr(e.at)) enc.at = asStr(e.at);
+      const d = Math.floor(Number(e.delay));
+      if (Number.isFinite(d) && d > 0) enc.delay = d;
+      return enc;
+    })
     .slice(0, GRAPH_CAPS.npc_encounters);
 }
 
@@ -466,6 +479,9 @@ export function validateLocationGraph(
     const e = graph.npc_encounters[i];
     if (npcRefs && e.npc && !npcRefs.has(e.npc)) warnings.push(`NPC 觸發事件中的「${e.npc}」不在此劇本的 NPC 名單中。`);
     validateTerms(e.when, `NPC「${e.npc}」觸發事件 ${i + 1} 的條件`);
+    if (e.at && !ids.has(e.at) && !graph.containers.some((c) => c.id === e.at)) {
+      warnings.push(`NPC「${e.npc}」觸發事件 ${i + 1} 的 at 引用了不存在的地點或區域 id：${e.at} — 這個事件永遠不會觸發。`);
+    }
   }
 
   return warnings;
@@ -486,6 +502,7 @@ export function initLocationState(graph: LocationGraph): LocationState {
     evidence_found: [],
     stuck_counter: 0,
     encounters_fired: [],
+    encounters_armed: {},
   };
 }
 
@@ -521,6 +538,14 @@ export function coerceLocationState(raw: any, graph: LocationGraph): LocationSta
     evidence_found: asStrArr(raw.evidence_found),
     stuck_counter: Number.isFinite(Number(raw.stuck_counter)) ? Number(raw.stuck_counter) : 0,
     encounters_fired: asStrArr(raw.encounters_fired),
+    encounters_armed:
+      raw.encounters_armed && typeof raw.encounters_armed === "object"
+        ? Object.fromEntries(
+            Object.entries(raw.encounters_armed)
+              .filter(([, v]) => Number.isFinite(Number(v)))
+              .map(([k, v]) => [k, Number(v)])
+          )
+        : {},
   };
 }
 
@@ -578,7 +603,7 @@ function condSatisfied(
 // default for a scenario that gates on evidence it has no location system for.
 const EMPTY_LOCATION_STATE: LocationState = {
   current: null, positions: {}, status: {}, visited: [], entered_round: {}, evidence_found: [],
-  stuck_counter: 0, encounters_fired: [],
+  stuck_counter: 0, encounters_fired: [], encounters_armed: {},
 };
 const EMPTY_LOCATION_GRAPH: LocationGraph = {
   version: 2, travel_mode: "free", containers: [], nodes: [], edges: [],
@@ -738,12 +763,24 @@ export function evaluateEncounters(
     // encounters need an explicit when (they can't fire "always" — that would
     // be every turn)
     if (enc.when.length === 0) continue;
-    if (condSatisfied(enc.when, state, graph, currentRound, objectiveProgress)) {
-      state.encounters_fired.push(key);
-      fired.push(enc);
-    }
+    if (!condSatisfied(enc.when, state, graph, currentRound, objectiveProgress)) continue;
+    // Armed: the condition holds. Remember when, so `delay` counts from here
+    // even if the party wanders off before the gate opens.
+    if (state.encounters_armed[key] === undefined) state.encounters_armed[key] = currentRound;
+    if (enc.delay && currentRound - state.encounters_armed[key] < enc.delay) continue;
+    if (enc.at && !partyIsAt(enc.at, state, graph)) continue;
+    state.encounters_fired.push(key);
+    fired.push(enc);
   }
   return fired;
+}
+
+/** Is the party's current node `id`, or inside container `id`? */
+function partyIsAt(id: string, state: LocationState, graph: LocationGraph): boolean {
+  if (!state.current) return false;
+  if (state.current === id) return true;
+  const node = graph.nodes.find((n) => n.id === state.current);
+  return !!node && node.container === id;
 }
 
 // ── Split-party v1: per-character positions ───────────────────────────────────
@@ -1612,7 +1649,9 @@ export function buildLocationBlock(
   // Triggered NPC encounters this turn.
   for (const enc of firedEncounters) {
     lines.push(
-      `NPC ENCOUNTER THIS TURN — ${npcDisplayName(enc.npc, npcRoster)} arrives / makes contact with the party regardless of location. Weave this into the scene immediately. Beat: ${enc.beat}`
+      enc.at
+        ? `NPC ENCOUNTER THIS TURN — ${npcDisplayName(enc.npc, npcRoster)} is here at the party's current location and makes contact now. Weave this into the scene immediately. Beat: ${enc.beat}`
+        : `NPC ENCOUNTER THIS TURN — ${npcDisplayName(enc.npc, npcRoster)} arrives / makes contact with the party regardless of location. Weave this into the scene immediately. Beat: ${enc.beat}`
     );
   }
 

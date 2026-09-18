@@ -112,7 +112,7 @@ const EXAMPLE = `{
       { "npc": "王伯", "at": "corridor", "when": [] }
     ],
     "npc_encounters": [
-      { "npc": "王伯", "when": [["item:e1"]], "beat": "王伯堵在走廊盡頭，要求你們把剪報交出來。" }
+      { "npc": "王伯", "when": [["item:e1"]], "at": "corridor", "delay": 1, "beat": "王伯堵在走廊盡頭，要求你們把剪報交出來。" }
     ]
   }
 }`;
@@ -263,10 +263,14 @@ ${terms}
 建議規模：地點 5–12、NPC 2–6、證物 4–10、目標 2–5、結局 2–4。故事太長就挑主線。
 
 【設計要點】
-- 大部分地點用 unlocked。需要條件才能進的用 discovered（並寫 locked_narration 解釋為什麼進不去）；
+- 起點只有一個：nodes 的第一個地點就是開場地點，initial 用 unlocked；其他地點不要一開始就 unlocked（自由移動時等於多個起點），用 discovered 加 unlock 條件或 hidden 加 discovers 帶到。需要條件才能進的用 discovered（並寫 locked_narration 解釋為什麼進不去）；
   真正的祕密處用 hidden，並讓某個地點的 discovers 陣列指向它，或給它 unlock 條件。
+- 證物的 reveal_text 只寫玩家拿到那一刻看到、讀到的東西（外觀、狀態、上面的字）；不寫它代表什麼、不說真相、不寫 NPC 的反應。地點的 desc 同理。
 - 證物的 how 是「玩家要做什麼才拿得到」。寫「搜查…」「翻查…」類的，玩家搜索成功就能拿到；
   寫特定動作（例如「撬開保險箱」）就必須做那個動作。這句話會被系統拿來比對玩家的行動文字。
+- NPC 觸發事件（npc_encounters）在 when 成立的**那一回合**就觸發，預設「無論隊伍在哪裡」都會出現——這只適合電話、託夢、鬼魂這類真的能隨時找上門的情況。
+  一般 NPC 請加 at（地點或區域 id）：條件成立後，等隊伍到了那裡他才現身；加 delay（回合數）可以讓他晚幾回合才來。
+  ✗ 玩家在岩洞拿到日誌，鎮長下一回合出現在岩洞。✓ at 設鎮公所：玩家回到鎮公所時，鎮長已經在等。
 - NPC 的 knowledge 是情報庫：topic 是玩家問到什麼會觸發，**info** 是他會說的內容，
   when 是解鎖條件（留空 = 一問就答）。主持人只能講出這裡列的東西，不會自己編。
   欄位名稱一定要用 info（不是 content、不是 text）——遊玩時系統只讀 info。
