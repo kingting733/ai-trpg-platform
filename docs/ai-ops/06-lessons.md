@@ -109,3 +109,43 @@
 - Fix: the refusal now says where the server has the NPC (「郭一山此刻在『辦公室』，不在你所在的『走廊』」, hidden nodes never named) and `[target:resolve]` logs actor node, named NPC, placement, candidates. `npcPlacementNode()` added for "where is this NPC".
 - Rule: when server state refuses something the narration made look possible, the refusal must state the server's fact in the player's terms; otherwise every such refusal is reported as a bug. Creators who want an escort NPC must give him a placement per node (or none, to follow the party).
 - Files updated: lessons only.
+
+### 2026-09-16 — Story machine: the writer echoed full_story, so output size scaled with input and got truncated
+- Context: first run of the story machine UI on a 68k-character campaign module.
+- Symptom: `claude -p --model opus` ran 24 minutes, then the round died with "找不到合法的 JSON" — the raw output stopped mid-sentence inside `full_story`.
+- Root cause: writer rule 6 demanded `full_story` verbatim, so a 68k-character input required a 68k-character output on top of the scenario structure; that crossed the model's per-response output limit. The platform's own cap (`SOURCE_DOC_MAX_CHARS`, 100k) never got a chance to apply.
+- Fix: the writer now emits the placeholder `__FULL_STORY__` and the machine injects the text after extraction (`injectStory`; CLI `extract --story <file>`); critic/fix prompts get the placeholder too (`stripStory`). Stories over a threshold are condensed first (`condensePrompt`), default sonnet.
+- Rule: never ask a model to reproduce input verbatim inside its output — copy it in code; the model's output budget must be spent only on what it has to decide.
+- File updated: lessons only (story-machine README documents the contract).
+
+### 2026-09-16 — Validator warned on 或 inside parentheses, the exact form its own message recommends
+- Context: five consecutive story-machine runs, two different writer models, each ended with the same warning on the "bad ending" objective.
+- Symptom: `目標 …（使用炸藥或鐵鎚） 含有「或」——…例如「取得農場控制權（合作或武力）」` — the recommended example itself contains 或 in parentheses.
+- Root cause: the check ran the regex over the whole objective text; the rule's intent is "branches go in parentheses", so parenthesised 或 is compliance, not violation.
+- Fix: strip `（…）`/`(…)` before testing (`validate.ts`); verified against the four real strings (three parenthesised pass, the bare "A，或 B" still warns).
+- Rule: when a validator message shows a "correct" example, feed that example through the validator — a rule that flags its own example is self-contradictory and models will keep tripping it.
+- File updated: lessons only.
+
+### 2026-09-16 — Story machine server died on EPIPE when a role command exited without reading stdin
+- Context: zero-token pipeline test with `head -c 3000` standing in for the condenser.
+- Symptom: `/api/run` returned a run id, then every request got "Connection refused" — the whole Node process was gone.
+- Root cause: `child.stdin.write(prompt)` on a child that had already exited raised an `error` event on the stdin stream with no listener; Node treats an unhandled stream error as fatal.
+- Fix: `child.stdin.on("error", () => {})` in `runCmd`; the `close` handler already reports the real outcome.
+- Rule: any spawned child that receives piped input needs a stdin error handler — the failing command should fail the step, never the server.
+- File updated: lessons only.
+
+### 2026-09-16 — "Most locations unlocked" means many start points; evidence text was narrating conclusions
+- Context: reviewing the story machine's output on a campaign-scale module with the product owner.
+- Symptom: 10 of 17 locations `unlocked` in free travel mode — the party can jump anywhere on turn 1, so the opening location is meaningless; and `reveal_text` on evidence stated interpretations and scripted NPC reactions ("駕駛技術不錯", "若讓他看清內容物他會改口") instead of what the players perceive.
+- Root cause: the creator prompt's guidance said "大部分地點用 unlocked", and nothing distinguished observation from conclusion for evidence text. The engine starts the party on the FIRST unlocked node (`locations.ts`), so extra unlocked nodes are extra starts.
+- Fix: one-start rule and observe-don't-conclude rule added to the writer preamble, critic rubric (rules 8, 9), the shared creator guidance in `lib/ai/scenario-json-prompt.ts`, and the machine validator (extra starts → blocking; concluding text → keyword warning).
+- Rule: any "initially open" flag is a start point in disguise — count them; and any text the player receives verbatim must be sensory, with meaning kept on the GM side.
+- File updated: lessons only (story-machine README documents both rules).
+
+### 2026-09-18 — NPC encounters fired "regardless of location" the turn an item was taken
+- Context: product owner reviewing a generated scenario's NPC 觸發事件.
+- Symptom: pick up the journal in the sea cave → the mayor "arrives" in the cave next turn. The GM directive literally said "arrives regardless of location, weave in immediately".
+- Root cause: `NpcEncounter` had only `when` + `beat`; `evaluateEncounters` fired the turn the condition held, and the condition grammar has no "party is currently at X" term, so authors could not express "when they next come to the town hall".
+- Fix: optional `at` (node or container id — wait until the party is there) and `delay` (rounds after the condition first holds) on encounters; `encounters_armed` in LocationState remembers the arming round; GM wording changes when `at` is set. Legacy data unchanged. Author docs, story-machine writer rule 10 / rubric 10 / validator warning added. Verified with a scratch tsx script (legacy, at node, at container, delay, coercion round-trip).
+- Rule: any "fires when condition X" trigger needs an answer to WHERE and WHEN it may fire — a trigger with no place gate is a teleport.
+- File updated: lessons only.

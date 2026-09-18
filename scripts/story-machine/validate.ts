@@ -18,6 +18,7 @@
 import { normalizeImported, type ImportedScenario } from "@/lib/ai/import-scenario";
 import { buildImportReport, type ImportCounts } from "@/lib/ai/import-report";
 import { checkScenarioQuality } from "@/lib/game/scenario-quality";
+import { DECISIONS_KEY } from "./prompts";
 
 export interface MachineReport {
   ok: boolean;
@@ -111,7 +112,10 @@ function objectiveWarnings(objectives: ImportedScenario["objectives"]): string[]
     if (/(決定|理解|明白|知道|意識到|相信|了解|想通|認清|發現真相)/.test(o.text)) {
       out.push(`${where} 描述的是心理狀態或決定，不是 GM 會寫出來的事件。改成可觀察的動作（下令、交出、說出、帶到…）。`);
     }
-    if (/(或者|或是|，或|或(?!許))/.test(o.text)) {
+    // The rule is "one event, branches go in parentheses" — so a 或 inside
+    // （…） is the recommended form, not a violation. Only look outside them.
+    const outsideParens = o.text.replace(/[（(][^（）()]*[）)]/g, "");
+    if (/(或者|或是|，或|或(?!許))/.test(outsideParens)) {
       out.push(`${where} 含有「或」——請改寫成一件事，把分支放進括號，例如「取得農場控制權（合作或武力）」。`);
     }
     if (/(並且|然後|接著|之後再|再[^次])/.test(o.text)) {
@@ -128,6 +132,12 @@ function objectiveWarnings(objectives: ImportedScenario["objectives"]): string[]
 export function validateScenarioJson(raw: unknown): MachineReport {
   const blocking: string[] = [];
   const warnings: string[] = [];
+  // conversion_notes is the machine's own audit field; the platform would
+  // only report it as an unknown key. Validate the scenario without it.
+  if (raw && typeof raw === "object" && !Array.isArray(raw) && DECISIONS_KEY in (raw as object)) {
+    const { [DECISIONS_KEY]: _omit, ...rest } = raw as Record<string, unknown>;
+    raw = rest;
+  }
   const info: string[] = [];
 
   if (!looksLikeScenario(raw)) {
@@ -206,6 +216,79 @@ export function validateScenarioJson(raw: unknown): MachineReport {
 
   // 5. Counts for the human.
   const c = report.counts;
+  // ── exactly one start ───────────────────────────────────────────────
+  // The engine puts the party on the FIRST unlocked node (locations.ts).
+  // Any other node that is enterable from turn 1 without walking there is a
+  // second start: always, in free mode; in edges mode, when no path leads
+  // to it from the start.
+  const nodesArr: any[] = graph?.nodes ?? [];
+  const unlockedNodes = nodesArr.filter((n) => n.initial === "unlocked");
+  if (unlockedNodes.length > 1) {
+    const start = unlockedNodes[0];
+    let extra: any[];
+    if (graph?.travel_mode === "edges") {
+      const adj = new Map<string, Set<string>>();
+      const link = (a: string, b: string) => { if (!adj.has(a)) adj.set(a, new Set()); adj.get(a)!.add(b); };
+      const ids = new Set(nodesArr.map((n) => n.id));
+      const entryOf = (cid: string) => {
+        const cont = (graph?.containers ?? []).find((x: any) => x.id === cid);
+        const kids = nodesArr.filter((n) => n.container === cid);
+        return cont && kids.some((n) => n.id === cont.entry) ? cont.entry : kids[0]?.id ?? null;
+      };
+      const ep = (id: string) => (ids.has(id) ? id : entryOf(id));
+      for (const e of graph?.edges ?? []) {
+        const a = ep(e.from), b = ep(e.to);
+        if (!a || !b) continue;
+        link(a, b); if (e.two_way) link(b, a);
+      }
+      for (const cont of graph?.containers ?? []) {
+        if (!cont.all_children_connected) continue;
+        const kids = nodesArr.filter((n) => n.container === cont.id).map((n) => n.id);
+        kids.forEach((a) => kids.forEach((b) => { if (a !== b) link(a, b); }));
+      }
+      const seen = new Set<string>([start.id]); const q = [start.id];
+      while (q.length) { const id = q.shift()!; (adj.get(id) ?? new Set<string>()).forEach((t) => { if (!seen.has(t)) { seen.add(t); q.push(t); } }); }
+      extra = unlockedNodes.filter((n) => !seen.has(n.id));
+    } else {
+      extra = unlockedNodes.slice(1);
+    }
+    if (extra.length) {
+      const names = extra.slice(0, 5).map((n) => `「${n.name}」`).join("、") + (extra.length > 5 ? "…" : "");
+      blocking.push(
+        `起點只能有一個。引擎把第一個 unlocked 地點「${start.name}」當起點，但另有 ${extra.length} 個地點一開始就 unlocked（${names}）` +
+        (graph?.travel_mode === "edges" ? "，而且沒有路徑從起點走到它們。" : "，自由移動模式下玩家可以直接跳過去，等於多個起點。") +
+        `把它們改成 discovered 並給 unlock 條件（例如 visit:${start.id}），或 hidden 並由某個地點的 discovers 帶到；或改 travel_mode 為 edges 並用 edges 從起點連過去。`
+      );
+    }
+  }
+  if (unlockedNodes.length) info.push(`起點：「${unlockedNodes[0].name}」（nodes 裡第一個 unlocked 地點）`);
+
+  // ── evidence / location text must describe, not conclude ────────────
+  // reveal_text is what the players perceive when they get the item. A
+  // sentence that interprets it, states the truth, or scripts an NPC's
+  // reaction belongs in gm_notes or NPC knowledge. Heuristic → warning.
+  const CONCLUDES = /(證明|代表|顯示了|意味|真相|原來|其實|果然|可見|說明了|坐實|揭露|無疑|一定是|看得出|可以推斷|推測|顯然|技術不錯|他會|她會|若讓|對它.{0,6}一無所知)/;
+  for (const node of nodesArr) {
+    for (const ev of node.evidence ?? []) {
+      const m = CONCLUDES.exec(String(ev.reveal_text ?? ""));
+      if (m) warnings.push(`證物「${ev.name}」（${node.name}）的 reveal_text 像在下結論或寫劇本（「${m[0]}」）——只寫玩家看到、讀到、摸到的東西；它代表什麼、真相是什麼、NPC 會怎麼反應，放 gm_notes 或 NPC 情報。`);
+    }
+    const md = CONCLUDES.exec(String(node.desc ?? ""));
+    if (md) warnings.push(`地點「${node.name}」的瀏覽描述像在下結論（「${md[0]}」）——玩家還沒調查就看得到的文字，只能寫外觀。`);
+  }
+
+  // ── encounters need a plausible place / time ───────────────────────
+  // The engine fires an encounter the turn its condition holds, anywhere.
+  // One keyed on an item/objective with no `at`/`delay` therefore pops the
+  // NPC into whatever room the party got the item in.
+  for (const e of (graph as any)?.npc_encounters ?? []) {
+    const terms: string[] = (e.when ?? []).flat().map(String);
+    const reactive = terms.length > 0 && terms.every((t: string) => /^(item|objective|count):/.test(t));
+    if (reactive && !e.at && !e.delay) {
+      warnings.push(`NPC「${e.npc}」的觸發事件只以「${terms.join("、")}」為條件，沒有 at 也沒有 delay——玩家在任何地方拿到／完成的下一回合，他就會出現在那裡。除非原文說他能隨時找上門，否則加 at（他平常所在的地點或區域 id），必要時加 delay。`);
+    }
+  }
+
   info.push(`地點 ${c.nodes}、證物 ${c.evidence}、NPC ${c.npcs}、目標 ${c.objectives}、結局 ${c.endings}、路徑 ${c.edges}、區域 ${c.containers}`);
   info.push(`full_story ${fullStory.trim().length} 字；language ${normalized.language}；travel_mode ${graph?.travel_mode ?? "（無地點圖）"}`);
 

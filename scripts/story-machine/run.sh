@@ -12,7 +12,9 @@
 set -euo pipefail
 
 STORY="$(realpath "${1:?用法：run.sh <story.md> [out-dir]}")"
-OUT="$(realpath -m "${2:-$(dirname "$STORY")/out}")"
+OUT="${2:-$(dirname "$STORY")/out}"
+mkdir -p "$OUT"
+OUT="$(realpath "$OUT")"  # macOS realpath has no -m, so create first
 # npm scripts resolve from the repo root; paths above are absolute so this is safe.
 cd "$(dirname "$(realpath "$0")")/../.."
 MAX_ROUNDS="${MAX_ROUNDS:-3}"
@@ -43,7 +45,7 @@ for ((round = 1; round <= MAX_ROUNDS; round++)); do
 
   echo "  ✍  作者產出 JSON…"
   bash -c "$WRITER_CMD" < "$P.prompt.txt" > "$P.raw.txt"
-  $SM extract < "$P.raw.txt" > "$P.json"
+  $SM extract --story "$STORY" < "$P.raw.txt" > "$P.json"
 
   echo "  🔍 驗證器…"
   set +e
@@ -55,7 +57,7 @@ for ((round = 1; round <= MAX_ROUNDS; round++)); do
   bash -c "$CRITIC_CMD" < "$P.critic-prompt.txt" > "$P.critic.txt" || echo "  ⚠ 評審指令失敗，本輪視為無評審意見"
 
   if $SM gate "$P.report.json" "$P.critic.txt"; then
-    cp "$P.json" "$OUT/scenario.json"
+    $SM finalize "$P.json" --decisions "$OUT/decisions.md" > "$OUT/scenario.json"
     echo
     echo "🎉 完成：$OUT/scenario.json（第 $round 輪通過）"
     echo "   下一步：打開「建立劇本 → 貼上 JSON」，貼入這個檔案的內容，按匯入。"
@@ -67,7 +69,7 @@ for ((round = 1; round <= MAX_ROUNDS; round++)); do
   prev_critic="$P.critic.txt"
 done
 
-cp "$prev_json" "$OUT/scenario.json"
+$SM finalize "$prev_json" --decisions "$OUT/decisions.md" > "$OUT/scenario.json"
 echo
 echo "⚠ 跑滿 $MAX_ROUNDS 輪仍未通過。最後一版已存到 $OUT/scenario.json，"
 echo "  請看 $prev_report 和 $prev_critic 決定是手動修還是再跑一次。"

@@ -1,0 +1,1475 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>故事機</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;700&family=Cormorant:wght@600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --gold:#c9a96e; --gold-light:#d4b87a; --gold-muted:#c9a96e99; --gold-dim:#c9a96e33;
+    --bg:#0c0a07; --surface:#161310; --card:#1a1612; --hover:#201d17; --border:#2a2418;
+    --text:#e8e2d6; --dim:#9a9184; --faint:#6b6559;
+    --red:#d97066; --red-dim:#d9706622; --amber:#d9a441; --amber-dim:#d9a44122;
+    --green:#7ba86b; --green-dim:#7ba86b22;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font:15px/1.6 Inter,system-ui,-apple-system,"PingFang TC","Noto Sans TC",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{font-family:"Noto Serif TC",serif; font-weight:700; margin:0}
+  button{font:inherit; cursor:pointer}
+  a{color:var(--gold)}
+
+  /* ── chrome ─────────────────────────────────────────── */
+  header{
+    display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;
+    padding:18px 26px; border-bottom:1px solid var(--border); background:var(--surface);
+    position:sticky; top:0; z-index:20;
+  }
+  header h1{font-size:21px; letter-spacing:.06em; color:var(--gold)}
+  header .en{font-family:Cormorant,serif; font-size:16px; color:var(--gold-muted); letter-spacing:.14em; text-transform:uppercase}
+  header .sub{color:var(--faint); font-size:12.5px; margin-left:auto}
+
+  main{display:grid; grid-template-columns:minmax(330px,400px) 1fr; gap:0; min-height:calc(100vh - 61px)}
+  @media(max-width:900px){ main{grid-template-columns:1fr} }
+
+  /* ── left rail ──────────────────────────────────────── */
+  aside{border-right:1px solid var(--border); background:var(--surface); padding:22px; display:flex; flex-direction:column; gap:16px}
+  @media(max-width:900px){ aside{border-right:none; border-bottom:1px solid var(--border)} }
+
+  .tabs{display:flex; gap:2px; background:var(--bg); padding:3px; border-radius:8px; border:1px solid var(--border)}
+  .tabs button{
+    flex:1; background:none; border:0; color:var(--dim); padding:7px 10px;
+    border-radius:6px; font-size:13.5px; transition:.15s;
+  }
+  .tabs button[aria-selected=true]{background:var(--card); color:var(--gold); box-shadow:0 1px 0 #0006}
+
+  label{display:block; font-size:12px; color:var(--dim); letter-spacing:.04em; margin-bottom:5px}
+  textarea,input[type=text],input[type=number]{
+    width:100%; background:var(--bg); color:var(--text); border:1px solid var(--border);
+    border-radius:8px; padding:10px 11px; font-size:13.5px; font-family:inherit; resize:vertical;
+  }
+  textarea{min-height:230px; line-height:1.65}
+  textarea.mono,input.mono{font-family:var(--mono); font-size:12.5px}
+  textarea:focus,input:focus{outline:none; border-color:var(--gold-dim); box-shadow:0 0 0 3px #c9a96e14}
+  .hint{font-size:11.5px; color:var(--faint); margin-top:5px}
+
+  details.adv{border:1px solid var(--border); border-radius:8px; background:var(--bg)}
+  details.adv summary{padding:9px 12px; font-size:12.5px; color:var(--dim); cursor:pointer; list-style:none}
+  details.adv summary::-webkit-details-marker{display:none}
+  details.adv summary::before{content:"▸ "; color:var(--faint)}
+  details.adv[open] summary::before{content:"▾ "}
+  details.adv .body{padding:4px 12px 13px; display:grid; gap:11px}
+
+  .go{
+    background:linear-gradient(180deg,var(--gold-light),var(--gold)); color:#1a1305; border:0;
+    padding:12px; border-radius:9px; font-weight:600; font-size:15px; letter-spacing:.04em;
+    font-family:"Noto Serif TC",serif;
+  }
+  .go:disabled{opacity:.4; cursor:not-allowed}
+  .ghost{background:none; border:1px solid var(--border); color:var(--dim); padding:9px 14px; border-radius:8px; font-size:13px}
+  .ghost:hover{background:var(--hover); color:var(--text)}
+
+  /* ── right stream ───────────────────────────────────── */
+  section.stream{padding:22px 26px 80px; overflow-x:hidden}
+  .empty{color:var(--faint); text-align:center; padding:90px 20px; font-family:"Noto Serif TC",serif; line-height:2.1}
+  .empty .big{font-size:34px; color:var(--border); display:block; margin-bottom:12px; font-family:Cormorant,serif; letter-spacing:.2em}
+
+  .round{border:1px solid var(--border); border-radius:11px; background:var(--card); margin-bottom:16px; overflow:hidden}
+  .round > .head{
+    display:flex; align-items:center; gap:12px; padding:13px 16px;
+    background:var(--surface); border-bottom:1px solid var(--border); flex-wrap:wrap;
+  }
+  .round > .head h2{font-size:15px; color:var(--gold); letter-spacing:.08em}
+  .chips{display:flex; gap:7px; margin-left:auto; flex-wrap:wrap}
+  .chip{
+    display:inline-flex; align-items:center; gap:5px; font-size:11.5px; padding:3px 9px;
+    border-radius:20px; border:1px solid var(--border); color:var(--faint); background:var(--bg);
+  }
+  .chip.run{color:var(--gold); border-color:var(--gold-dim)}
+  .chip.ok{color:var(--green); border-color:#7ba86b44}
+  .chip.bad{color:var(--red); border-color:#d9706644}
+  .chip .dot{width:5px; height:5px; border-radius:50%; background:currentColor}
+  .chip.run .dot{animation:pulse 1.1s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+
+  .panel{border-top:1px solid var(--border)}
+  .panel > summary{
+    padding:11px 16px; cursor:pointer; font-size:13px; color:var(--dim);
+    display:flex; align-items:center; gap:9px; list-style:none;
+  }
+  .panel > summary::-webkit-details-marker{display:none}
+  .panel > summary::before{content:"▸"; color:var(--faint); font-size:10px}
+  .panel[open] > summary::before{content:"▾"}
+  .panel > summary:hover{background:var(--hover)}
+  .panel > summary .tag{margin-left:auto; font-size:11px; color:var(--faint)}
+  .panel .inner{padding:4px 16px 16px}
+
+  .findings{list-style:none; margin:0; padding:0; display:grid; gap:7px}
+  .findings li{
+    display:grid; grid-template-columns:auto 1fr; gap:9px; align-items:start;
+    padding:9px 11px; border-radius:7px; font-size:13.2px; line-height:1.55;
+  }
+  .findings li .n{font-family:var(--mono); font-size:11px; opacity:.75; padding-top:2px}
+  li.block{background:var(--red-dim); color:#f0c2bc; border-left:2px solid var(--red)}
+  li.warn{background:var(--amber-dim); color:#eed9a8; border-left:2px solid var(--amber)}
+  li.info{background:var(--bg); color:var(--dim); border-left:2px solid var(--border); font-family:var(--mono); font-size:12px}
+
+  .fcard{background:var(--red-dim); border-left:2px solid var(--red); border-radius:7px; padding:11px 13px; display:grid; gap:5px}
+  .fcard.sug{background:var(--bg); border-left-color:var(--border)}
+  .fcard .top{display:flex; gap:9px; align-items:center; flex-wrap:wrap}
+  .fcard .rule{font-size:10.5px; font-weight:600; letter-spacing:.06em; background:var(--red); color:#1a1305; padding:2px 7px; border-radius:4px}
+  .fcard.sug .rule{background:var(--border); color:var(--dim)}
+  .fcard .where{font-family:var(--mono); font-size:11.5px; color:var(--gold-muted)}
+  .fcard .issue{font-size:13.2px; color:#f0c2bc}
+  .fcard.sug .issue{color:var(--text)}
+  .fcard .fix{font-size:12.8px; color:var(--dim); border-top:1px dashed #ffffff14; padding-top:6px}
+  .fcard .fix b{color:var(--green); font-weight:600}
+
+  /* scenario summary */
+  .meta{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px}
+  .meta span{font-size:11.5px; padding:3px 9px; border-radius:5px; background:var(--bg); border:1px solid var(--border); color:var(--dim)}
+  .quote{border-left:2px solid var(--gold-dim); padding:2px 0 2px 12px; color:var(--dim); font-size:13px; margin-bottom:14px; line-height:1.7}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+  @media(max-width:760px){ .grid2{grid-template-columns:1fr} }
+  .slabel{font-size:11px; color:var(--faint); letter-spacing:.1em; text-transform:uppercase; margin:0 0 7px; font-family:Inter,sans-serif; font-weight:600}
+  .rows{display:grid; gap:6px}
+  .row{background:var(--bg); border:1px solid var(--border); border-radius:7px; padding:8px 11px; font-size:13px}
+  .row .t{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+  .row .id{font-family:var(--mono); font-size:11px; color:var(--faint)}
+  .row .d{color:var(--dim); font-size:12.3px; margin-top:3px; line-height:1.55}
+  .badge{font-size:10px; padding:1.5px 6px; border-radius:4px; border:1px solid var(--border); color:var(--dim)}
+  .badge.unlocked{color:var(--green); border-color:#7ba86b44}
+  .badge.discovered{color:var(--amber); border-color:#d9a44144}
+  .badge.hidden{color:var(--red); border-color:#d9706644}
+  .badge.req{color:var(--gold); border-color:var(--gold-dim)}
+  .badge.victory{color:var(--green); border-color:#7ba86b44}
+  .badge.failure{color:var(--red); border-color:#d9706644}
+  .badge.neutral{color:var(--dim)}
+  code.cond{font-family:var(--mono); font-size:11px; color:var(--gold-muted); word-break:break-all}
+
+  pre.json{
+    background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:13px;
+    font-family:var(--mono); font-size:11.5px; line-height:1.65; color:var(--dim);
+    max-height:420px; overflow:auto; margin:0; white-space:pre-wrap; word-break:break-word;
+  }
+
+  /* result banner */
+  .result{
+    border-radius:11px; padding:17px 19px; margin-bottom:16px; display:flex;
+    gap:15px; align-items:center; flex-wrap:wrap; border:1px solid;
+  }
+  .result.pass{background:var(--green-dim); border-color:#7ba86b55}
+  .result.fail{background:var(--amber-dim); border-color:#d9a44155}
+  .result h2{font-size:16px}
+  .result.pass h2{color:var(--green)}
+  .result.fail h2{color:var(--amber)}
+  .result p{margin:3px 0 0; font-size:12.8px; color:var(--dim)}
+  .result .acts{margin-left:auto; display:flex; gap:8px; flex-wrap:wrap}
+
+  /* log drawer */
+  .logwrap{position:fixed; right:0; bottom:0; left:auto; width:min(560px,100%); z-index:30}
+  .logwrap details{background:#08070500; border-top:1px solid var(--border); border-left:1px solid var(--border)}
+  .logwrap details[open]{background:#080705f2; backdrop-filter:blur(6px); border-top-left-radius:10px}
+  .logwrap summary{
+    padding:8px 15px; font-size:11.5px; color:var(--faint); cursor:pointer; list-style:none;
+    display:flex; gap:9px; align-items:center; background:#080705ee; border-top-left-radius:10px;
+  }
+  .logwrap summary::-webkit-details-marker{display:none}
+  .logwrap .lines{max-height:230px; overflow:auto; padding:6px 15px 12px; font-family:var(--mono); font-size:10.8px; line-height:1.6; color:var(--faint)}
+  .logwrap .lines div{white-space:pre-wrap; word-break:break-all}
+  .logwrap .lines .writer{color:#8a9bb0}
+  .logwrap .lines .critic{color:#b09a8a}
+  .runitem{
+    background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:10px 12px;
+    cursor:pointer; transition:.15s; display:grid; gap:5px;
+  }
+  .runitem:hover{background:var(--hover); border-color:var(--gold-dim)}
+  .runitem .t{display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:13.5px}
+  .runitem .t .nm{color:var(--text)}
+  .runitem .meta2{display:flex; gap:7px; flex-wrap:wrap; font-size:11px; color:var(--faint)}
+  .runitem .meta2 span{white-space:nowrap}
+  .runitem .id{font-family:var(--mono); font-size:10.5px; color:var(--faint)}
+
+  .urlrow{display:flex; gap:6px; margin-top:7px}
+  .urlrow input{flex:1; font-size:12.5px; padding:8px 10px}
+  .urlrow button{padding:8px 13px; white-space:nowrap}
+  .src{font-size:11.5px; color:var(--gold-muted); display:flex; gap:6px; align-items:baseline; flex-wrap:wrap}
+  .src a{color:var(--gold-muted); text-decoration:none; border-bottom:1px dotted var(--gold-dim); word-break:break-all}
+  .src .k{border:1px solid var(--border); border-radius:4px; padding:1px 6px; font-size:10px; color:var(--faint)}
+
+  /* CLI status */
+  .cli{display:grid; gap:6px; border:1px solid var(--border); border-radius:8px; background:var(--bg); padding:10px 12px}
+  .cli .r{display:flex; align-items:center; gap:8px; font-size:12.5px}
+  .cli .r .nm{color:var(--text); min-width:58px}
+  .cli .r .ver{font-family:var(--mono); font-size:10.5px; color:var(--faint)}
+  .cli .r .st{margin-left:auto; font-size:11px; padding:2px 8px; border-radius:20px; border:1px solid var(--border)}
+  .cli .r .st.on{color:var(--green); border-color:#7ba86b44}
+  .cli .r .st.off{color:var(--red); border-color:#d9706644}
+  .cli .r .st.no{color:var(--faint)}
+  .cli .fix{font-size:11px; color:var(--amber); font-family:var(--mono)}
+  .cli .top{display:flex; align-items:center; gap:8px; font-size:11px; color:var(--faint); letter-spacing:.08em; text-transform:uppercase; font-weight:600}
+  .cli .top button{margin-left:auto; background:none; border:0; color:var(--gold-muted); font-size:11px; padding:0}
+
+  /* role / model pickers */
+  .role{display:grid; gap:7px; padding:10px 12px; border:1px solid var(--border); border-radius:8px; background:var(--bg)}
+  .role .hd{display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text)}
+  .role .hd .who{font-weight:600}
+  .role .hd .note{color:var(--faint); font-size:11px}
+  .role .pick{display:grid; grid-template-columns:1fr 1fr; gap:7px}
+  select{
+    background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:7px;
+    padding:7px 9px; font-size:12.5px; font-family:inherit; width:100%;
+  }
+  select:focus{outline:none; border-color:var(--gold-dim)}
+  .role .cmd{font-family:var(--mono); font-size:10.5px; color:var(--faint); word-break:break-all; line-height:1.5}
+  .sw{display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--dim); cursor:pointer}
+  .sw input{accent-color:var(--gold); width:15px; height:15px}
+
+  /* fun report */
+  .fun{border:1px solid var(--gold-dim); border-radius:11px; background:var(--card); margin-bottom:16px; overflow:hidden}
+  .fun > .head{display:flex; align-items:center; gap:12px; padding:13px 16px; background:linear-gradient(90deg,#c9a96e18,transparent); border-bottom:1px solid var(--border); flex-wrap:wrap}
+  .fun > .head h2{font-size:15px; color:var(--gold); letter-spacing:.08em}
+  .fun .verdict{font-size:11.5px; padding:3px 10px; border-radius:20px; border:1px solid var(--gold-dim); color:var(--gold)}
+  .fun .oneline{padding:12px 16px 4px; color:var(--dim); font-size:13.5px; font-style:italic; line-height:1.7}
+  .fun .inner{padding:10px 16px 16px}
+  .rates{display:grid; gap:8px; margin-bottom:14px}
+  .rate{display:grid; grid-template-columns:78px 86px 1fr; gap:11px; align-items:center; font-size:12.8px}
+  .rate .a{color:var(--text)}
+  .rate .bar{display:flex; gap:3px}
+  .rate .bar i{width:14px; height:5px; border-radius:2px; background:var(--border)}
+  .rate .bar i.on{background:var(--gold)}
+  .rate .bar i.lo{background:var(--red)}
+  .rate .w{color:var(--dim); font-size:12.2px; line-height:1.55}
+  .hl{background:var(--green-dim); border-left:2px solid var(--green); border-radius:7px; padding:9px 12px; font-size:12.8px; color:#c9dfc0}
+
+  .cn{font-size:11.5px; color:var(--amber); margin-top:4px}
+  .pick2{display:grid; grid-template-columns:1fr 1fr; gap:9px}
+  .sgate{font-family:var(--mono); font-size:10.5px; color:var(--amber); margin-left:6px}
+
+  /* ── scenario map ── */
+  .mapd{border:1px solid var(--border); border-radius:8px; background:var(--bg); margin-bottom:14px}
+  .mapd > summary{padding:9px 12px; font-size:12.5px; color:var(--dim); cursor:pointer; list-style:none}
+  .mapd > summary::-webkit-details-marker{display:none}
+  .mapd > summary::before{content:"▸ "; color:var(--faint)}
+  .mapd[open] > summary::before{content:"▾ "}
+  .mapinner{padding:0 10px 10px}
+  .maplayout{display:flex; gap:12px; align-items:stretch}
+  @media(max-width:900px){ .maplayout{flex-direction:column} }
+  .map{flex:1; min-width:0; overflow:auto; max-height:560px; border:1px solid var(--border); border-radius:8px;
+       background:#0a0806; background-image:radial-gradient(#ffffff09 1px, transparent 1px); background-size:22px 22px}
+  .mapcanvas{position:relative}
+  .medges{position:absolute; left:0; top:0}
+  .mnode{position:absolute; box-sizing:border-box; background:var(--card); border:1px solid var(--border); border-radius:9px;
+         padding:6px 10px 8px; cursor:pointer; overflow:hidden; transition:border-color .15s, box-shadow .15s}
+  .mnode:hover{border-color:var(--gold-dim)}
+  .mnode.sel{border-color:var(--gold); box-shadow:0 0 0 3px #c9a96e22}
+  .mnode.discovered{border-style:dashed}
+  .mnode.hidden{border-style:dashed; opacity:.78; border-color:#d9706666}
+  .mnode .mh{display:flex; align-items:center; gap:6px; height:28px; margin-bottom:2px}
+  .mnode .mn{font-family:"Noto Serif TC",serif; font-weight:700; font-size:13px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1}
+  .mnode .mlock{font-size:11px}
+  .mnode .mi{font-size:11.5px; line-height:20px; height:20px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--dim)}
+  .mnode .mi.ev{color:var(--gold-light)}
+  .mnode .mi.np{color:#a9b8c9}
+  .mnode .mi.none{color:var(--faint); font-style:italic}
+  .mapside{width:300px; flex:none; overflow:auto; max-height:560px; border:1px solid var(--border); border-radius:8px; padding:12px; background:var(--card); font-size:12.5px}
+  @media(max-width:900px){ .mapside{width:auto; max-height:none} }
+  .mapside .sh{display:flex; align-items:center; gap:8px; margin-bottom:2px}
+  .mapside .st{font-family:"Noto Serif TC",serif; font-weight:700; font-size:15px; color:var(--gold)}
+  .mapside .sid{font-family:var(--mono); font-size:10.5px; color:var(--faint); margin-bottom:8px}
+  .mapside .sl{display:grid; grid-template-columns:64px 1fr; gap:6px; margin:6px 0; line-height:1.55}
+  .mapside .sl.lock .sv{color:var(--red)}
+  .mapside .sk{color:var(--faint); font-size:11px; padding-top:2px}
+  .mapside .sv{color:var(--text)}
+  .mapside .sv.dim{color:var(--dim); font-size:12px; margin-top:3px; line-height:1.5}
+  .mapside .sitem{background:var(--bg); border:1px solid var(--border); border-radius:7px; padding:7px 9px; margin-bottom:6px}
+  .mapside .sitem.click{cursor:pointer}
+  .mapside .sitem.click:hover{border-color:var(--gold-dim)}
+  .mapside .sit{display:flex; gap:7px; align-items:center; flex-wrap:wrap; color:var(--text)}
+  .mapside .nl{color:var(--gold-light); text-decoration:none; border-bottom:1px dotted var(--gold-dim)}
+  .legend{display:flex; flex-wrap:wrap; gap:8px 12px; margin:8px 0 4px; font-size:11px; color:var(--dim)}
+  .legend .li{display:inline-flex; align-items:center; gap:5px}
+  .legend i{display:inline-block; width:14px; height:9px; border-radius:2px; border:1px solid var(--border); background:var(--card)}
+  .legend i.di{border-style:dashed}
+  .legend i.hi{border-style:dashed; border-color:#d9706666; opacity:.78}
+  .legend i.ln{height:0; border:0; border-top:2px solid #8a8072; width:18px; border-radius:0}
+  .legend i.ln.d{border-top:2px dashed #c9a96e}
+  .legend i.ln.u{border-top:2px dotted #d97066}
+
+  .spin{display:inline-block; width:9px; height:9px; border:1.5px solid var(--gold-dim); border-top-color:var(--gold); border-radius:50%; animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>故事機</h1>
+  <span class="en">Story Machine</span>
+  <span class="sub" id="hsub">故事 → 作者 AI → 程式驗證 → 評審 AI → 可匯入的劇本 JSON</span>
+</header>
+
+<main>
+  <aside>
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-tab="run">產生劇本</button>
+      <button role="tab" aria-selected="false" data-tab="val">只驗證 JSON</button>
+      <button role="tab" aria-selected="false" data-tab="past">先前的執行</button>
+    </div>
+
+    <!-- 產生 -->
+    <div id="pane-run" style="display:grid;gap:16px">
+      <div>
+        <label for="story">故事原文</label>
+        <textarea id="story" placeholder="把一篇完整的故事貼進來&#10;&#10;包含：背景、真相、地點、人物、結局&#10;祕密要能附著在「某個地點 + 某個動作」上，玩家才拿得到"></textarea>
+        <div class="urlrow">
+          <input type="text" id="url" placeholder="或貼上網址，從網頁抓故事">
+          <button class="ghost" id="grab">抓取</button>
+        </div>
+        <div class="hint">
+          <span id="cc">0</span> 字 ·
+          <a href="#" id="pick">上傳 PDF / Word / 文字檔</a> ·
+          <a href="#" id="sample">載入範例</a>
+          <input type="file" id="file" accept=".pdf,.docx,.md,.txt,.markdown" style="display:none">
+          <div id="cnote" class="cn"></div>
+          <div id="fstat" style="margin-top:4px"></div>
+        </div>
+      </div>
+
+      <div class="cli" id="cli">
+        <div class="top">CLI 連線狀態 <button id="recheck">重新檢查</button></div>
+        <div style="color:var(--faint);font-size:12px">檢查中…</div>
+      </div>
+
+      <label class="sw"><input type="checkbox" id="wantfun" checked> 通過後加跑一輪「好不好玩」</label>
+
+      <details class="adv">
+        <summary>模型與進階設定</summary>
+        <div class="body">
+          <div>
+            <label for="rounds">最多輪數</label>
+            <input type="number" id="rounds" value="3" min="1" max="10">
+          </div>
+          <div class="pick2">
+            <div><label for="cabove">超過幾字先濃縮</label><input type="number" id="cabove" min="2000" step="1000"></div>
+            <div><label for="ctarget">濃縮到約幾字</label><input type="number" id="ctarget" min="1000" step="1000"></div>
+          </div>
+          <div class="hint">原文不超過十萬字時仍會原封不動放進 full_story 給主持人讀；模型只讀濃縮版來設計結構。濃縮用哪個模型，在下面的「濃縮」角色選。</div>
+          <div class="role" data-role="w">
+            <div class="hd"><span class="who">作者</span><span class="note">寫出劇本 JSON</span></div>
+            <div class="pick">
+              <select class="prov"></select>
+              <select class="model"></select>
+            </div>
+            <input type="text" class="mono custom" style="display:none">
+            <div class="cmd"></div>
+          </div>
+          <div class="role" data-role="c">
+            <div class="hd"><span class="who">評審</span><span class="note">找必修問題</span></div>
+            <div class="pick">
+              <select class="prov"></select>
+              <select class="model"></select>
+            </div>
+            <input type="text" class="mono custom" style="display:none">
+            <div class="cmd"></div>
+          </div>
+          <div class="role" data-role="k">
+            <div class="hd"><span class="who">濃縮</span><span class="note">故事太長時先摘要，用快的模型就好</span></div>
+            <div class="pick">
+              <select class="prov"></select>
+              <select class="model"></select>
+            </div>
+            <input type="text" class="mono custom" style="display:none">
+            <div class="cmd"></div>
+          </div>
+          <div class="role" data-role="f">
+            <div class="hd"><span class="who">試玩</span><span class="note">判斷好不好玩</span></div>
+            <div class="pick">
+              <select class="prov"></select>
+              <select class="model"></select>
+            </div>
+            <input type="text" class="mono custom" style="display:none">
+            <div class="cmd"></div>
+          </div>
+          <div class="hint">作者和評審用不同模型效果最好。驗證器是純程式，不受模型影響。</div>
+        </div>
+      </details>
+
+      <button class="go" id="go">開始</button>
+      <button class="ghost" id="stop" style="display:none">停止</button>
+    </div>
+
+    <!-- 先前的執行 -->
+    <div id="pane-past" style="display:none">
+      <div class="hint" style="margin-bottom:10px">硬碟上的執行結果，包含命令列跑的。點一筆就能把當時的畫面整個叫回來。</div>
+      <div id="runlist" class="rows"></div>
+    </div>
+
+    <!-- 只驗證 -->
+    <div id="pane-val" style="display:none">
+      <label for="vjson">劇本 JSON</label>
+      <textarea id="vjson" class="mono" placeholder='{ "title": "…", "location_graph": { … } }'></textarea>
+      <div class="hint">跑的是平台匯入與送審時同一套檢查，不呼叫任何 AI。</div>
+      <button class="go" id="vgo" style="margin-top:14px;width:100%">驗證</button>
+    </div>
+  </aside>
+
+  <section class="stream" id="stream">
+    <div class="empty" id="empty">
+      <span class="big">◈</span>
+      貼上一篇故事，按「開始」。<br>
+      機器會反覆改寫，直到它通過平台的匯入檢查與發佈門檻。
+    </div>
+  </section>
+</main>
+
+<div class="logwrap" id="logwrap" style="display:none">
+  <details>
+    <summary><span class="spin" id="logspin"></span> 執行紀錄 <span id="logcount" style="margin-left:auto"></span></summary>
+    <div class="lines" id="loglines"></div>
+  </details>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const el = (tag, cls, txt) => { const n = document.createElement(tag); if (cls) n.className = cls; if (txt != null) n.textContent = txt; return n; };
+const stream = $("#stream");
+// #empty is removed whenever the stream is cleared, so every caller must guard.
+const hideEmpty = () => { const e = $("#empty"); if (e) e.style.display = "none"; };
+
+// ── model pickers ───────────────────────────────────────────────────────────
+// A role is a stdin→stdout shell command. The selects only compose that string,
+// so anything expressible by hand stays expressible via 自訂.
+let PROVIDERS = {};
+const ROLE_DEFAULT = {};
+
+function composeCmd(role) {
+  const box = document.querySelector('.role[data-role=' + role + ']');
+  const prov = box.querySelector('.prov').value;
+  const model = box.querySelector('.model').value;
+  if (prov === "custom") return box.querySelector('.custom').value.trim();
+  const p = PROVIDERS[prov];
+  if (!p) return "";
+  const parts = [p.base];
+  if (model) parts.push(p.modelFlag, model);
+  if (p.suffix) parts.push(p.suffix);
+  return parts.join(" ");
+}
+
+function refreshRole(role) {
+  const box = document.querySelector('.role[data-role=' + role + ']');
+  const prov = box.querySelector('.prov').value;
+  const isCustom = prov === "custom";
+  box.querySelector('.model').style.display = isCustom ? "none" : "";
+  box.querySelector('.custom').style.display = isCustom ? "" : "none";
+  box.querySelector('.cmd').textContent = composeCmd(role) || "（請填入指令）";
+}
+
+function fillModels(role) {
+  const box = document.querySelector('.role[data-role=' + role + ']');
+  const p = PROVIDERS[box.querySelector('.prov').value];
+  const sel = box.querySelector('.model');
+  sel.innerHTML = "";
+  if (!p) return;
+  const none = el("option", null, "預設模型");
+  none.value = "";
+  sel.appendChild(none);
+  p.models.forEach(m => { const o = el("option", null, m); o.value = m; sel.appendChild(o); });
+}
+
+function setupRoles(d) {
+  PROVIDERS = d.providers;
+  const guess = (cmd) => {
+    for (const k of Object.keys(PROVIDERS)) if (cmd.startsWith(PROVIDERS[k].base.split(" ")[0])) return k;
+    return "custom";
+  };
+  ROLE_DEFAULT.w = d.writerCmd; ROLE_DEFAULT.c = d.criticCmd; ROLE_DEFAULT.f = d.funCmd; ROLE_DEFAULT.k = d.condenseCmd;
+  $("#cabove").value = d.condenseAbove; $("#ctarget").value = d.condenseTarget; countChars();
+  ["w", "c", "k", "f"].forEach(role => {
+    const box = document.querySelector('.role[data-role=' + role + ']');
+    const prov = box.querySelector('.prov');
+    Object.keys(PROVIDERS).forEach(k => { const o = el("option", null, PROVIDERS[k].label); o.value = k; prov.appendChild(o); });
+    const o = el("option", null, "自訂指令"); o.value = "custom"; prov.appendChild(o);
+    prov.value = guess(ROLE_DEFAULT[role] || "");
+    box.querySelector('.custom').value = ROLE_DEFAULT[role] || "";
+    fillModels(role);
+    const mm = /--model\s+(\S+)/.exec(ROLE_DEFAULT[role] || "");
+    if (mm && [...box.querySelector('.model').options].some(o => o.value === mm[1])) box.querySelector('.model').value = mm[1];
+    refreshRole(role);
+    prov.onchange = () => { fillModels(role); refreshRole(role); };
+    box.querySelector('.model').onchange = () => refreshRole(role);
+    box.querySelector('.custom').oninput = () => refreshRole(role);
+  });
+}
+
+fetch("/api/defaults").then(r => r.json()).then(setupRoles);
+
+// ── past runs ───────────────────────────────────────────────────────────────
+// Replayed through the same attach()/handle() path as a live run, so history
+// renders identically and needs no separate view.
+async function loadRuns() {
+  const host = $("#runlist");
+  host.innerHTML = "";
+  host.appendChild(el("div", "hint", "讀取中…"));
+  let d;
+  try { d = await (await fetch("/api/runs")).json(); }
+  catch { host.innerHTML = ""; host.appendChild(el("div", "hint", "讀不到執行紀錄。")); return; }
+  host.innerHTML = "";
+  if (!d.runs.length) { host.appendChild(el("div", "hint", "還沒有任何執行結果。")); return; }
+  d.runs.forEach(r => {
+    const it = el("div", "runitem");
+    const t = el("div", "t");
+    t.appendChild(el("span", "nm", r.title));
+    t.appendChild(el("span", "badge " + (r.passed ? "victory" : "failure"), r.passed ? "通過" : "未通過"));
+    if (r.funVerdict) t.appendChild(el("span", "badge", r.funVerdict + (r.funAvg ? " " + r.funAvg : "")));
+    it.appendChild(t);
+    const m = el("div", "meta2");
+    [r.rounds + " 輪", r.locations + " 地點",
+     new Date(r.when).toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }),
+    ].forEach(x => m.appendChild(el("span", null, x)));
+    if (r.tokens) m.appendChild(el("span", null, k(r.tokens) + " tokens" + (r.costUsd ? " · $" + r.costUsd.toFixed(2) : "")));
+    m.appendChild(el("span", "id", r.id));
+    it.appendChild(m);
+    it.onclick = () => {
+      stream.innerHTML = ""; rounds.clear(); lastJson = ""; usageLog = []; pendingUsage.clear();
+      $("#go").disabled = false; $("#go").textContent = "開始";
+      $("#stop").style.display = "none";
+      attach(r.id);
+    };
+    host.appendChild(it);
+  });
+}
+
+// ── CLI connection status ───────────────────────────────────────────────────
+async function checkCli() {
+  const host = $("#cli");
+  host.querySelectorAll(".r, .msg").forEach(n => n.remove());
+  const loading = host.querySelector("div:not(.top)");
+  if (loading) loading.remove();
+  let d;
+  try { d = await (await fetch("/api/cli-status")).json(); }
+  catch { host.appendChild(el("div", "msg", "無法檢查")); return; }
+  [["claude", "Claude"], ["codex", "Codex"]].forEach(([k, name]) => {
+    const c = d[k];
+    const r = el("div", "r");
+    r.appendChild(el("span", "nm", name));
+    r.appendChild(el("span", "ver", c.installed ? (c.version || "已安裝") : "未安裝"));
+    const st = el("span", "st " + (!c.installed ? "no" : c.loggedIn ? "on" : "off"),
+      !c.installed ? "找不到" : c.loggedIn ? "已連線" : "未登入");
+    r.appendChild(st);
+    host.appendChild(r);
+    if (c.installed && !c.loggedIn && c.hint) host.appendChild(el("div", "fix", c.hint));
+  });
+}
+checkCli();
+$("#recheck").onclick = checkCli;
+
+// ── tabs ────────────────────────────────────────────────────────────────────
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".tabs button").forEach(x => x.setAttribute("aria-selected", String(x === b)));
+  $("#pane-run").style.display = b.dataset.tab === "run" ? "grid" : "none";
+  $("#pane-val").style.display = b.dataset.tab === "val" ? "block" : "none";
+  $("#pane-past").style.display = b.dataset.tab === "past" ? "block" : "none";
+  if (b.dataset.tab === "past") loadRuns();
+});
+
+// ── story input ─────────────────────────────────────────────────────────────
+const story = $("#story");
+const countChars = () => {
+  const n = story.value.length;
+  $("#cc").textContent = n.toLocaleString();
+  const ab = +$("#cabove").value || 25000, tg = +$("#ctarget").value || 12000;
+  $("#cnote").textContent = n > ab ? `超過 ${ab.toLocaleString()} 字，開始時會先濃縮到約 ${tg.toLocaleString()} 字，模型才不用一次吞下整篇。` : "";
+};
+["cabove", "ctarget"].forEach(id => $("#" + id).addEventListener("input", countChars));
+story.addEventListener("input", countChars);
+story.addEventListener("dragover", e => { e.preventDefault(); story.style.borderColor = "var(--gold)"; });
+story.addEventListener("dragleave", () => story.style.borderColor = "");
+story.addEventListener("drop", e => {
+  e.preventDefault(); story.style.borderColor = "";
+  if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+});
+// ── fetch a story from a web page ───────────────────────────────────────────
+// The extracted text lands in the textarea rather than going straight into a
+// run: a fetched page is untrusted, and the author should read it first.
+async function grabUrl() {
+  const u = $("#url").value.trim();
+  if (!u) return;
+  const stat = $("#fstat");
+  const btn = $("#grab");
+  btn.disabled = true; btn.textContent = "抓取中…";
+  stat.textContent = "讀取 " + u + " …";
+  stat.style.color = "var(--faint)";
+  try {
+    const r = await fetch("/api/fetch-url", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: u }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    story.value = d.text;
+    countChars();
+    stat.textContent = "";
+    stat.style.color = "";
+    const src = el("div", "src");
+    src.appendChild(el("span", "k", d.kind));
+    src.appendChild(el("span", null, d.title));
+    src.appendChild(el("span", null, "· " + d.chars.toLocaleString() + " 字 ·"));
+    const a = el("a", null, "原始連結");
+    a.href = d.source; a.target = "_blank"; a.rel = "noreferrer noopener";
+    src.appendChild(a);
+    stat.appendChild(src);
+    stat.appendChild(el("div", null, "抓下來的文字已放進上面，請先看過再開始。"));
+    stat.lastChild.style.cssText = "color:var(--faint);margin-top:3px";
+  } catch (e) {
+    stat.textContent = e.message || "抓取失敗";
+    stat.style.color = "var(--red)";
+  } finally {
+    btn.disabled = false; btn.textContent = "抓取";
+  }
+}
+$("#grab").onclick = grabUrl;
+$("#url").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); grabUrl(); } });
+
+$("#pick").onclick = e => { e.preventDefault(); $("#file").click(); };
+$("#file").onchange = e => { if (e.target.files[0]) loadFile(e.target.files[0]); };
+
+// PDF and .docx are extracted on the server; plain text never leaves the page.
+async function loadFile(f) {
+  const stat = $("#fstat");
+  const plain = /\.(md|markdown|txt)$/i.test(f.name);
+  stat.textContent = "讀取 " + f.name + "…";
+  stat.style.color = "var(--faint)";
+  try {
+    if (plain) {
+      story.value = await f.text();
+    } else {
+      const r = await fetch("/api/extract?name=" + encodeURIComponent(f.name), { method: "POST", body: f });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      story.value = d.text;
+    }
+    countChars();
+    stat.textContent = "已讀入 " + f.name + "（" + story.value.length.toLocaleString() + " 字）";
+    stat.style.color = "var(--green)";
+  } catch (err) {
+    stat.textContent = err.message || "讀取失敗";
+    stat.style.color = "var(--red)";
+  }
+}
+$("#sample").onclick = async e => {
+  e.preventDefault();
+  const r = await fetch("/api/sample");
+  if (r.ok) { story.value = await r.text(); countChars(); }
+  else alert("找不到範例故事 stories/sample.md");
+};
+
+// ── round rendering ─────────────────────────────────────────────────────────
+const rounds = new Map();
+
+function roundCard(n, of) {
+  if (rounds.has(n)) return rounds.get(n);
+  hideEmpty();
+  const box = el("div", "round");
+  const head = el("div", "head");
+  head.appendChild(el("h2", null, "第 " + n + " 輪"));
+  if (of) head.appendChild(el("span", "chip", "上限 " + of));
+  const chips = el("div", "chips");
+  head.appendChild(chips);
+  box.appendChild(head);
+  const body = el("div");
+  box.appendChild(body);
+  stream.appendChild(box);
+  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  const r = { box, chips, body, steps: {} };
+  rounds.set(n, r);
+  return r;
+}
+
+const STEP_NAME = { writer: "作者", validator: "驗證器", critic: "評審", fun: "試玩" };
+
+function setStep(n, step, status, label) {
+  const r = roundCard(n);
+  let c = r.steps[step];
+  if (!c) { c = el("span", "chip"); r.steps[step] = c; r.chips.appendChild(c); }
+  c.className = "chip " + (status === "start" ? "run" : status === "error" ? "bad" : status === "ok" ? "ok" : status === "bad" ? "bad" : "");
+  c.textContent = "";
+  c.appendChild(el("span", "dot"));
+  c.appendChild(document.createTextNode(label || STEP_NAME[step] || step));
+  const pu = pendingUsage.get(n + "|" + step) || usageLog.find(u => u.round === n && u.step === step);
+  if (pu) applyUsage(c, pu);
+}
+
+function panel(n, title, tag, open) {
+  const r = roundCard(n);
+  const d = el("details", "panel");
+  if (open) d.open = true;
+  const s = el("summary");
+  s.appendChild(document.createTextNode(title));
+  if (tag) s.appendChild(el("span", "tag", tag));
+  d.appendChild(s);
+  const inner = el("div", "inner");
+  d.appendChild(inner);
+  r.body.appendChild(d);
+  return inner;
+}
+
+function listOf(items, cls) {
+  const ul = el("ul", "findings");
+  items.forEach((t, i) => {
+    const li = el("li", cls);
+    li.appendChild(el("span", "n", String(i + 1)));
+    li.appendChild(el("span", null, t));
+    ul.appendChild(li);
+  });
+  return ul;
+}
+
+function renderReport(n, report) {
+  const bad = report.blocking.length;
+  const inner = panel(n, "驗證器報告", bad ? bad + " 個阻斷 · " + report.warnings.length + " 個警告"
+                                          : "通過 · " + report.warnings.length + " 個警告", bad > 0);
+  if (bad) { inner.appendChild(el("p", "slabel", "阻斷（必須修）")); inner.appendChild(listOf(report.blocking, "block")); }
+  if (report.warnings.length) { inner.appendChild(el("p", "slabel", "警告")); inner.appendChild(listOf(report.warnings, "warn")); }
+  if (report.info.length) { inner.appendChild(el("p", "slabel", "資訊")); inner.appendChild(listOf(report.info, "info")); }
+  return inner;
+}
+
+function findingCard(f, isSug) {
+  const c = el("div", "fcard" + (isSug ? " sug" : ""));
+  const top = el("div", "top");
+  if (f.rule != null) top.appendChild(el("span", "rule", "規則 " + f.rule));
+  else if (isSug) top.appendChild(el("span", "rule", "建議"));
+  if (f.where) top.appendChild(el("span", "where", f.where));
+  c.appendChild(top);
+  if (f.issue) c.appendChild(el("div", "issue", f.issue));
+  if (f.fix) {
+    const fx = el("div", "fix");
+    fx.appendChild(el("b", null, "改法："));
+    fx.appendChild(document.createTextNode(f.fix));
+    c.appendChild(fx);
+  }
+  return c;
+}
+
+function renderCritic(n, ev) {
+  const nb = ev.blocking.length;
+  const inner = panel(n, "評審意見", ev.unparsed ? "輸出不是合法 JSON，本輪視為無意見"
+    : nb + " 條必修 · " + ev.suggestions.length + " 條建議", nb > 0);
+  if (ev.unparsed) { inner.appendChild(el("p", "hint", "評審沒有回傳可解析的 JSON，迴圈不會因此卡住。")); return; }
+  if (!nb && !ev.suggestions.length) { inner.appendChild(el("p", "hint", "評審沒有找到問題。")); return; }
+  if (nb) {
+    inner.appendChild(el("p", "slabel", "必修"));
+    const g = el("div", "rows"); ev.blocking.forEach(f => g.appendChild(findingCard(f, false))); inner.appendChild(g);
+  }
+  if (ev.suggestions.length) {
+    inner.appendChild(el("p", "slabel", "建議"));
+    const g = el("div", "rows"); ev.suggestions.forEach(f => g.appendChild(findingCard(f, true))); inner.appendChild(g);
+  }
+}
+
+function renderSummary(host, s, sc) {
+  const meta = el("div", "meta");
+  [s.genre, s.difficulty, s.travel_mode && "移動 " + s.travel_mode,
+   s.locations.length + " 地點",
+   s.locations.reduce((a, l) => a + l.evidence.length, 0) + " 證物",
+   s.npcs.length + " NPC", s.objectives.length + " 目標", s.endings.length + " 結局",
+   "原文 " + s.fullStoryChars.toLocaleString() + " 字",
+  ].filter(Boolean).forEach(t => meta.appendChild(el("span", null, t)));
+  host.appendChild(meta);
+
+  if (s.description) host.appendChild(el("div", "quote", s.description));
+
+  const g = el("div", "grid2");
+
+  const c1 = el("div");
+  c1.appendChild(el("p", "slabel", "地點"));
+  const lr = el("div", "rows");
+  s.locations.forEach(l => {
+    const row = el("div", "row");
+    const t = el("div", "t");
+    t.appendChild(document.createTextNode(l.name || "(無名)"));
+    t.appendChild(el("span", "badge " + (l.initial || ""), l.initial || "?"));
+    t.appendChild(el("span", "id", l.id || ""));
+    row.appendChild(t);
+    l.evidence.forEach(e => row.appendChild(el("div", "d", "◦ " + (e.name || "") + (e.how ? " — " + e.how : ""))));
+    lr.appendChild(row);
+  });
+  c1.appendChild(lr);
+  c1.appendChild(el("p", "slabel", "NPC"));
+  const nr = el("div", "rows");
+  s.npcs.forEach(p => {
+    const row = el("div", "row");
+    const t = el("div", "t");
+    t.appendChild(document.createTextNode(p.name || ""));
+    if (p.disposition) t.appendChild(el("span", "badge", p.disposition));
+    t.appendChild(el("span", "id", "情報 " + p.knowledge));
+    row.appendChild(t);
+    if (p.goal) row.appendChild(el("div", "d", p.goal));
+    const full = sc && (sc.npcs || []).find(x => x && x.name === p.name);
+    const ks = (full && full.knowledge) || [];
+    if (ks.length) {
+      const kd = el("div", "d"); kd.appendChild(document.createTextNode("情報："));
+      ks.forEach((k, i) => {
+        if (i) kd.appendChild(document.createTextNode("／"));
+        kd.appendChild(document.createTextNode(k.topic || k.id || ""));
+        if (condText(k.when)) kd.appendChild(el("span", "sgate", "🔒" + condText(k.when)));
+      });
+      row.appendChild(kd);
+    }
+    nr.appendChild(row);
+  });
+  c1.appendChild(nr);
+  g.appendChild(c1);
+
+  const c2 = el("div");
+  c2.appendChild(el("p", "slabel", "目標"));
+  const or = el("div", "rows");
+  s.objectives.forEach(o => {
+    const row = el("div", "row");
+    const t = el("div", "t");
+    t.appendChild(document.createTextNode(o.text || ""));
+    t.appendChild(el("span", "badge" + (o.required ? " req" : ""), o.required ? "必要" : "加分"));
+    row.appendChild(t);
+    or.appendChild(row);
+  });
+  c2.appendChild(or);
+  c2.appendChild(el("p", "slabel", "結局"));
+  const er = el("div", "rows");
+  s.endings.forEach(e => {
+    const row = el("div", "row");
+    const t = el("div", "t");
+    t.appendChild(document.createTextNode(e.name || ""));
+    t.appendChild(el("span", "badge " + (e.type || ""), e.type || ""));
+    row.appendChild(t);
+    if (e.condition) row.appendChild(el("code", "cond", JSON.stringify(e.condition)));
+    if (e.description) row.appendChild(el("div", "d", e.description));
+    er.appendChild(row);
+  });
+  c2.appendChild(er);
+  g.appendChild(c2);
+
+  host.appendChild(g);
+}
+
+function renderFun(ev) {
+  const box = el("div", "fun");
+  const head = el("div", "head");
+  head.appendChild(el("h2", null, "試玩評審"));
+  if (ev.verdict) head.appendChild(el("span", "verdict", ev.verdict));
+  const avg = ev.ratings.length
+    ? (ev.ratings.reduce((a, r) => a + r.score, 0) / ev.ratings.length).toFixed(1) : null;
+  if (avg) head.appendChild(el("span", "chip", "平均 " + avg + " / 5"));
+  box.appendChild(head);
+  if (ev.one_line) box.appendChild(el("div", "oneline", "「" + ev.one_line + "」"));
+
+  const inner = el("div", "inner");
+  if (ev.ratings.length) {
+    const g = el("div", "rates");
+    ev.ratings.forEach(r => {
+      const row = el("div", "rate");
+      row.appendChild(el("div", "a", r.aspect));
+      const bar = el("div", "bar");
+      for (let i = 1; i <= 5; i++) {
+        const b = el("i");
+        if (i <= r.score) b.className = r.score <= 2 ? "on lo" : "on";
+        bar.appendChild(b);
+      }
+      row.appendChild(bar);
+      row.appendChild(el("div", "w", r.why));
+      g.appendChild(row);
+    });
+    inner.appendChild(g);
+  }
+  if (ev.risks.length) {
+    inner.appendChild(el("p", "slabel", "會讓人玩不下去的地方"));
+    const g = el("div", "rows");
+    ev.risks.forEach(f => g.appendChild(findingCard(f, false)));
+    inner.appendChild(g);
+  }
+  if (ev.highlights.length) {
+    inner.appendChild(el("p", "slabel", "做得好的地方"));
+    const g = el("div", "rows");
+    ev.highlights.forEach(h => g.appendChild(el("div", "hl", h)));
+    inner.appendChild(g);
+  }
+  if (!ev.ratings.length && !ev.risks.length) inner.appendChild(el("p", "hint", "試玩評審沒有回傳內容。"));
+  box.appendChild(inner);
+  stream.insertBefore(box, stream.firstChild);
+}
+
+// ── scenario map ────────────────────────────────────────────────────────────
+// Drawn straight from the scenario JSON. Layout is deterministic (card height
+// is computed from line counts, never measured), so it renders correctly even
+// inside a closed <details>. Rooms are columns by distance from the open
+// starting rooms; a room the player can never reach is called out.
+const SVGNS = "http://www.w3.org/2000/svg";
+let mapSeq = 0;
+function svgEl(tag, attrs) { const n = document.createElementNS(SVGNS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); return n; }
+function condText(when) {
+  if (!Array.isArray(when) || !when.length) return "";
+  return when.map(g => (Array.isArray(g) ? g : [g]).map(String).join(" 且 ")).join("　或　");
+}
+const INITIAL_TXT = { unlocked: "開放", discovered: "已知未開", hidden: "隱藏" };
+
+function renderScenario(host, s, sc, mapOpen) {
+  if (sc) {
+    const d = el("details", "mapd"); if (mapOpen) d.open = true;
+    d.appendChild(el("summary", null, "劇本地圖 · 地點、路徑、證物、NPC"));
+    const inner = el("div", "mapinner"); d.appendChild(inner); host.appendChild(d);
+    renderMap(inner, sc);
+  }
+  if (s) renderSummary(host, s, sc);
+}
+
+function renderMap(host, sc) {
+  const g = sc.location_graph || {};
+  const nodes = (Array.isArray(g.nodes) ? g.nodes : []).filter(n => n && n.id);
+  if (!nodes.length) { host.appendChild(el("p", "hint", "這份劇本沒有地點資料，畫不出地圖。")); return; }
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  const evOwner = new Map();
+  nodes.forEach(n => (n.evidence || []).forEach(e => { if (e && e.id) evOwner.set(e.id, n.id); }));
+  const containers = new Map((g.containers || []).filter(c => c && c.id).map(c => [c.id, c]));
+  const placements = (g.npc_placements || []).filter(p => p && byId.has(p.at));
+  const encounters = Array.isArray(g.npc_encounters) ? g.npc_encounters : [];
+  const npcs = (sc.npcs || []).filter(p => p && p.name);
+  const npcByName = new Map(npcs.map(p => [p.name, p]));
+  const npcsAt = (id) => placements.filter(p => p.at === id);
+
+  // links: travel edges, discovers, and unlock dependencies (visit:/after:/item:)
+  const links = [];
+  (g.edges || []).forEach(e => { if (e && byId.has(e.from) && byId.has(e.to) && e.from !== e.to) links.push({ from: e.from, to: e.to, kind: "edge", two: !!e.two_way }); });
+  nodes.forEach(n => (n.discovers || []).forEach(t => { if (byId.has(t) && t !== n.id) links.push({ from: n.id, to: t, kind: "discover" }); }));
+  nodes.forEach(n => {
+    const deps = new Set();
+    (n.unlock || []).forEach(grp => (Array.isArray(grp) ? grp : [grp]).forEach(term => {
+      const t = String(term), i = t.indexOf(":"); if (i < 0) return;
+      const k = t.slice(0, i), v = t.slice(i + 1);
+      if ((k === "visit" || k === "after") && byId.has(v)) deps.add(v);
+      if (k === "item" && evOwner.has(v)) deps.add(evOwner.get(v));
+    }));
+    deps.forEach(d => { if (d !== n.id) links.push({ from: d, to: n.id, kind: "unlock", label: condText(n.unlock) }); });
+  });
+
+  // columns by BFS distance from the open rooms
+  const adj = new Map(nodes.map(n => [n.id, new Set()]));
+  links.forEach(l => { adj.get(l.from).add(l.to); if (l.kind === "edge" && l.two) adj.get(l.to).add(l.from); });
+  const members = new Map();
+  nodes.forEach(n => { if (n.container && containers.has(n.container)) { if (!members.has(n.container)) members.set(n.container, []); members.get(n.container).push(n.id); } });
+  members.forEach((ids, cid) => { if (containers.get(cid).all_children_connected !== false) ids.forEach(a => ids.forEach(b => { if (a !== b) adj.get(a).add(b); })); });
+  // The engine starts the party on the FIRST unlocked node — that is the one
+  // and only root. Every other node has to be walked to, discovered, or
+  // unlocked; an unlocked node the BFS never reaches is a second start.
+  const start = nodes.find(n => (n.initial || "unlocked") === "unlocked") || nodes[0];
+  const depth = new Map(); const q = [];
+  depth.set(start.id, 0); q.push(start.id);
+  while (q.length) { const id = q.shift(); adj.get(id).forEach(t => { if (!depth.has(t)) { depth.set(t, depth.get(id) + 1); q.push(t); } }); }
+  let maxD = 0; depth.forEach(v => { maxD = Math.max(maxD, v); });
+  // Every unreached room still gets a column (or it has no position and the
+  // card pass crashes). The warning is narrower: unreached AND no unlock of
+  // any kind — a room gated on round:/count:/objective: opens when that
+  // fires, it just has no source room for the BFS to walk from.
+  const unreached = nodes.filter(n => !depth.has(n.id));
+  unreached.forEach(n => depth.set(n.id, maxD + 1));
+  const extraStarts = unreached.filter(n => (n.initial || "unlocked") === "unlocked");
+  const orphans = unreached.filter(n => (n.initial || "unlocked") !== "unlocked" && !(n.unlock || []).some(g => (Array.isArray(g) ? g : [g]).length));
+  const cols = [];
+  nodes.forEach(n => { const d = depth.get(n.id); (cols[d] = cols[d] || []).push(n); });
+  cols.forEach(c => c.sort((a, b) => String(a.container || "￿").localeCompare(String(b.container || "￿"))));
+
+  // geometry
+  const W = 224, GX = 76, GY = 18, PAD = 22, LINE = 20, HEAD = 34, PADC = 16;
+  const pos = new Map(); let maxH = 0;
+  cols.forEach((col, ci) => {
+    let y = PAD + 26;
+    col.forEach(n => {
+      const lines = Math.max(1, (n.evidence || []).length + npcsAt(n.id).length);
+      const h = HEAD + lines * LINE + PADC;
+      pos.set(n.id, { x: PAD + ci * (W + GX), y, w: W, h, col: ci });
+      y += h + GY;
+    });
+    maxH = Math.max(maxH, y);
+  });
+  const CW = PAD * 2 + cols.length * (W + GX) - GX, CH = maxH + PAD;
+
+  const layout = el("div", "maplayout");
+  const scroller = el("div", "map");
+  const canvas = el("div", "mapcanvas");
+  canvas.style.width = CW + "px"; canvas.style.height = CH + "px";
+  const svg = svgEl("svg", { class: "medges", width: CW, height: CH, viewBox: `0 0 ${CW} ${CH}` });
+  const uid = "m" + (++mapSeq);
+  const defs = svgEl("defs", {});
+  [["edge", "#8a8072"], ["discover", "#c9a96e"], ["unlock", "#d97066"]].forEach(([k, c]) => {
+    const mk = svgEl("marker", { id: `${uid}-${k}`, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" });
+    mk.appendChild(svgEl("path", { d: "M0,0 L10,5 L0,10 z", fill: c }));
+    defs.appendChild(mk);
+  });
+  svg.appendChild(defs);
+  const gGroups = svgEl("g", {}), gLinks = svgEl("g", {});
+  svg.appendChild(gGroups); svg.appendChild(gLinks);
+  canvas.appendChild(svg);
+
+  members.forEach((ids, cid) => {
+    const c = containers.get(cid);
+    let x0 = 1e9, y0 = 1e9, x1 = 0, y1 = 0;
+    ids.forEach(id => { const p = pos.get(id); x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x + p.w); y1 = Math.max(y1, p.y + p.h); });
+    gGroups.appendChild(svgEl("rect", { x: x0 - 9, y: y0 - 24, width: x1 - x0 + 18, height: y1 - y0 + 33, rx: 12, fill: "#c9a96e0d", stroke: "#c9a96e33", "stroke-dasharray": "4 3" }));
+    const t = svgEl("text", { x: x0, y: y0 - 9, fill: "#c9a96e99", "font-size": 11, "font-family": "Inter, system-ui, sans-serif" });
+    t.textContent = (c.name || cid) + (c.all_children_connected !== false ? " · 區域內互通" : "");
+    gGroups.appendChild(t);
+  });
+
+  const style = { edge: { stroke: "#8a8072", width: 1.6, dash: "" }, discover: { stroke: "#c9a96e", width: 1.4, dash: "6 4" }, unlock: { stroke: "#d97066", width: 1.3, dash: "2 4" } };
+  const seen = new Set();
+  links.forEach(l => {
+    if (l.kind === "edge" && l.two) { const key = [l.from, l.to].sort().join("|"); if (seen.has(key)) return; seen.add(key); }
+    const a = pos.get(l.from), b = pos.get(l.to);
+    const ay = a.y + a.h / 2, by = b.y + b.h / 2;
+    let d;
+    if (b.col > a.col) { const x1 = a.x + a.w, x2 = b.x, m = (x2 - x1) / 2; d = `M${x1},${ay} C${x1 + m},${ay} ${x2 - m},${by} ${x2},${by}`; }
+    else if (b.col < a.col) { const x1 = a.x, x2 = b.x + b.w, m = (x1 - x2) / 2; d = `M${x1},${ay} C${x1 - m},${ay} ${x2 + m},${by} ${x2},${by}`; }
+    else { const x1 = a.x + a.w, x2 = b.x + b.w, k = 34 + Math.abs(by - ay) * 0.12; d = `M${x1},${ay} C${x1 + k},${ay} ${x2 + k},${by} ${x2},${by}`; }
+    const st = style[l.kind];
+    const attrs = { d, fill: "none", stroke: st.stroke, "stroke-width": st.width, "marker-end": `url(#${uid}-${l.kind})` };
+    if (st.dash) attrs["stroke-dasharray"] = st.dash;
+    if (l.kind === "edge" && l.two) attrs["marker-start"] = `url(#${uid}-edge)`;
+    const pth = svgEl("path", attrs);
+    const tt = svgEl("title", {});
+    tt.textContent = l.kind === "edge" ? `${byId.get(l.from).name} ${l.two ? "⇄" : "→"} ${byId.get(l.to).name}`
+      : l.kind === "discover" ? `到過「${byId.get(l.from).name}」會發現「${byId.get(l.to).name}」`
+      : `「${byId.get(l.to).name}」解鎖條件：${l.label}`;
+    pth.appendChild(tt);
+    gLinks.appendChild(pth);
+  });
+
+  const cards = new Map();
+  nodes.forEach(n => {
+    const p = pos.get(n.id);
+    const c = el("div", "mnode " + (n.initial || "unlocked"));
+    c.style.cssText = `left:${p.x}px;top:${p.y}px;width:${p.w}px;height:${p.h}px`;
+    const hd = el("div", "mh");
+    hd.appendChild(el("span", "mn", n.name || n.id));
+    if (n.id === start.id) hd.appendChild(el("span", "badge req", "起點"));
+    else hd.appendChild(el("span", "badge " + (n.initial || "unlocked"), INITIAL_TXT[n.initial] || "開放"));
+    if ((n.unlock || []).length) hd.appendChild(el("span", "mlock", "🔒"));
+    c.appendChild(hd);
+    const body = el("div", "mb");
+    (n.evidence || []).forEach(e => body.appendChild(el("div", "mi ev", "◆ " + (e.name || e.id))));
+    npcsAt(n.id).forEach(pl => body.appendChild(el("div", "mi np", "☺ " + pl.npc + (condText(pl.when) ? " 🔒" : ""))));
+    if (!body.children.length) body.appendChild(el("div", "mi none", "（沒有證物或 NPC）"));
+    c.appendChild(body);
+    c.onclick = () => select({ node: n });
+    canvas.appendChild(c);
+    cards.set(n.id, c);
+  });
+  scroller.appendChild(canvas);
+  layout.appendChild(scroller);
+  const side = el("div", "mapside");
+  layout.appendChild(side);
+  host.appendChild(layout);
+
+  const line = (k, v, cls) => { const r = el("div", "sl" + (cls ? " " + cls : "")); r.appendChild(el("span", "sk", k)); r.appendChild(el("span", "sv", v)); return r; };
+  const npcLink = (name) => { const a = el("a", "nl", name); a.href = "#"; a.onclick = (e) => { e.preventDefault(); e.stopPropagation(); const p = npcByName.get(name); if (p) select({ npc: p }); }; return a; };
+  const nodeLink = (id) => { const n = byId.get(id); const a = el("a", "nl", n ? n.name : id); a.href = "#"; a.onclick = (e) => { e.preventDefault(); if (n) select({ node: n }); }; return a; };
+  const listLine = (label, ids) => { const r = el("div", "sl"); r.appendChild(el("span", "sk", label)); const v = el("span", "sv"); ids.forEach((d, i) => { if (i) v.appendChild(document.createTextNode("、")); v.appendChild(nodeLink(d)); }); r.appendChild(v); return r; };
+
+  function select(what) {
+    cards.forEach(c => c.classList.remove("sel"));
+    side.innerHTML = "";
+    if (what.node) {
+      const n = what.node; cards.get(n.id).classList.add("sel");
+      const h = el("div", "sh"); h.appendChild(el("span", "st", n.name || n.id)); h.appendChild(el("span", "badge " + (n.initial || "unlocked"), INITIAL_TXT[n.initial] || "開放")); side.appendChild(h);
+      const cont = n.container && containers.get(n.container);
+      side.appendChild(el("div", "sid", n.id + (cont ? " · 區域：" + (cont.name || n.container) : "")));
+      if (n.desc) side.appendChild(line("瀏覽描述", n.desc));
+      if (n.on_enter) side.appendChild(line("進入時", n.on_enter));
+      if (n.locked_narration) side.appendChild(line("進不去時", n.locked_narration));
+      if ((n.unlock || []).length) side.appendChild(line("解鎖條件", condText(n.unlock), "lock"));
+      if ((n.discovers || []).length) side.appendChild(listLine("到這裡會發現", n.discovers.filter(d => byId.has(d))));
+      const evs = n.evidence || [];
+      if (evs.length) {
+        side.appendChild(el("p", "slabel", "證物 " + evs.length));
+        evs.forEach(e => {
+          const b = el("div", "sitem"); b.appendChild(el("div", "sit", "◆ " + (e.name || e.id)));
+          if (e.how) b.appendChild(line("怎麼拿", e.how));
+          if (e.reveal_text) b.appendChild(line("拿到時", e.reveal_text));
+          if ((e.tags || []).length) b.appendChild(line("標籤", e.tags.join("、")));
+          side.appendChild(b);
+        });
+      }
+      const here = npcsAt(n.id);
+      if (here.length) {
+        side.appendChild(el("p", "slabel", "在場 NPC"));
+        here.forEach(pl => {
+          const b = el("div", "sitem"); const t = el("div", "sit"); t.appendChild(npcLink(pl.npc));
+          if (condText(pl.when)) t.appendChild(el("span", "sgate", "🔒 " + condText(pl.when)));
+          b.appendChild(t); const p = npcByName.get(pl.npc); if (p && p.goal) b.appendChild(el("div", "sv dim", p.goal)); side.appendChild(b);
+        });
+      }
+      const linked = [...new Set(links.filter(l => l.kind === "edge" && (l.from === n.id || (l.two && l.to === n.id))).map(l => l.from === n.id ? l.to : l.from))];
+      if (linked.length) side.appendChild(listLine("可前往", linked));
+    } else if (what.npc) {
+      const p = what.npc;
+      const h = el("div", "sh"); h.appendChild(el("span", "st", p.name)); if (p.disposition) h.appendChild(el("span", "badge", p.disposition)); side.appendChild(h);
+      if (p.personality) side.appendChild(line("個性", p.personality));
+      if (p.goal) side.appendChild(line("目標／條件", p.goal));
+      const at = placements.filter(pl => pl.npc === p.name);
+      if (at.length) { const r = el("div", "sl"); r.appendChild(el("span", "sk", "出現在")); const v = el("span", "sv"); at.forEach((pl, i) => { if (i) v.appendChild(document.createTextNode("、")); v.appendChild(nodeLink(pl.at)); if (condText(pl.when)) v.appendChild(el("span", "sgate", "🔒 " + condText(pl.when))); }); r.appendChild(v); side.appendChild(r); }
+      const ks = p.knowledge || [];
+      side.appendChild(el("p", "slabel", "情報 " + ks.length + (ks.length ? "" : "（他什麼都不會說）")));
+      ks.forEach(k => { const b = el("div", "sitem"); const t = el("div", "sit"); t.appendChild(document.createTextNode(k.topic || k.id || "")); if (condText(k.when)) t.appendChild(el("span", "sgate", "🔒 " + condText(k.when))); b.appendChild(t); if (k.info) b.appendChild(el("div", "sv dim", k.info)); side.appendChild(b); });
+      const encs = encounters.filter(e => e && e.npc === p.name);
+      if (encs.length) {
+        side.appendChild(el("p", "slabel", "觸發事件"));
+        encs.forEach(e => {
+          const b = el("div", "sitem");
+          if (condText(e.when)) b.appendChild(el("div", "sgate", "當 " + condText(e.when)));
+          const where = e.at ? ("在 " + ((byId.get(e.at) || {}).name || (containers.get(e.at) || {}).name || e.at)) : "無論隊伍在哪";
+          const when = e.delay ? ("，" + e.delay + " 回合後") : "";
+          const w = el("div", "sgate", (e.at ? "📍 " : "⚠ ") + where + when);
+          if (!e.at) w.title = "沒有 at：條件成立的那一回合，NPC 會出現在隊伍所在的任何地方";
+          b.appendChild(w);
+          b.appendChild(el("div", "sv dim", e.beat || ""));
+          side.appendChild(b);
+        });
+      }
+    }
+    const back = el("button", "ghost", "← 總覽"); back.style.cssText = "margin-top:12px;width:100%"; back.onclick = overview; side.appendChild(back);
+  }
+
+  function overview() {
+    cards.forEach(c => c.classList.remove("sel"));
+    side.innerHTML = "";
+    side.appendChild(el("div", "st", sc.title || "劇本"));
+    const m = el("div", "meta");
+    [nodes.length + " 地點", links.filter(l => l.kind === "edge").length + " 條路徑", evOwner.size + " 證物", npcs.length + " NPC", g.travel_mode === "free" ? "自由移動" : "沿路徑移動"].forEach(t => m.appendChild(el("span", null, t)));
+    side.appendChild(m);
+    const lg = el("div", "legend");
+    [["un", "起點／開放"], ["di", "已知但進不去"], ["hi", "隱藏"], ["ln", "路徑"], ["ln d", "到過會發現"], ["ln u", "解鎖依賴"]].forEach(([c, t]) => { const r = el("span", "li"); r.appendChild(el("i", c)); r.appendChild(document.createTextNode(t)); lg.appendChild(r); });
+    side.appendChild(lg);
+    side.appendChild(el("div", "sl-start", "起點：" + (start.name || start.id)));
+    side.lastChild.style.cssText = "font-size:12px;color:var(--gold);margin:2px 0 6px";
+    if (extraStarts.length) side.appendChild(el("div", "sgate", "⚠ 額外起點 " + extraStarts.length + " 個（一開始就開放，但從起點走不到）：" + extraStarts.map(n => n.name || n.id).join("、")));
+    if (orphans.length) side.appendChild(el("div", "sgate", "⚠ 從起點走不到：" + orphans.map(n => n.name || n.id).join("、")));
+    side.appendChild(el("p", "slabel", "NPC"));
+    npcs.forEach(p => { const b = el("div", "sitem click"); const t = el("div", "sit"); t.appendChild(el("span", "nl", p.name)); if (p.disposition) t.appendChild(el("span", "badge", p.disposition)); t.appendChild(el("span", "id", "情報 " + (p.knowledge || []).length)); b.appendChild(t); if (p.goal) b.appendChild(el("div", "sv dim", p.goal)); b.onclick = () => select({ npc: p }); side.appendChild(b); });
+    side.appendChild(el("p", "slabel", "目標"));
+    (sc.objectives || []).forEach(o => { const b = el("div", "sitem"); const t = el("div", "sit"); t.appendChild(document.createTextNode(o.text || "")); t.appendChild(el("span", "badge" + (o.required ? " req" : ""), o.required ? "必要" : "加分")); b.appendChild(t); side.appendChild(b); });
+    side.appendChild(el("p", "slabel", "結局"));
+    (sc.endings || []).forEach(e => { const b = el("div", "sitem"); const t = el("div", "sit"); t.appendChild(document.createTextNode(e.name || "")); t.appendChild(el("span", "badge " + (e.type || ""), e.type || "")); b.appendChild(t); if (e.condition) b.appendChild(el("div", "sgate", "條件：" + condText(e.condition))); side.appendChild(b); });
+    side.appendChild(el("div", "hint", "點地圖上的地點，或上面的 NPC，看細節。"));
+  }
+  overview();
+}
+
+// ── event handling ──────────────────────────────────────────────────────────
+let runId = null, lastJson = "", lastSummary = null, lastRound = 0;
+let usageLog = [];
+const pendingUsage = new Map();   // "round|step" → usage event that arrived before its chip existed
+function applyUsage(chip, ev) {
+  let u = chip.querySelector(".us");
+  if (!u) { u = el("span", "us"); u.style.cssText = "opacity:.75;font-family:var(--mono);font-size:10.5px;margin-left:4px"; chip.appendChild(u); }
+  u.textContent = "· " + usageText(ev);
+  u.title = `${ev.model}：輸入 ${(ev.input || 0).toLocaleString()}、輸出 ${(ev.output || 0).toLocaleString()}、快取讀 ${(ev.cacheRead || 0).toLocaleString()}、快取寫 ${(ev.cacheWrite || 0).toLocaleString()}` + (typeof ev.costUsd === "number" ? `、$${ev.costUsd.toFixed(3)}` : "");
+}
+const k = (n) => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "k" : String(n);
+function usageText(u) {
+  if (u.input || u.output) return `${k(u.input + u.cacheRead + u.cacheWrite)}→${k(u.output)}`;
+  return k(u.total) + " tokens";
+}
+function usageTotals(list) {
+  const t = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0, cost: 0, hasCost: false, codexTotal: 0 };
+  list.forEach(u => {
+    t.input += u.input || 0; t.output += u.output || 0; t.cacheRead += u.cacheRead || 0; t.cacheWrite += u.cacheWrite || 0;
+    t.total += u.total || 0;
+    if (typeof u.costUsd === "number") { t.cost += u.costUsd; t.hasCost = true; }
+    if (!u.input && !u.output) t.codexTotal += u.total || 0;
+  });
+  return t;
+}
+const parseSc = (j) => { try { return JSON.parse(j); } catch { return null; } };
+
+function notice(id, status, text) {
+  let n = document.getElementById(id);
+  if (!n) { n = el("div", "chip"); n.id = id; n.style.cssText = "margin:0 8px 14px 0"; stream.insertBefore(n, stream.firstChild); }
+  n.className = "chip " + (status === "start" ? "run" : status === "error" ? "bad" : "ok");
+  n.textContent = ""; n.appendChild(el("span", "dot")); n.appendChild(document.createTextNode(text));
+  const step = id === "funstat" ? "fun" : id === "condstat" ? "condense" : "";
+  const pu = step && (pendingUsage.get("0|" + step) || usageLog.find(u => u.round === 0 && u.step === step));
+  if (pu) applyUsage(n, pu);
+}
+
+function handle(ev) {
+  switch (ev.type) {
+    case "start":
+      $("#hsub").textContent = "輸出：" + ev.dir;
+      break;
+    case "round":
+      lastRound = ev.round;
+      roundCard(ev.round, ev.maxRounds);
+      break;
+    case "step":
+      if (ev.step === "fun") {
+        notice("funstat", ev.status, ev.status === "start" ? "試玩評審進行中…" : ev.status === "error" ? ("試玩評審失敗：" + (ev.message || "")) : "試玩評審完成");
+        break;
+      }
+      if (ev.step === "condense") {
+        notice("condstat", ev.status, ev.status === "start"
+          ? `原文 ${(ev.from || 0).toLocaleString()} 字，先濃縮到約 ${(ev.target || 0).toLocaleString()} 字…`
+          : ev.status === "error" ? ("濃縮失敗：" + (ev.message || "")) : "濃縮完成");
+        break;
+      }
+      if (ev.status === "error") {
+        setStep(ev.round, ev.step, "error");
+        const inner = panel(ev.round, (STEP_NAME[ev.step] || ev.step) + " 失敗", "", true);
+        inner.appendChild(listOf([ev.message + (ev.head ? "\n\n前 400 字：\n" + ev.head : "")], "block"));
+      } else if (ev.status === "start") {
+        setStep(ev.round, ev.step, "start");
+      } else {
+        setStep(ev.round, ev.step,
+          ev.step === "validator" ? (ev.ok ? "ok" : "bad")
+          : ev.step === "critic" ? (ev.blocking ? "bad" : "ok") : "ok");
+      }
+      break;
+    case "scenario": {
+      lastJson = ev.json; lastSummary = ev.summary;
+      const inner = panel(ev.round, "產出的劇本", (ev.json.length / 1024).toFixed(1) + " KB");
+      renderScenario(inner, ev.summary, parseSc(ev.json), false);
+      const d = el("details");
+      d.appendChild(el("summary", null, "原始 JSON"));
+      d.querySelector("summary").style.cssText = "cursor:pointer;font-size:12px;color:var(--faint);margin:14px 0 8px";
+      d.appendChild(el("pre", "json", ev.json));
+      inner.appendChild(d);
+      break;
+    }
+    case "report": renderReport(ev.round, ev.report); break;
+    case "fun": renderFun(ev); break;
+    case "decisions": {
+      if (!ev.text) break;
+      const d = el("details", "round"); d.id = "decisions";
+      const sm = el("summary", null, "轉換決定與修改紀錄（審稿用，不會進主持人的提示詞）");
+      sm.style.cssText = "padding:12px 16px;cursor:pointer;color:var(--dim);font-size:13px;list-style:none";
+      d.appendChild(sm);
+      const pre = el("pre", "json", ev.text); pre.style.cssText += ";max-height:360px;margin:0 16px 16px;white-space:pre-wrap";
+      d.appendChild(pre);
+      const note = el("div", "hint", "主持人實際會讀到的 gm_notes 剩 " + (ev.gmNotesChars || 0).toLocaleString() + " 字。");
+      note.style.cssText = "padding:0 16px 14px";
+      d.appendChild(note);
+      const old = document.getElementById("decisions"); if (old) old.remove();
+      stream.appendChild(d);
+      break;
+    }
+    case "condensed":
+      notice("condstat", "ok", `原文 ${ev.from.toLocaleString()} 字 → 濃縮 ${ev.to.toLocaleString()} 字。模型讀濃縮版設計結構；full_story 仍放原文。`);
+      break;
+    case "critic": renderCritic(ev.round, ev); break;
+    case "gate": {
+      const r = roundCard(ev.round);
+      const c = el("span", "chip " + (ev.pass ? "ok" : "bad"));
+      c.appendChild(el("span", "dot"));
+      c.appendChild(document.createTextNode(ev.pass ? "通過" : "未通過"));
+      r.chips.appendChild(c);
+      break;
+    }
+    case "log": {
+      $("#logwrap").style.display = "block";
+      const lines = $("#loglines");
+      const d = el("div", ev.tag, ev.text);
+      lines.appendChild(d);
+      while (lines.children.length > 300) lines.removeChild(lines.firstChild);
+      lines.scrollTop = lines.scrollHeight;
+      $("#logcount").textContent = lines.children.length + " 行";
+      break;
+    }
+    case "usage": {
+      usageLog.push(ev);
+      // Hang the count on the chip for that step (round chips, or the notice
+      // line for condense / fun).
+      let chip = null;
+      if (ev.round > 0) { const r = rounds.get(ev.round); chip = r && r.steps[ev.step]; }
+      else chip = document.getElementById(ev.step === "fun" ? "funstat" : ev.step === "condense" ? "condstat" : "");
+      if (chip) applyUsage(chip, ev);
+      else pendingUsage.set(ev.round + "|" + ev.step, ev);   // replay: usage arrives before the chip
+      break;
+    }
+    case "tick": {
+      const m = Math.floor(ev.elapsed / 60), sec = ev.elapsed % 60;
+      const txt = " · 已 " + (m ? m + " 分 " : "") + sec + " 秒";
+      document.querySelectorAll("#stream .chip.run").forEach(c => {
+        let e = c.querySelector(".el");
+        if (!e) { e = el("span", "el"); e.style.cssText = "opacity:.7;font-variant-numeric:tabular-nums"; c.appendChild(e); }
+        e.textContent = txt;
+      });
+      break;
+    }
+    case "done": finish(ev); break;
+  }
+}
+
+function finish(ev) {
+  $("#go").disabled = false;
+  $("#go").textContent = "重新開始";
+  $("#stop").style.display = "none";
+  $("#logspin").style.display = "none";
+
+  const box = el("div", "result " + (ev.pass ? "pass" : "fail"));
+  const left = el("div");
+  const reasons = {
+    "max-rounds": "跑滿輪數仍未通過。最後一版已存檔。可以照評審意見手動修，或直接從這裡接著再跑幾輪，不用從頭來。",
+    "writer-failed": "作者指令執行失敗。檢查該 CLI 是否已登入、指令是否讀 stdin。",
+    "condense-failed": "濃縮步驟失敗，沒有進入作者階段。",
+    "no-json": "作者輸出裡找不到合法 JSON。",
+    stopped: "已停止。",
+    crash: "執行過程發生錯誤。",
+  };
+  left.appendChild(el("h2", null, ev.pass ? "通過了" : "未通過"));
+  left.appendChild(el("p", null, ev.pass
+    ? "第 " + ev.round + " 輪通過驗證器與評審。下一步：打開平台「建立劇本 → 貼上 JSON」，貼進去按匯入。"
+    : (reasons[ev.reason] || "未通過。")));
+  if (usageLog.length) {
+    const t = usageTotals(usageLog);
+    const parts = [];
+    if (t.input || t.output) parts.push(`Claude 輸入 ${(t.input + t.cacheRead + t.cacheWrite).toLocaleString()}（其中快取讀 ${t.cacheRead.toLocaleString()}）· 輸出 ${t.output.toLocaleString()}`);
+    if (t.codexTotal) parts.push(`Codex 合計 ${t.codexTotal.toLocaleString()}`);
+    if (t.hasCost) parts.push(`Claude 依定價約 $${t.cost.toFixed(2)}`);
+    const up = el("p", null, "用量：" + parts.join(" · ") + "。");
+    up.style.cssText = "margin-top:6px;font-family:var(--mono);font-size:11.5px;color:var(--faint)";
+    left.appendChild(up);
+  }
+  box.appendChild(left);
+
+  const acts = el("div", "acts");
+  if (!ev.pass && ev.reason === "max-rounds" && runId) {
+    // Pick up where this run stopped instead of paying for rounds 1..N again.
+    const more = el("div", "more");
+    const n = el("input"); n.type = "number"; n.value = "2"; n.min = "1"; n.max = "10";
+    n.style.cssText = "width:58px;padding:7px 8px;font-size:13px";
+    const go = el("button", "go", "從第 " + ((ev.round || lastRound) + 1) + " 輪接著跑");
+    go.style.cssText = "padding:8px 14px;font-size:13px";
+    go.onclick = async () => {
+      go.disabled = true; go.textContent = "啟動中…";
+      const r = await fetch("/api/continue", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ run: runId, rounds: +n.value, writerCmd: composeCmd("w"), criticCmd: composeCmd("c"), funCmd: composeCmd("f"), wantFun: $("#wantfun").checked }),
+      });
+      const d = await r.json();
+      if (!r.ok) { alert(d.error); go.disabled = false; go.textContent = "再試一次"; return; }
+      stream.innerHTML = ""; rounds.clear(); lastJson = ""; lastSummary = null; usageLog = []; pendingUsage.clear();
+      $("#go").disabled = true; $("#go").textContent = "執行中…"; $("#stop").style.display = "block";
+      $("#logspin").style.display = "inline-block";
+      attach(d.runId);
+    };
+    more.appendChild(el("span", null, "再跑")); more.appendChild(n); more.appendChild(el("span", null, "輪")); more.appendChild(go);
+    more.style.cssText = "display:flex;gap:8px;align-items:center;font-size:13px;color:var(--dim)";
+    acts.appendChild(more);
+  }
+  if (ev.json || lastJson) {
+    const copy = el("button", "ghost", "複製 JSON");
+    copy.onclick = async () => {
+      await navigator.clipboard.writeText(ev.json || lastJson);
+      copy.textContent = "已複製";
+      setTimeout(() => copy.textContent = "複製 JSON", 1600);
+    };
+    acts.appendChild(copy);
+    const dl = el("a", "ghost", "下載 scenario.json");
+    dl.href = "/api/download?run=" + runId;
+    dl.style.textDecoration = "none";
+    acts.appendChild(dl);
+  }
+  box.appendChild(acts);
+  stream.insertBefore(box, stream.firstChild);
+
+  const sc = parseSc(ev.json || lastJson);
+  if (sc) {
+    const blk = el("div", "round");
+    const hd = el("div", "head"); hd.appendChild(el("h2", null, ev.pass ? "最終劇本" : "最後一版")); blk.appendChild(hd);
+    const inner = el("div", "inner"); inner.style.padding = "12px 16px 16px";
+    renderScenario(inner, ev.summary || lastSummary, sc, true);
+    blk.appendChild(inner);
+    stream.insertBefore(blk, box.nextSibling);
+  }
+  box.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+// ── start / stop ────────────────────────────────────────────────────────────
+$("#go").onclick = async () => {
+  if (story.value.trim().length < 50) return alert("故事太短了，至少要 50 個字。");
+  stream.innerHTML = ""; rounds.clear(); lastJson = ""; usageLog = []; pendingUsage.clear();   // #funstat lives in here too
+  $("#loglines").innerHTML = ""; $("#logspin").style.display = "inline-block";
+  $("#go").disabled = true; $("#go").textContent = "執行中…";
+  $("#stop").style.display = "block";
+
+  const r = await fetch("/api/run", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      story: story.value, maxRounds: +$("#rounds").value,
+      writerCmd: composeCmd("w"), criticCmd: composeCmd("c"),
+      funCmd: composeCmd("f"), wantFun: $("#wantfun").checked,
+      condenseCmd: composeCmd("k"), condenseAbove: +$("#cabove").value, condenseTarget: +$("#ctarget").value,
+    }),
+  });
+  const d = await r.json();
+  if (!r.ok) { alert(d.error); $("#go").disabled = false; $("#go").textContent = "開始"; return; }
+  attach(d.runId);
+};
+
+// The server keeps every event, so a reload can replay an in-flight run —
+// but only if the page remembers which one. Keep the id in the URL.
+function attach(id) {
+  runId = id;
+  location.hash = id;
+  let got = false;
+  const es = new EventSource("/api/stream?run=" + id);
+  es.onmessage = (m) => { got = true; handle(JSON.parse(m.data)); };
+  es.onerror = () => {
+    es.close();
+    // A run id that the server no longer knows sends no events at all.
+    if (!got) { location.hash = ""; $("#go").disabled = false; $("#go").textContent = "開始"; $("#stop").style.display = "none"; }
+  };
+}
+
+// Pasting a run URL into an already-open tab only changes the fragment, which
+// is a same-document navigation: nothing reloads and attach() never runs.
+addEventListener("hashchange", () => {
+  const id = location.hash.slice(1);
+  if (id && id !== runId) location.reload();   // attach() sets the hash itself; ignore that
+});
+
+// Reconnect to a run still in flight after a reload (the server replays it).
+if (location.hash.length > 1) {
+  $("#go").disabled = true; $("#go").textContent = "執行中…";
+  $("#stop").style.display = "block";
+  $("#logspin").style.display = "inline-block";
+  attach(location.hash.slice(1));
+}
+
+$("#stop").onclick = () => fetch("/api/stop?run=" + runId, { method: "POST" });
+
+// ── validate-only ───────────────────────────────────────────────────────────
+$("#vgo").onclick = async () => {
+  const r = await fetch("/api/validate", { method: "POST", body: $("#vjson").value });
+  const d = await r.json();
+  stream.innerHTML = ""; rounds.clear();
+  hideEmpty();
+  if (!d.ok) {
+    const box = el("div", "round"); const head = el("div", "head");
+    head.appendChild(el("h2", null, "無法解析")); box.appendChild(head);
+    const b = el("div", "inner"); b.appendChild(listOf([d.error], "block")); box.appendChild(b);
+    stream.appendChild(box); return;
+  }
+  const r0 = roundCard(0);
+  r0.box.querySelector("h2").textContent = "驗證結果";
+  setStep(0, "validator", d.report.ok ? "ok" : "bad");
+  renderReport(0, d.report);
+  const inner = panel(0, "劇本結構", "", true);
+  renderScenario(inner, d.summary, parseSc(d.json), true);
+};
+</script>
+</body>
+</html>

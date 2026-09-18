@@ -5,11 +5,14 @@
  * result clears the platform's own import + publish checks.
  *
  *   npm run story-machine -- writer-prompt  <story.md>                     > prompt.txt
- *   npm run story-machine -- extract        < model-output.txt             > scenario.json
+ *   npm run story-machine -- extract  --story <story.md> < model-output.txt > scenario.json
+ *   npm run story-machine -- condense-prompt <story.md> [targetChars]       > prompt.txt
  *   npm run story-machine -- validate       <scenario.json> [--out report.json]
  *   npm run story-machine -- critic-prompt  <story.md> <scenario.json> <report.json>
  *   npm run story-machine -- fix-prompt     <story.md> <scenario.json> <report.json> <critic.json>
  *   npm run story-machine -- gate           <report.json> <critic.json>
+ *   npm run story-machine -- fun-prompt     <story.md> <scenario.json>       > prompt.txt
+ *   npm run story-machine -- finalize       <round.json> [--decisions out.md] > scenario.json
  *
  * run.sh in this folder chains these with `claude -p` / `codex exec`. The
  * subcommands are separate on purpose: any one of them can be swapped for a
@@ -18,7 +21,7 @@
 import fs from "node:fs";
 import { extractFirstJSON } from "@/lib/ai/import-scenario";
 import { validateScenarioJson, renderReport, type MachineReport } from "./validate";
-import { writerPrompt, criticPrompt, fixPrompt } from "./prompts";
+import { writerPrompt, criticPrompt, fixPrompt, funPrompt, condensePrompt, injectStory, finalizeScenario } from "./prompts";
 
 function read(p: string): string {
   return fs.readFileSync(p, "utf-8");
@@ -68,11 +71,16 @@ switch (cmd) {
     break;
   }
   case "extract": {
+    // --story <file>: the writer leaves a placeholder in full_story; put the
+    // real text in here so the model never has to echo it.
+    const [flag, storyPath] = args;
     const raw = readStdin().trim();
     if (!raw) die("stdin 是空的——模型沒有輸出任何東西。");
     let json: string;
     try {
-      json = JSON.stringify(JSON.parse(extractFirstJSON(raw)), null, 2);
+      const parsed = JSON.parse(extractFirstJSON(raw));
+      if (flag === "--story" && storyPath) injectStory(parsed, read(storyPath));
+      json = JSON.stringify(parsed, null, 2);
     } catch (e) {
       die(`模型輸出裡找不到合法的 JSON：${e instanceof Error ? e.message : e}\n--- 前 300 字 ---\n${raw.slice(0, 300)}`);
     }
@@ -108,6 +116,28 @@ switch (cmd) {
     process.stdout.write(fixPrompt(read(story), read(scenario), loadReport(report), read(critic)));
     break;
   }
+  case "condense-prompt": {
+    const [story, target] = args;
+    if (!story) die("用法：condense-prompt <story.md> [targetChars]");
+    process.stdout.write(condensePrompt(read(story), Number(target) || 12000));
+    break;
+  }
+  case "fun-prompt": {
+    const [story, scenario] = args;
+    if (!story || !scenario) die("用法：fun-prompt <story.md> <scenario.json>");
+    process.stdout.write(funPrompt(read(story), read(scenario)));
+    break;
+  }
+  case "finalize": {
+    // Strip the audit trail out of the GM-facing JSON; save it beside.
+    const [file, flag, outPath] = args;
+    if (!file) die("用法：finalize <round.json> [--decisions decisions.md]");
+    const parsed = JSON.parse(read(file));
+    const decisions = finalizeScenario(parsed);
+    if (flag === "--decisions" && outPath) fs.writeFileSync(outPath, decisions + "\n");
+    process.stdout.write(JSON.stringify(parsed, null, 2) + "\n");
+    break;
+  }
   case "gate": {
     const [report, critic] = args;
     if (!report || !critic) die("用法：gate <report.json> <critic.json>");
@@ -120,5 +150,5 @@ switch (cmd) {
     process.exit(pass ? 0 : 1);
   }
   default:
-    die(`未知的子命令「${cmd ?? ""}」。可用：writer-prompt | extract | validate | critic-prompt | fix-prompt | gate`);
+    die(`未知的子命令「${cmd ?? ""}」。可用：writer-prompt | extract | validate | critic-prompt | fix-prompt | condense-prompt | fun-prompt | finalize | gate`);
 }
