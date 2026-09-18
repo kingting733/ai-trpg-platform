@@ -85,3 +85,11 @@
 - Fix: `coerceEndings` accepts `summary` as a synonym (same pattern as NPC knowledge `content`→`info`); example switched to `description`.
 - Rule: a worked example inside a prompt is a contract — validate it through the real coercer (the story machine's fixture test now does this for the whole shape) instead of trusting it by eye.
 - Files updated: lessons only.
+
+### 2026-09-18 — A trigger keyed on auth.uid() blocks the service role, i.e. exactly the trusted caller
+- Context: admin clicked 核准 in /admin and got the publish-gate error meant for creators.
+- Symptom: `/api/admin/scenarios/[id]/review` passed its own admin check, then the UPDATE (done with `createAdminClient()`, per the hardening rule) was refused by `enforce_scenario_publish_gate()`.
+- Root cause: under the service role there is no user JWT → `auth.uid()` is NULL → `is_admin()` is false. The gate had no notion of "trusted server write", so the one path designed to publish was the one it blocked. Two rules written in different weeks (hardening: sensitive writes use service role; review: only admins may publish) were each correct and jointly impossible.
+- Fix: `fix_publish_gate_service_role.sql` — gate also passes when the request's JWT role is `service_role` (`is_service_role()`); the browser can never present that role, so the creator-side guarantee is intact.
+- Rule: any DB-side authorization check (`is_admin()`, `auth.uid() = …`) that a service-role route will hit needs an explicit service-role allowance, or the route needs a user-client write plus an RLS policy. Decide which at design time; test the admin path with the admin's real client, not just the creator path.
+- Files updated: lessons only.
