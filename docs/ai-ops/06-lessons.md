@@ -101,3 +101,11 @@
 - Fix: `findNamedNonCandidate()` — if the text names any known character who is not a candidate, decline with that name in the error; `isBareNameLike()` — a bare name that matched nobody is a miss, not a wildcard. Both fallbacks guarded.
 - Rule: a "pick the only option" fallback must first prove the input is UNNAMED. Any known name in the text that is not among the options means the player asked for something you cannot do — say which, do not substitute.
 - Files updated: lessons only.
+
+### 2026-09-18 — "He is standing right there" — narration placed an NPC where the placement table did not
+- Context: follow-up to the 萎縮術 mis-target. The player insisted 郭一山 was in the same place; the narration had him holding the door as the party stepped into the corridor.
+- Symptom: an NPC the story shows beside you is refused (or, before the guard, silently swapped) as a target.
+- Root cause: presence is decided by `npc_placements` (last satisfied placement's node); an NPC with any placement is present ONLY there. The GM narrated him at the room's door during the move turn, which reads as "with us" once the party is in the corridor. Server and narration disagreed and the player only saw the narration.
+- Fix: the refusal now says where the server has the NPC (「郭一山此刻在『辦公室』，不在你所在的『走廊』」, hidden nodes never named) and `[target:resolve]` logs actor node, named NPC, placement, candidates. `npcPlacementNode()` added for "where is this NPC".
+- Rule: when server state refuses something the narration made look possible, the refusal must state the server's fact in the player's terms; otherwise every such refusal is reported as a bug. Creators who want an escort NPC must give him a placement per node (or none, to follow the party).
+- Files updated: lessons only.

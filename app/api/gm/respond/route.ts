@@ -38,6 +38,7 @@ import {
   evaluateUnlocks,
   evaluateEncounters,
   evaluateNpcPlacements,
+  npcPlacementNode,
   evalUnlockConditions,
   buildLocationBlock,
   locationShortName,
@@ -244,8 +245,24 @@ export async function POST(request: Request) {
         // spell onto whoever happens to be the only creature in the scene.
         const absent = findNamedNonCandidate(actionText, candidates, namesOtherThanActor);
         if (absent) {
+          // Tell the player where the server has that NPC, when the place is
+          // one they already know of (never reveal a hidden node). Logged too:
+          // "sometimes I can't target X" is undiagnosable without this.
+          const absentNode = combatGraph && combatLocState
+            ? npcPlacementNode(combatGraph, combatLocState, room.current_round, combatObjProgress, absent, npcRoster)
+            : null;
+          const hereName = combatGraph?.nodes.find((n) => n.id === combatActorNode)?.name;
+          const thereName = combatGraph?.nodes.find((n) => n.id === absentNode)?.name;
+          const canSayWhere = absentNode && thereName && hereName && combatLocState?.status[absentNode] !== "hidden";
+          console.info(
+            `[target:resolve] spell=${mythosSpell.key} actor=${resolvedActor.name} node=${combatActorNode ?? "-"} ` +
+            `named=${absent} placedAt=${absentNode ?? (npcHasPlacement(npcStateKey(absent, npcRoster)) ? "elsewhere" : "unplaced/not-roster")} ` +
+            `candidates=${JSON.stringify(candidates)}`
+          );
           return NextResponse.json({
-            error: `「${absent}」無法作為「${mythosSpell.zh}」的目標——不在此處，或不是可施術的對象。`,
+            error: canSayWhere
+              ? `「${absent}」此刻在「${locationShortName(thereName)}」，不在你所在的「${locationShortName(hereName)}」——「${mythosSpell.zh}」只能觸及眼前的對象。`
+              : `「${absent}」無法作為「${mythosSpell.zh}」的目標——不在此處，或不是可施術的對象。`,
           }, { status: 400 });
         }
         // Sole-candidate fallback is for unnamed casts (a bare cast, 「對她」);
@@ -332,12 +349,14 @@ export async function POST(request: Request) {
       // Same guard as spells: 「攻擊郭一山」 with 郭一山 elsewhere must not swing
       // at the one NPC who happens to be here. With no target the turn falls
       // through to an ordinary check and the GM narrates the miss/confusion.
-      if (
-        candidates.length === 1 &&
-        !findNamedNonCandidate(actionText, candidates, namesOtherThanActor) &&
-        !isBareNameLike(actionText)
-      ) {
+      const namedElsewhere = findNamedNonCandidate(actionText, candidates, namesOtherThanActor);
+      if (candidates.length === 1 && !namedElsewhere && !isBareNameLike(actionText)) {
         targetNpcName = candidates[0];
+      } else if (namedElsewhere) {
+        console.info(
+          `[target:resolve] attack=${attackType} actor=${resolvedActor.name} node=${combatActorNode ?? "-"} ` +
+          `named=${namedElsewhere} candidates=${JSON.stringify(candidates)} → no target (named character not present)`
+        );
       }
     }
   }

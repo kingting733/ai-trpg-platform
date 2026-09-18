@@ -6,7 +6,7 @@
 // state and given narration directives; it never decides what is locked,
 // unlocked, or who is present.
 
-import { type NpcRef, npcDisplayName } from "@/lib/game/npc";
+import { type NpcRef, npcDisplayName, npcStateKey } from "@/lib/game/npc";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -691,6 +691,31 @@ export function evaluateNpcPlacements(
     if (lastSatisfied && lastSatisfied.at === scene) present.push(npc);
   });
   return present;
+}
+
+/**
+ * Where the server currently places ONE NPC: the node of their last satisfied
+ * placement (same "last satisfied wins" rule as evaluateNpcPlacements), or
+ * null when the NPC has no placement at all (a follow-the-action NPC) or the
+ * ref matches no placement. Used to tell a player WHERE an NPC they named is,
+ * instead of a bare "not here" — the narration may have just shown that NPC
+ * at the door while the placement still has them in the room.
+ */
+export function npcPlacementNode(
+  graph: LocationGraph,
+  state: LocationState,
+  currentRound: number,
+  objectiveProgress: ObjectiveProgressLike,
+  npcRef: string,
+  roster: NpcRef[]
+): string | null {
+  const key = npcStateKey(npcRef, roster);
+  let last: NpcPlacement | null = null;
+  for (const p of graph.npc_placements) {
+    if (npcStateKey(p.npc, roster) !== key) continue;
+    if (condSatisfied(p.when, state, graph, currentRound, objectiveProgress)) last = p;
+  }
+  return last?.at ?? null;
 }
 
 /**
