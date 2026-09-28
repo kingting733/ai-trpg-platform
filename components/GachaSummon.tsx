@@ -25,7 +25,7 @@
 // prefers-reduced-motion collapses every stage to near-instant fades.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { ArrowRight, Dices, Repeat, SkipForward } from "lucide-react";
+import { ArrowRight, Repeat, SkipForward } from "lucide-react";
 import { MAX_TOTAL_STATS, RARITY_THRESHOLDS, rarityForTotal, type Rarity } from "@/lib/cards/dice";
 
 // ─── Card shape (structurally compatible with CardRollReveal's RevealCard) ────
@@ -542,13 +542,15 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
   const step = steps[Math.min(idx, last)];
   const currentLanded = landedCount > idx;
   const fateNow = isFate(idx) && !currentLanded;
-  const rollLabel =
-    rollPhase === "rolling" ? "擲骰中……"
-    : rollPhase === "ready" ? (isFate(idx) ? "命運的一擲" : `擲骰 · ${step.zh}`)
-    : idx >= last ? "揭曉結果"
-    : waitingForFate ? "……"
-    : `擲下一項 · ${steps[idx + 1].zh}`;
+  // The dice ARE the button: the whole tray is the tap target, and this hint
+  // (inside the tray, under the dice) says what the next tap does.
+  const rollHint =
+    rollPhase === "rolling" || waitingForFate ? ""
+    : rollPhase === "ready" ? (isFate(idx) ? "點擊骰子 · 命運的一擲" : "點擊骰子擲骰")
+    : idx >= last ? "點擊揭曉結果"
+    : `點擊擲下一項 · ${steps[idx + 1].zh}`;
   const rollDisabled = rollPhase === "rolling" || waitingForFate;
+  const trayArmed = !rollDisabled && !fateNow && !(high && high.stat === idx);
   const meterPct = Math.min(100, (running / MAX_TOTAL_STATS) * 100);
 
   return (
@@ -640,7 +642,13 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
           </div>
 
           {/* tray */}
-          <div className={`gacha-tray relative rounded-xl px-3 pt-3 pb-4 text-center${high && high.stat === idx ? ` is-high-${high.level}` : ""}`}>
+          <div
+            role="button"
+            tabIndex={0}
+            aria-label={rollHint || "擲骰中"}
+            aria-disabled={rollDisabled}
+            onClick={advance}
+            className={`gacha-tray relative rounded-xl px-3 pt-3 pb-3 text-center${high && high.stat === idx ? ` is-high-${high.level}` : ""}${rollDisabled ? "" : " is-clickable"}${trayArmed ? " is-armed" : ""}`}>
             {/* ≥80 / 90 celebration, keyed so each high roll replays it */}
             {high && high.stat === idx && (<>
               <div key={`fx-${high.stat}`} className="gacha-high-fx" aria-hidden>
@@ -701,6 +709,11 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
                 </span>
               ) : null}
             </div>
+            {/* what the next tap does — fixed height so the tray never jumps */}
+            <p className={`gacha-tray-hint h-4 mt-1 text-[11px] tracking-[0.2em]${fateNow && rollHint ? " is-fate" : ""}`}
+              style={{ color: gold(fateNow ? 0.85 : 0.55) }} aria-hidden>
+              {rollHint}
+            </p>
           </div>
 
           {/* rarity meter */}
@@ -745,19 +758,7 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
             </div>
           </div>
 
-          <button type="button" onClick={advance} disabled={rollDisabled}
-            className={`gacha-roll-btn w-full py-3 rounded-xl font-serif text-base tracking-[0.15em] transition-all${fateNow && rollPhase === "ready" ? " is-fate-btn" : ""}${rollPhase === "ready" || rollPhase === "landed" ? " is-armed" : ""}`}
-            style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07" }}>
-            <span className="inline-flex items-center justify-center gap-2">
-              {rollPhase === "landed" && idx >= last ? (
-                <>{rollLabel} <ArrowRight size={16} strokeWidth={2} /></>
-              ) : (
-                <>{rollPhase !== "rolling" && !waitingForFate && <Dices size={17} strokeWidth={2} />}{rollLabel}</>
-              )}
-            </span>
-          </button>
-
-          <div className="flex items-center justify-between -mt-1">
+          <div className="flex items-center justify-between">
             <button type="button" onClick={() => setAuto((v) => !v)}
               className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full transition-colors"
               style={auto

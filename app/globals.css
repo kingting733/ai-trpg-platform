@@ -365,13 +365,6 @@ body {
 .gacha-roll-btn.is-armed:not(:disabled) { animation: gacha-armed 1.8s ease-in-out infinite; }
 .gacha-roll-btn.is-armed:not(:disabled):hover { filter: brightness(1.1); }
 @keyframes gacha-armed { 0%, 100% { box-shadow: 0 0 12px rgba(201,169,110,.2); } 50% { box-shadow: 0 0 26px rgba(201,169,110,.5); } }
-.gacha-roll-btn.is-fate-btn:not(:disabled) { letter-spacing: .4em; animation: gacha-fate-btn .9s ease-in-out infinite; }
-@keyframes gacha-fate-btn {
-  0%, 100% { box-shadow: 0 0 14px rgba(201,169,110,.3); transform: scale(1); }
-  15% { box-shadow: 0 0 34px rgba(228,216,190,.65); transform: scale(1.025); }
-  30% { box-shadow: 0 0 16px rgba(201,169,110,.3); transform: scale(1); }
-  45% { box-shadow: 0 0 28px rgba(228,216,190,.5); transform: scale(1.015); }
-}
 
 /* stat slots, tray, meter */
 .gacha-slot {
@@ -467,8 +460,24 @@ body {
 .gacha-tray {
   background: linear-gradient(180deg, rgba(14,12,8,.75), rgba(26,22,18,.6));
   border: 1px solid #2a2010; box-shadow: inset 0 -20px 30px rgba(0,0,0,.35);
-  transition: border-color .4s;
+  transition: border-color .4s, transform .12s;
+  -webkit-tap-highlight-color: transparent; user-select: none; outline: none;
 }
+/* the tray is the button: it glows while waiting for the tap */
+.gacha-tray.is-clickable { cursor: pointer; }
+.gacha-tray.is-armed { border-color: rgba(201,169,110,.45); animation: gacha-tray-armed 2s ease-in-out infinite; }
+.gacha-tray.is-clickable:hover { border-color: rgba(201,169,110,.7); }
+.gacha-tray.is-clickable:active { transform: scale(.985); }
+.gacha-tray:focus-visible { border-color: rgba(228,216,190,.8); }
+@keyframes gacha-tray-armed {
+  0%, 100% { box-shadow: inset 0 -20px 30px rgba(0,0,0,.35), 0 0 8px rgba(201,169,110,.12); }
+  50%      { box-shadow: inset 0 -20px 30px rgba(0,0,0,.35), inset 0 0 26px rgba(201,169,110,.10), 0 0 22px rgba(201,169,110,.32); }
+}
+.gacha-tray.is-clickable .gacha-die-slot.is-idle { transition: filter .2s; }
+.gacha-tray.is-clickable:hover .gacha-die-slot.is-idle { filter: brightness(1.12) drop-shadow(0 0 8px rgba(201,169,110,.45)); }
+.gacha-tray-hint { animation: gacha-hint 2s ease-in-out infinite; }
+.gacha-tray-hint.is-fate { letter-spacing: .35em; animation-duration: .9s; text-shadow: 0 0 10px rgba(201,169,110,.7); }
+@keyframes gacha-hint { 0%, 100% { opacity: .65; } 50% { opacity: 1; } }
 .is-fate .gacha-slot { opacity: .35; }
 .is-fate .gacha-tray { border-color: rgba(201,169,110,.55); animation: gacha-heartbeat .9s ease-in-out infinite; }
 @keyframes gacha-heartbeat {
@@ -535,7 +544,7 @@ body {
   .gacha-breakthrough, .gacha-tick-lit, .gacha-rv-card, .gacha-rv-float, .gacha-rv-back, .gacha-rv-sheen,
   .gacha-converge, .gacha-burst, .gacha-shock, .gacha-stamp-puff, .gacha-rv-front::after,
   .gacha-die-slot::after, .gacha-formula, .gacha-fate-banner, .gacha-die-idle, .gacha-die-tremble,
-  .gacha-roll-btn, .gacha-die-fade, .gacha-slot.is-perfect::after, .gacha-high-ring, .gacha-high-rays, .gacha-high-banner,
+  .gacha-roll-btn, .gacha-die-fade, .gacha-tray-hint, .gacha-slot.is-perfect::after, .gacha-high-ring, .gacha-high-rays, .gacha-high-banner,
   .gacha-high-num { animation: none !important; }
   .gacha-crack { stroke-dashoffset: 0; }
 }
