@@ -160,9 +160,12 @@ function CountUp({ from = 0, to, ms, reduced, onDone }: {
 }
 
 // ─── 3D die ───────────────────────────────────────────────────────────────────
-// Face placement and the cube rotation that brings each face to the viewer were
-// verified numerically (every face lands face-up with any number of extra full
-// turns; opposite faces sum to 7).
+// Read like a real die: the camera looks DOWN at the table at an angle, and the
+// rolled face lands pointing UP — the number on top is the result. Landing pose
+// = FACE_SHOW (which brings a face toward +z) preceded by rotateX(90deg) (which
+// turns +z to world-up). Verified numerically: every result lands on the
+// world-up face with any number of extra turns, and under the camera it is the
+// most viewer-facing of the six; opposite faces sum to 7.
 
 const FACE_PLACE: Record<number, string> = {
   1: "rotateY(0deg)", 6: "rotateY(180deg)", 2: "rotateY(90deg)",
@@ -174,8 +177,10 @@ const FACE_SHOW: Record<number, [number, number]> = {
 const PIPS: Record<number, number[]> = {
   1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8],
 };
+/** Rolled face pointing up (see the note above). */
+const landPose = (v: number): [number, number] => [90 + FACE_SHOW[v][0], FACE_SHOW[v][1]];
 
-function Die3D({ value, delay, duration, reduced, idle = false, tremble = false, size = 54 }: {
+function Die3D({ value, delay, duration, reduced, idle = false, tremble = false, size = 58 }: {
   value: number; delay: number; duration: number; reduced: boolean;
   /** Waiting in the tray for the player to roll: a neutral pose that never
    *  shows the result face-on, so nothing is spoiled. */
@@ -187,17 +192,17 @@ function Die3D({ value, delay, duration, reduced, idle = false, tremble = false,
   // forward; land on target + whole turns (same face, more drama).
   const [pose, setPose] = useState<[number, number]>(() =>
     idle ? [-28 - Math.random() * 20, 35 + Math.random() * 30]
-      : reduced ? FACE_SHOW[value] : [-(120 + Math.random() * 300), -(120 + Math.random() * 300)]
+      : reduced ? landPose(value) : [-(120 + Math.random() * 300), -(120 + Math.random() * 300)]
   );
   const [landed, setLanded] = useState(reduced && !idle);
 
   useEffect(() => {
     if (idle) return;
-    if (reduced) { setPose(FACE_SHOW[value]); setLanded(true); return; }
-    const [fx, fy] = FACE_SHOW[value];
+    if (reduced) { setPose(landPose(value)); setLanded(true); return; }
+    const [lx, ly] = landPose(value);
     let r1 = 0, r2 = 0;
     // Two frames so the start pose is painted before the transition target is set.
-    r1 = requestAnimationFrame(() => { r2 = requestAnimationFrame(() => setPose([fx + 720, fy + 1080])); });
+    r1 = requestAnimationFrame(() => { r2 = requestAnimationFrame(() => setPose([lx + 720, ly + 1080])); });
     const t = setTimeout(() => setLanded(true), delay + duration);
     return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2); clearTimeout(t); };
   }, [value, delay, duration, reduced, idle]);
@@ -209,9 +214,20 @@ function Die3D({ value, delay, duration, reduced, idle = false, tremble = false,
 
   return (
     <div className={`gacha-die-slot${landed ? " is-landed" : ""}${idle ? " is-idle" : ""}`} style={{ width: size, height: size }}>
-      <div className={reduced || idle ? "gacha-die-shadow-rest" : "gacha-die-shadow"} style={tossStyle} />
-      <div className={motion} style={tossStyle}>
-        <div className="gacha-die-tilt">
+      {/* The fade-in lives OUT HERE, never on anything inside the camera: an
+          animated opacity makes Chrome flatten that element to a 2D image, and
+          a flattened die inside the tilted camera renders as a squashed tile. */}
+      <div className={`gacha-die-view${reduced || idle ? "" : " gacha-die-fade"}`} style={tossStyle}>
+      {/* camera: looking down at the table; everything below is in table space */}
+      <div className="gacha-die-cam">
+        {/* shadow lies ON the table plane, under the die, so the camera foreshortens it */}
+        <div className="gacha-die-floor" style={{ transform: `translateY(${size / 2}px) rotateX(90deg)` }}>
+          <div className={reduced || idle ? "gacha-die-shadow-rest" : "gacha-die-shadow"} style={tossStyle} />
+        </div>
+        {/* the toss drops along the table's up axis: from near the camera onto the felt.
+            gacha-die-body is unconditional: every element between the camera
+            and the die must preserve 3D, or the die renders flat and squashed. */}
+        <div className={`gacha-die-body${motion ? ` ${motion}` : ""}`} style={tossStyle}>
           <div
             className="gacha-die"
             style={{
@@ -233,6 +249,7 @@ function Die3D({ value, delay, duration, reduced, idle = false, tremble = false,
             ))}
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
@@ -349,6 +366,8 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
   const [impact, setImpact] = useState(false);
   const leaving = useRef(false);
   const quickReveal = useRef(false);   // 跳過 lands straight on the face-up card
+  /** A stat that just landed at ≥80 (level 1, 極佳) or 90 — the max — (level 2, 完美). */
+  const [high, setHigh] = useState<{ level: 1 | 2; stat: number } | null>(null);
 
   const cracks = useMemo(() => crackPaths(tier.cracks), [tier.cracks]);
   const motes = useMemo(() => {
@@ -364,6 +383,11 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
     return { dx: Math.cos(a) * d, dy: Math.sin(a) * d, delay: Math.random() * 160, size: 2.5 + Math.random() * 3 };
   }), [tier.sparks]);
 
+  const highSparks = useMemo(() => Array.from({ length: 26 }, (_, i) => {
+    const a = (i / 26) * Math.PI * 2 + Math.random() * 0.4;
+    const d = 70 + Math.random() * 110;
+    return { dx: Math.cos(a) * d, dy: Math.sin(a) * d * 0.7, delay: Math.random() * 120, size: 2 + Math.random() * 3 };
+  }), []);
   const chargeMs = CHARGE_MS[card.rarity];
   const converge = useMemo(() => Array.from({ length: CONVERGE[card.rarity] }, (_, i) => {
     const a = (i / CONVERGE[card.rarity]) * Math.PI * 2 + Math.random() * 0.5;
@@ -405,7 +429,11 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
     const fate = isFate(i);
     const t: RollTiming = reduced
       ? { toss: 0, stagger: 0, lead: 0 }
-      : { toss: fate ? 1900 : i < 2 ? 1300 : 1150, stagger: 170, lead: fate ? 250 : 0 };
+      : {
+          // A 90 (the maximum) tumbles a beat longer — a tell before it lands.
+          toss: (fate ? 1900 : i < 2 ? 1300 : 1150) + (steps[i].total >= 90 ? 350 : 0),
+          stagger: 170, lead: fate ? 250 : 0,
+        };
     setIdx(i);
     setRoll(t);
     setRollNo((n) => n + 1);
@@ -420,6 +448,14 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
       if (to !== from && !reduced) {
         setBreakthrough(to);
         later(() => setBreakthrough(null), 1800);
+      }
+      // High rolls: ≥80 celebrates, 90 (the max for every stat) celebrates harder.
+      const v = steps[i].total;
+      if (v >= 80 && !reduced) {
+        const level: 1 | 2 = v >= 90 ? 2 : 1;
+        setHigh({ level, stat: i });
+        later(() => setHigh((h) => (h && h.stat === i ? null : h)), level === 2 ? 2300 : 1700);
+        if (level === 2) { setShake(true); later(() => setShake(false), 480); }
       }
       // The fate roll gets its own held breath: after the second-to-last stat
       // lands, the tray turns to LUCK and waits — trembling — for the click.
@@ -583,13 +619,19 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
             {steps.map((s, i) => {
               const done = i < landedCount;
               const active = i === idx && !done;
+              // High stats keep their mark after the celebration ends.
+              const mark = done ? (s.total >= 90 ? " is-perfect" : s.total >= 80 ? " is-high" : "") : "";
               return (
-                <div key={s.key} className={`gacha-slot${done ? " is-done" : ""}${active ? " is-active" : ""}`}>
+                <div key={s.key} className={`gacha-slot${done ? " is-done" : ""}${active ? " is-active" : ""}${mark}`}>
+                  {done && s.total >= 90 && <span className="gacha-slot-star" aria-label="完美">✦</span>}
                   <span className="text-[10px] tracking-wider" style={{ color: gold(done ? 0.7 : 0.4) }}>
                     {s.zh} <span className="opacity-60">{s.label}</span>
                   </span>
                   <span className="text-lg font-bold tabular-nums leading-tight"
-                    style={{ color: done ? (s.total >= 70 ? "#d4b87a" : PARCHMENT) : gold(active ? 0.55 : 0.2) }}>
+                    style={{
+                      color: done ? (s.total >= 80 ? PARCHMENT : s.total >= 70 ? "#d4b87a" : PARCHMENT) : gold(active ? 0.55 : 0.2),
+                      textShadow: done && s.total >= 80 ? `0 0 ${s.total >= 90 ? 14 : 8}px ${gold(s.total >= 90 ? 0.9 : 0.6)}` : undefined,
+                    }}>
                     {done ? s.total : active ? "…" : "—"}
                   </span>
                 </div>
@@ -598,18 +640,40 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
           </div>
 
           {/* tray */}
-          <div className="gacha-tray relative rounded-xl px-3 pt-3 pb-4 text-center">
+          <div className={`gacha-tray relative rounded-xl px-3 pt-3 pb-4 text-center${high && high.stat === idx ? ` is-high-${high.level}` : ""}`}>
+            {/* ≥80 / 90 celebration, keyed so each high roll replays it */}
+            {high && high.stat === idx && (<>
+              <div key={`fx-${high.stat}`} className="gacha-high-fx" aria-hidden>
+                {high.level === 2 && <span className="gacha-high-rays" />}
+                <span className="gacha-high-ring" />
+                {high.level === 2 && <span className="gacha-high-ring is-second" />}
+                <span className="gacha-high-origin">
+                  {highSparks.slice(0, high.level === 2 ? 26 : 14).map((sp, k) => (
+                    <span key={k} className="gacha-spark" style={{
+                      width: sp.size, height: sp.size, animationDelay: `${sp.delay}ms`,
+                      ["--dx" as string]: `${sp.dx}px`, ["--dy" as string]: `${sp.dy}px`,
+                    } as CSSProperties} />
+                  ))}
+                </span>
+              </div>
+              <div key={`banner-${high.stat}`} className={`gacha-high-banner is-${high.level}`} aria-live="polite">
+                {high.level === 2 ? "完 美" : "極 佳"}
+              </div>
+            </>)}
             {isFate(idx) && (
               <p className="gacha-fate-banner text-[11px] tracking-[0.3em] mb-1" style={{ color: PARCHMENT }}>
                 命 運 的 一 擲
               </p>
             )}
-            <p className="font-serif text-base" style={{ color: PARCHMENT }}>
-              {step.zh} <span className="text-[11px] tracking-[0.2em]" style={{ color: gold(0.55) }}>{step.label}</span>
-            </p>
-            <p className="text-[11px] leading-snug mb-3" style={{ color: gold(0.45) }}>{step.desc}</p>
+            {/* hidden while a 極佳/完美 banner occupies this spot */}
+            <div className="gacha-tray-head">
+              <p className="font-serif text-base" style={{ color: PARCHMENT }}>
+                {step.zh} <span className="text-[11px] tracking-[0.2em]" style={{ color: gold(0.55) }}>{step.label}</span>
+              </p>
+              <p className="text-[11px] leading-snug mb-3" style={{ color: gold(0.45) }}>{step.desc}</p>
+            </div>
 
-            <div key={`${idx}-${rollPhase === "ready" ? "ready" : rollNo}`} className="flex items-end justify-center gap-4 h-[92px] pb-1">
+            <div key={`${idx}-${rollPhase === "ready" ? "ready" : rollNo}`} className="relative z-[1] flex items-end justify-center gap-4 h-[92px] pb-1">
               {step.dice.map((d, i) => rollPhase === "ready" ? (
                 <Die3D key={i} value={d} reduced={reduced} idle tremble={fateNow} delay={0} duration={0} />
               ) : (
@@ -624,7 +688,12 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
                   ({step.dice.join(" + ")}
                   {step.base > 0 && <span style={{ color: gold(0.4) }}> + {step.base}</span>}
                   ) × 5 ={" "}
-                  <b className="text-xl" style={{ color: "#c9a96e", textShadow: `0 0 14px ${gold(0.5)}` }}>{step.total}</b>
+                  {step.total >= 80 ? (
+                    <b className={`gacha-high-num ${step.total >= 90 ? "text-3xl" : "text-2xl"}`}
+                      style={{ color: PARCHMENT, textShadow: `0 0 ${step.total >= 90 ? 22 : 14}px ${gold(0.85)}` }}>{step.total}</b>
+                  ) : (
+                    <b className="text-xl" style={{ color: "#c9a96e", textShadow: `0 0 14px ${gold(0.5)}` }}>{step.total}</b>
+                  )}
                 </span>
               ) : fateNow ? (
                 <span className="text-[11px]" style={{ color: gold(0.6) }}>

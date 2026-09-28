@@ -149,3 +149,11 @@
 - Fix: optional `at` (node or container id — wait until the party is there) and `delay` (rounds after the condition first holds) on encounters; `encounters_armed` in LocationState remembers the arming round; GM wording changes when `at` is set. Legacy data unchanged. Author docs, story-machine writer rule 10 / rubric 10 / validator warning added. Verified with a scratch tsx script (legacy, at node, at container, delay, coercion round-trip).
 - Rule: any "fires when condition X" trigger needs an answer to WHERE and WHEN it may fire — a trigger with no place gate is a teleport.
 - File updated: lessons only.
+
+### 2026-09-28 — CSS 3D: one flattening element anywhere between camera and object squashes it
+- Context: draw animation dice moved to a downward-looking camera so the TOP face is the rolled number.
+- Symptom: math verified numerically, but landed dice rendered as squashed flat tiles; idle dice looked fine. Then, after fixing that, the reduced-motion dice were flat too.
+- Root cause: every element between the perspective root and the cube must keep `transform-style: preserve-3d`, and none may have a grouping property. (1) The toss wrapper animated `opacity` — Chrome flattens that element to a 2D image, which is harmless when it faces the viewer (the old head-on camera hid the bug for weeks) but gets foreshortened inside a tilted camera. (2) In reduced motion the wrapper had no class at all, so it lost `preserve-3d`.
+- Fix: fade moved to a wrapper OUTSIDE the camera (which also owns `perspective`); toss keyframes are transform-only; an unconditional `gacha-die-body` class keeps `preserve-3d` regardless of motion mode.
+- Rule: numeric checks of the transform chain don't cover rendering — also measure in the browser (face bounding boxes: the result face must be the largest; the outline must be cube-shaped). Never put opacity/filter/clip/overflow on anything inside a 3D chain; keep 3D-structural styles on classes that are always present.
+- Files updated: lessons only.
