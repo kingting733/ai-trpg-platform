@@ -333,6 +333,127 @@ export function detectAttackTypeForTargets(text: string, combatantNames: string[
   return detectAttackType(t);
 }
 
+// ── Strikes aimed straight at a named person ──────────────────────────────────
+// Single-character strike verbs are too ambiguous to count on their own (打開 /
+// 打聽, 砍價, 諷刺, 咬緊牙關), so the keyword lists above leave them out — and
+// 「打B」「用刀刺B」「給B一拳」 used to slip through as ordinary actions: no
+// server-rolled attack, no retaliation, the GM narrating the blow freely.
+// Aimed straight at a known name they can only mean a blow. Conservative on
+// purpose — a false positive starts a fight: the verb must touch the name
+// (「打B」「打了B」「刺向B」「踢倒B」), a measure-word blow must follow a
+// directional word (「給B一拳」「朝B臉上一拳」, never 「B一拳打過來」), dialogue
+// in quotes is ignored, and the clause must not negate, forbid, delegate or
+// hypothesise the blow (「別打B」「阻止A打B」「叫A去打B」「如果B過來就打B」),
+// nor have another combatant as its subject (「A打B」 is A hitting B).
+
+const NAMED_STRIKE_VERBS: Record<string, AttackType> = {
+  打: "fighting", 捶: "fighting", 踢: "fighting", 扇: "fighting", 摑: "fighting",
+  刺: "fighting", 砍: "fighting", 捅: "fighting", 劈: "fighting", 斬: "fighting",
+  咬: "fighting", 砸: "str", 掐: "str", 勒: "str",
+};
+/** Words that merely start (or end) with a strike verb — never a blow, even
+ *  when a name happens to follow (「打包大人的行李」, 「諷刺B」). */
+const STRIKE_FALSE_COMPOUNDS = [
+  "打開", "打掃", "打字", "打電", "打聽", "打量", "打算", "打扮", "打招", "打工",
+  "打包", "打折", "打獵", "打坐", "打賭", "打理", "打點", "打發", "打造", "打烊",
+  "打牌", "打球", "打針", "打氣", "打探", "打斷", "打擾", "打轉", "打結", "打滾",
+  "打鼓", "打卡", "打給", "打通", "打撈", "打磨", "打鐵",
+  "刺激", "刺探", "刺青", "刺眼", "刺耳", "刺繡",
+  "砍價", "砍柴", "砍樹", "咬牙", "咬緊", "勒索", "勒令", "扇子", "扇動", "扇風",
+  "劈柴", "砸場", "砸鍋", "掐指", "掐算", "斬釘",
+];
+const STRIKE_FALSE_PREFIXES = ["諷刺"];
+/** What may sit between the verb and the name: 打了B / 刺向B / 踢倒B / 砍傷B. */
+const STRIKE_LINKERS = ["了", "向", "往", "倒", "傷", "死"];
+const BLOW_LEADS = ["給", "賞", "朝", "對", "往", "向"];
+const BLOWS: Array<[string, AttackType]> = [
+  ["一巴掌", "fighting"], ["一拳", "fighting"], ["一腳", "fighting"], ["一掌", "fighting"],
+  ["一刀", "fighting"], ["一棍", "fighting"], ["一棒", "fighting"], ["一槍", "ranged"],
+];
+/** Most characters allowed between the name and a measure-word blow
+ *  (「朝B的臉上狠狠一拳」). Speech in that gap is a threat, not a blow. */
+const BLOW_MAX_GAP = 6;
+const BLOW_GAP_SPEECH = ["說", "講", "喊", "吼", "道", "問", "罵", "威脅", "警告", "嚇"];
+/** Anywhere earlier in the clause, these make the blow not the actor's real,
+ *  present act. */
+const STRIKE_BLOCKERS = [
+  "不", "別", "勿", "沒", "莫", "阻止", "制止", "防止", "避免", "攔", "勸",
+  "叫", "讓", "命令", "要求", "指使", "假裝", "如果", "若", "要是", "萬一",
+];
+/** Idioms that contain 不 yet push the blow forward (「忍不住打了B」). */
+const STRIKE_INTENSIFIERS = /忍不住|不禁|不由得|不管|不顧|毫不|不假思索|二話不說/g;
+const CLAUSE_BREAK = /[，,。.！!？?；;：:\n]/;
+const QUOTED = /「[^」]*」|『[^』]*』|“[^”]*”|"[^"]*"/g;
+
+/**
+ * A strike aimed straight at a named combatant (see the block above).
+ * Returns the attack type and the exact name struck, or null. `names` are the
+ * combatants the engine knows (roster NPCs, tracked NPCs, player characters);
+ * the actor's own name is never a target. Names under 2 characters are ignored
+ * — 「打王牌」 must not hit an NPC called 王.
+ */
+export function detectNamedStrike(
+  rawText: string,
+  names: string[],
+  actorName?: string | null,
+): { type: AttackType; target: string } | null {
+  const targets = Array.from(new Set(names.filter((n) => n && n.length >= 2 && n !== actorName)))
+    .sort((a, b) => b.length - a.length);
+  if (targets.length === 0) return null;
+  // Dialogue is speech, not action: 對B說「我要打你」.
+  const text = rawText.replace(QUOTED, "，");
+
+  const nameAt = (i: number): string | null => {
+    while (text[i] === " ") i++;
+    return targets.find((n) => text.startsWith(n, i)) ?? null;
+  };
+  const blocked = (i: number): boolean => {
+    let start = i;
+    while (start > 0 && !CLAUSE_BREAK.test(text[start - 1])) start--;
+    const before = text.slice(start, i).replace(STRIKE_INTENSIFIERS, "");
+    if (STRIKE_BLOCKERS.some((b) => before.includes(b))) return true;
+    // Someone else is the subject: 「A打B」「A又打B」.
+    const subject = before.replace(/[又再也就還想要去來便\s]+$/, "");
+    return targets.some((n) => subject.endsWith(n));
+  };
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+
+    // 「打B」「打了B」「刺向B」「踢倒B」
+    const verbType = NAMED_STRIKE_VERBS[ch];
+    if (verbType) {
+      const rest = text.slice(i);
+      const pre = text.slice(Math.max(0, i - 1), i + 1);
+      if (!STRIKE_FALSE_COMPOUNDS.some((c) => rest.startsWith(c)) && !STRIKE_FALSE_PREFIXES.includes(pre)) {
+        let j = i + 1;
+        while (text[j] === " ") j++;
+        const target = nameAt(j) ?? (STRIKE_LINKERS.includes(text[j]) ? nameAt(j + 1) : null);
+        if (target && !blocked(i)) return { type: verbType, target };
+      }
+    }
+
+    // 「給B一拳」「賞B一巴掌」「朝B的臉上狠狠一拳」「向B開了一槍」
+    if (BLOW_LEADS.includes(ch)) {
+      const target = nameAt(i + 1) ?? (text[i + 1] === "著" ? nameAt(i + 2) : null); // 朝著B / 對著B
+      if (target) {
+        const after = text.slice(text.indexOf(target, i + 1) + target.length);
+        const clauseEnd = after.search(CLAUSE_BREAK);
+        const clause = clauseEnd === -1 ? after : after.slice(0, clauseEnd);
+        for (const [blow, type] of BLOWS) {
+          const at = clause.indexOf(blow);
+          if (at === -1 || at > BLOW_MAX_GAP) continue;
+          const gap = clause.slice(0, at);
+          if (BLOW_GAP_SPEECH.some((w) => gap.includes(w))) continue;
+          if (clause.startsWith("一刀兩斷", at)) continue;
+          if (!blocked(i)) return { type, target };
+        }
+      }
+    }
+  }
+  return null;
+}
+
 function attackSkillValue(type: AttackType, char: CheckCharacter): number {
   if (type === "ranged") {
     const stored = (char.skills ?? {}).firearms as number | undefined;

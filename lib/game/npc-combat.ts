@@ -24,12 +24,23 @@ export interface NpcRuntimeState {
   last_attack_round?: number;
 }
 
+/** Does this NPC turn on whoever attacks it? The editor promises
+ *  「友善（從不攻擊）」: a friendly NPC never attacks — not even after being
+ *  hurt; it cowers, flees or pleads instead. Everyone else fights back. */
+export function fightsBack(disposition: NpcDisposition): boolean {
+  return disposition !== "friendly";
+}
+
 /** Effective stance = runtime override, else the legacy hostile flag, else the
- *  scenario disposition. Lets pacify work even on disposition:"hostile" NPCs. */
+ *  scenario disposition. Lets pacify work even on disposition:"hostile" NPCs.
+ *  A friendly NPC is never hostile, whatever its state says: rooms saved
+ *  before fightsBack() existed can carry a stance "hostile" from an old
+ *  retaliation, and it must not make a 「從不攻擊」 NPC attack. */
 export function effectiveStance(
   state: NpcRuntimeState | undefined | null,
   disposition: NpcDisposition,
 ): NpcDisposition {
+  if (!fightsBack(disposition)) return disposition;
   if (state?.stance) return state.stance;
   if (state?.hostile) return "hostile";
   return disposition;

@@ -253,7 +253,7 @@ ${terms}
 - difficulty: ${IMPORT_DIFFICULTIES.join(" / ")}
 - 地點 initial: unlocked（開放）/ discovered（已知但進不去）/ hidden（玩家還不知道它存在）
 - 結局 type: victory / failure / neutral
-- NPC disposition: friendly / neutral / hostile
+- NPC disposition: friendly（從不攻擊，被打也不還手）/ neutral（被攻擊才反擊，預設）/ hostile（登場即攻擊隊伍）
 - travel_mode: free（任何已解鎖地點都能直接去）/ edges（只能沿著 edges 走，較有地圖感）
 
 【數量上限（超過的部分會被系統丟棄）】

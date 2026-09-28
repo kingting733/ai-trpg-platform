@@ -197,7 +197,7 @@ export function NpcRosterEditor({
 
             {/* Combat stance — drives the server-authoritative NPC attacks. */}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-1">
-              <label className="flex items-center gap-2" title="hostile：一登場就攻擊隊伍；neutral：被攻擊後才反擊；friendly：從不主動攻擊">
+              <label className="flex items-center gap-2" title="hostile：一登場就攻擊隊伍；neutral：被攻擊後才反擊；friendly：從不攻擊——被打也不還手，只會躲避、求饒或呼救">
                 <span className="inline-flex items-center gap-1 text-xs text-slate-400"><Swords size={12} strokeWidth={2} /> 戰鬥立場</span>
                 <select
                   value={npc.disposition ?? "neutral"}

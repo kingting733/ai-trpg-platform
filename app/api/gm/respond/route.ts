@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { generateGMResponseStreaming, sanitizeChoicesWithMeta, summarizeRejections, CHOICE_COUNT, GMAIInput, ScenarioGMContext, LedgerEntry, NpcEntry } from "@/lib/ai/gm";
 import { ensureHorrorFx, horrorFxTag } from "@/lib/ai/text-fx";
+import { buildSceneReactionDirective } from "@/lib/ai/scene-reaction";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   resolveAction, rollInjuryDamage, rollFirstAidHeal, InjurySeverity,
   resolveAttack, dodgeValueOf, NPC_DEFAULT_DODGE, AttackResult,
-  detectAttackTypeForTargets, resolveFuzzyNpcTarget, findNamedNonCandidate, isBareNameLike, resolveSanCheck,
+  detectAttackTypeForTargets, detectNamedStrike, resolveFuzzyNpcTarget, findNamedNonCandidate, isBareNameLike, resolveSanCheck,
   PLAYER_SKILL_LIST,
 } from "@/lib/game/resolution";
 import { generateSceneChoices } from "@/lib/ai/scene-choices";
@@ -49,7 +50,7 @@ import {
 } from "@/lib/game/locations";
 import { type NpcRef, resolveNpc, npcStateKey, npcStateEntry, npcDisplayName } from "@/lib/game/npc";
 import { mythosSpellByKey, resolveMythosCast, rollShrivellingDamage, detectMythosCastIntent, MYTHOS_MP_COST } from "@/lib/game/mythos";
-import { npcAsAttacker, npcAttackType, coerceDisposition, isNpcHostile } from "@/lib/game/npc-combat";
+import { npcAsAttacker, npcAttackType, coerceDisposition, isNpcHostile, fightsBack } from "@/lib/game/npc-combat";
 import {
   coerceInventory,
   applyItemEvents,
@@ -141,6 +142,9 @@ export async function POST(request: Request) {
 
   let roll = null as ReturnType<typeof resolveAction> | null;
   let attack: AttackResult | null = null;
+  // Who the actor attacked this turn (weapon or damaging spell) — feeds the
+  // SCENE REACTION directive, so the victim and the witnesses respond.
+  let violence: { victim: string; victimIsNpc: boolean; hurt: boolean } | null = null;
   let actorDied = false;
   let actorBroke = false;
 
@@ -288,9 +292,19 @@ export async function POST(request: Request) {
     mythosCast = cast;
   }
 
-  const attackType = resolvedActor && !mythosCast
+  // A blow aimed straight at a name (「打B」「用刀刺B」「給B一拳」) — see
+  // detectNamedStrike. It also names its exact target, so 「看著A，打B」 hits B.
+  const namedStrike = resolvedActor && !mythosCast
+    ? detectNamedStrike(actionText, combatantNames, resolvedActor.name)
+    : null;
+  const keywordAttackType = resolvedActor && !mythosCast
     ? detectAttackTypeForTargets(actionText, combatantNames)
     : null;
+  const attackType = keywordAttackType ?? namedStrike?.type ?? null;
+  const aimedAt = namedStrike?.target ?? null;
+  if (namedStrike && !keywordAttackType) {
+    console.info(`[attack:detect] actor=${resolvedActor?.name} named strike → ${namedStrike.type} at ${namedStrike.target}`);
+  }
 
   // Find an attack target named in the action: a living roster character (not self)
   // first, otherwise a known living NPC.
@@ -300,7 +314,7 @@ export async function POST(request: Request) {
     // Split-party: you can only strike someone standing in YOUR scene.
     targetChar = sortedByDex.find(
       (c: any) => c.id !== resolvedActor.id && c.hp > 0 && c.san > 0 &&
-        actionText.includes(c.name) && charPresentInScene(c)
+        (aimedAt ? c.name === aimedAt : actionText.includes(c.name)) && charPresentInScene(c)
     ) ?? null;
     if (!targetChar) {
       // Match against roster display names; also any NPC already tracked in
@@ -317,12 +331,19 @@ export async function POST(request: Request) {
       const livingKnown = knownNpcNames.filter(
         (name) => npcStateEntry(name, npcRoster, npcStateNow)?.alive !== false
       );
-      targetNpcName = livingKnown.find((name) => actionText.includes(name)) ?? null;
-      // Conservative fuzzy fallback — tolerate single-char typos / distinctive
-      // partial mentions ("阿哲" for 阿澤, "reys" for Reyes). Never guesses
-      // between close candidates. Runs only when the exact match above missed.
-      if (!targetNpcName) {
-        targetNpcName = resolveFuzzyNpcTarget(actionText, livingKnown);
+      if (aimedAt) {
+        // The blow names its target; if that one can't be struck here, never
+        // redirect it onto another name in the sentence (the guard below
+        // reports it as named-but-absent instead).
+        targetNpcName = livingKnown.includes(aimedAt) ? aimedAt : null;
+      } else {
+        targetNpcName = livingKnown.find((name) => actionText.includes(name)) ?? null;
+        // Conservative fuzzy fallback — tolerate single-char typos / distinctive
+        // partial mentions ("阿哲" for 阿澤, "reys" for Reyes). Never guesses
+        // between close candidates. Runs only when the exact match above missed.
+        if (!targetNpcName) {
+          targetNpcName = resolveFuzzyNpcTarget(actionText, livingKnown);
+        }
       }
     }
 
@@ -379,6 +400,7 @@ export async function POST(request: Request) {
       dodgeVal = npcDex != null && npcDex > 0 ? Math.floor(npcDex / 2) : NPC_DEFAULT_DODGE;
     }
     attack = resolveAttack(resolvedActor, dodgeVal, attackType, targetName, isNpc);
+    violence = { victim: targetName, victimIsNpc: isNpc, hurt: attack.damage > 0 };
 
     if (attack.damage > 0) {
       if (isNpc) {
@@ -452,8 +474,10 @@ export async function POST(request: Request) {
     }
 
     // RETALIATION — attacking an NPC (hit or miss) turns it hostile, so it
-    // fights back via the NPC-aggression pass below.
-    if (isNpc) {
+    // fights back via the NPC-aggression pass below. A friendly NPC never
+    // does (「友善（從不攻擊）」) — the SCENE REACTION directive has the GM
+    // show it cowering or pleading instead.
+    if (isNpc && fightsBack(coerceDisposition((resolveNpc(targetName, scenarioNpcs) as any)?.disposition))) {
       const states = { ...npcStateNow };
       const key = npcStateKey(targetName, npcRoster);
       const existing: any = states[key] ?? npcStateEntry(targetName, npcRoster, states);
@@ -530,11 +554,15 @@ export async function POST(request: Request) {
       }
       npc = { ...npc, hp: Math.max(0, npc.hp - damage) };
       if (npc.hp <= 0) npc.alive = false;
-      // Surviving victims of forbidden magic turn hostile (same as being attacked).
-      if (npc.alive) (npc as any).stance = "hostile";
+      // Surviving victims of forbidden magic turn hostile (same as being
+      // attacked) — unless friendly, who never fight back.
+      if (npc.alive && fightsBack(coerceDisposition((resolveNpc(mythosTargetName, scenarioNpcs) as any)?.disposition))) {
+        (npc as any).stance = "hostile";
+      }
       npcStates[stateKey] = npc;
       await supabase.from("rooms").update({ npc_states: npcStates }).eq("id", roomId);
       npcStateNow = npcStates;
+      violence = { victim: mythosTargetName, victimIsNpc: true, hurt: true };
       attackSystemLog = npc.alive
         ? `🜏 ${mythosTargetName} 被 ${resolvedActor.name} 的「${mythosSpell.zh}」灼傷（−${damage} HP，剩餘 ${npc.hp}/${npc.max_hp}）`
         : `☠ ${mythosTargetName} 在「${mythosSpell.zh}」下凋萎而亡。`;
@@ -1040,6 +1068,7 @@ export async function POST(request: Request) {
   // same resolveAttack machinery players use (to-hit vs 閃避, damage + STR/SIZ
   // bonus, crit, fumble). The GM only narrates the outcomes computed here.
   const npcActionLines: string[] = [];
+  const npcStruckThisTurn = new Set<string>(); // state keys — a victim's counter-attack shows here
   if (resolvedActor) {
     // Split-party: the narrated scene is the ACTOR's node. Placed NPCs count as
     // present only if placed THERE; tracked-but-unplaced NPCs keep the legacy
@@ -1127,6 +1156,7 @@ export async function POST(request: Request) {
 
       statesChanged = true;
       attacksDone++;
+      npcStruckThisTurn.add(key);
       await supabase.from("story_logs").insert({
         room_id: roomId, round_number: room.current_round, entry_type: "system", content: logLine,
       });
@@ -1446,6 +1476,45 @@ export async function POST(request: Request) {
     ? `NPC KNOWLEDGE (authoritative — the ONLY information each NPC may give, and ONLY when a player actually talks to THAT NPC and asks/brings up the matching topic in some form; match the player's meaning, not exact words). Reveal it naturally in the NPC's own voice when the topic genuinely comes up. Do NOT volunteer it unprompted, do NOT reveal an entry whose topic the player did not raise, and do NOT invent NPC knowledge beyond this list — anything not listed is either unknown to the NPC or not yet unlocked:\n${npcKnowledgeLines.join("\n")}`
     : null;
 
+  // === SCENE REACTION (violence has witnesses) — lib/ai/scene-reaction.ts ===
+  // Witnesses are the NPCs the server KNOWS stood in the scene when the blow
+  // fell: placed at the actor's node (combat snapshot, pre-travel), alive, not
+  // the victim, and not hostile — a hostile NPC's part is its own attack (NPC
+  // ACTIONS). Unplaced NPCs have no known position; the directive leaves
+  // "anyone else the story has in this scene" to the GM.
+  let sceneReactionDirective: string | null = null;
+  if (violence && resolvedActor) {
+    const v = violence;
+    const victimKey = v.victimIsNpc ? npcStateKey(v.victim, npcRoster) : null;
+    const victimFightsBack = v.victimIsNpc &&
+      fightsBack(coerceDisposition((resolveNpc(v.victim, scenarioNpcs) as any)?.disposition));
+    const victimStruckBack = victimKey != null && npcStruckThisTurn.has(victimKey);
+    const witnesses = Array.from(combatPlacedKeys)
+      .filter((key) => key !== victimKey)
+      .filter((key) => {
+        const st = npcStateEntry(key, npcRoster, npcStateNow);
+        if (st?.alive === false) return false;
+        return !isNpcHostile(st, coerceDisposition((resolveNpc(key, scenarioNpcs) as any)?.disposition));
+      })
+      .map((key) => npcDisplayName(key, npcRoster));
+    sceneReactionDirective = buildSceneReactionDirective({
+      actor: resolvedActor.name,
+      victim: v.victim,
+      victimIsNpc: v.victimIsNpc,
+      victimHurt: v.hurt,
+      victimDown: v.victimIsNpc
+        ? npcStateEntry(v.victim, npcRoster, npcStateNow)?.alive === false
+        : (sortedByDex.find((c: any) => c.name === v.victim)?.hp ?? 1) <= 0,
+      victimFightsBack,
+      victimStruckBack,
+      witnesses,
+    });
+    console.info(
+      `[scene:reaction] room=${roomId} round=${room.current_round} actor=${resolvedActor.name} victim=${v.victim} ` +
+      `npc=${v.victimIsNpc} fights_back=${victimFightsBack} struck_back=${victimStruckBack} witnesses=${JSON.stringify(witnesses)}`
+    );
+  }
+
   const input: GMAIInput = {
     scenarioTitle: scenario?.title ?? "Unknown Scenario",
     scenarioBackground: scenario?.background ?? null,
@@ -1464,6 +1533,7 @@ export async function POST(request: Request) {
     npcActionDirective: npcActionLines.length
       ? `NPC ACTIONS THIS TURN — MANDATORY NARRATION BEATS. The system already rolled these hostile-NPC attacks and ALREADY APPLIED THE HP LOSS; the players have seen the damage lines on screen. You MUST narrate every one of them as it happened. Omitting one produces a scene where a player silently loses HP for no reason they can read. Do NOT invent different outcomes, extra attacks, or attacks that were not listed:\n${npcActionLines.map((l) => `- ${l}`).join("\n")}`
       : null,
+    sceneReactionDirective,
     npcKnowledgeDirective,
     actorLastScene,
     mythosDirective,
