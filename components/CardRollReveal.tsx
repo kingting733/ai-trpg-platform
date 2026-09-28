@@ -1,7 +1,8 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Drama, Star, ArrowRight, AlertTriangle } from "lucide-react";
 import { GachaSummon, TIER, gold, buildStatSteps } from "@/components/GachaSummon";
+import { OccupationRoulette } from "@/components/OccupationRoulette";
 
 const OCCUPATION_ICON: Record<string, string> = {
   "記者":     "/reporter.png",
@@ -24,7 +25,6 @@ function OccupationImg({ name, className, size = 40 }: { name: string; className
   return <img src={src} alt={name} width={size} height={size} className={className} style={{ objectFit: "contain" }} />;
 }
 
-const ALL_OCCUPATIONS = Object.keys(OCCUPATION_ICON);
 import type { SkillKey } from "@/lib/cards/dice";
 
 type Rarity = "Common" | "Rare" | "Epic" | "Legendary";
@@ -235,52 +235,10 @@ function OccupationReveal({
   buffedSkills: string[];
   onDone: () => void;
 }) {
-  // Phase: "spinning" → "slowing" → "locked"
-  const [spinPhase, setSpinPhase] = useState<"spinning" | "slowing" | "locked">("spinning");
-  const [displayed, setDisplayed] = useState(ALL_OCCUPATIONS[0]);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    let speed = 60;
-    let ticks = 0;
-    const FAST_TICKS = 18;    // fast spin count
-    const SLOW_TICKS = 10;    // slow spin count
-
-    function spin(ms: number) {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      intervalRef.current = setInterval(() => {
-        ticks++;
-        if (ticks <= FAST_TICKS) {
-          setDisplayed(ALL_OCCUPATIONS[ticks % ALL_OCCUPATIONS.length]);
-        } else if (ticks <= FAST_TICKS + SLOW_TICKS) {
-          setSpinPhase("slowing");
-          speed = 80 + (ticks - FAST_TICKS) * 30;
-          setDisplayed(ALL_OCCUPATIONS[ticks % ALL_OCCUPATIONS.length]);
-          // re-schedule at new speed
-          clearInterval(intervalRef.current!);
-          intervalRef.current = setInterval(() => {
-            ticks++;
-            if (ticks > FAST_TICKS + SLOW_TICKS) {
-              clearInterval(intervalRef.current!);
-              setDisplayed(occupation);
-              setSpinPhase("locked");
-            } else {
-              setDisplayed(ALL_OCCUPATIONS[ticks % ALL_OCCUPATIONS.length]);
-            }
-          }, speed);
-        }
-      }, ms);
-    }
-
-    spin(speed);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [occupation]);
-
-  const icon = OCCUPATION_ICON[displayed];
-  const isLocked = spinPhase === "locked";
+  const [locked, setLocked] = useState(false);
 
   return (
-    <div className="flex flex-col items-center gap-5 py-2">
+    <div className="flex flex-col items-center gap-4 py-1">
       {/* Eyebrow */}
       <div className="flex items-center gap-3 w-full">
         <div className="h-px flex-1" style={{ background: "linear-gradient(to right, transparent, rgba(201,169,110,0.3))" }} />
@@ -288,39 +246,11 @@ function OccupationReveal({
         <div className="h-px flex-1" style={{ background: "linear-gradient(to left, transparent, rgba(201,169,110,0.3))" }} />
       </div>
 
-      {/* Slot display */}
-      <div className="w-full rounded-xl py-6 flex flex-col items-center gap-2 transition-all"
-        style={isLocked
-          ? { background: "rgba(201,169,110,0.07)", border: "1px solid rgba(201,169,110,0.45)", boxShadow: "0 0 28px rgba(201,169,110,0.18)" }
-          : { background: "rgba(14,12,8,0.7)", border: "1px solid #2a2010" }}>
-        <div
-          className="transition-all select-none"
-          style={{ filter: isLocked ? "drop-shadow(0 0 12px rgba(201,169,110,0.6))" : "none",
-            transform: spinPhase === "spinning" ? "scale(0.9)" : "scale(1)",
-            transition: "transform 0.2s, filter 0.3s" }}
-        >
-          {icon
-            // eslint-disable-next-line @next/next/no-img-element
-            ? <img src={icon} alt={displayed} width={72} height={72} style={{ objectFit: "contain" }} />
-            : <Drama size={72} strokeWidth={1.5} />}
-        </div>
-        <span
-          className="font-serif text-2xl tracking-wide transition-all"
-          style={{ color: isLocked ? "#e4d8be" : "rgba(201,169,110,0.4)",
-            textShadow: isLocked ? "0 0 18px rgba(201,169,110,0.45)" : "none",
-            letterSpacing: "0.08em" }}
-        >
-          {displayed}
-        </span>
-        {!isLocked && (
-          <span className="text-[10px] tracking-[0.2em] uppercase animate-pulse"
-            style={{ color: "rgba(201,169,110,0.4)" }}>抽籤中…</span>
-        )}
-      </div>
+      <OccupationRoulette occupation={occupation} icons={OCCUPATION_ICON} onLocked={() => setLocked(true)} />
 
-      {/* Buffed skills reveal — only shown once locked */}
-      {isLocked && (
-        <div className="w-full">
+      {/* Buffed skills reveal — only shown once the wheel stops */}
+      {locked && (
+        <div className="w-full gacha-fade-in">
           <p className="text-[10px] tracking-[0.2em] uppercase text-center mb-2"
             style={{ color: "rgba(201,169,110,0.55)" }}>職業加成技能 +10</p>
           <div className="grid grid-cols-2 gap-2">
@@ -338,20 +268,13 @@ function OccupationReveal({
         </div>
       )}
 
-      {isLocked && (
+      {locked && (
         <button
           onClick={onDone}
-          className="w-full py-2.5 rounded-lg font-serif text-sm transition-all hover:brightness-110"
+          className="w-full py-2.5 rounded-lg font-serif text-sm transition-all hover:brightness-110 gacha-fade-in"
           style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07", boxShadow: "0 0 16px rgba(201,169,110,0.2)" }}
         >
           <span className="inline-flex items-center gap-1">查看屬性總覽 <ArrowRight size={16} strokeWidth={2} /></span>
-        </button>
-      )}
-
-      {!isLocked && (
-        <button onClick={() => { if (intervalRef.current) clearInterval(intervalRef.current); setDisplayed(occupation); setSpinPhase("locked"); }}
-          className="text-xs text-zinc-600 hover:text-zinc-400">
-          跳過
         </button>
       )}
     </div>

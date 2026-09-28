@@ -5,11 +5,13 @@
 //                 cracks. Common and Rare look identical here on purpose (the
 //                 dice have not spoken yet); Epic cracks harder, Legendary
 //                 shakes the screen — the classic "something's coming" tell.
-//   擲骰 dice   → real 3D dice land on the SERVER's rolled faces
-//                 (roll_details). A rarity meter fills as each stat lands and
+//   擲骰 dice   → the player rolls each stat by hand (擲骰 / Space); real 3D
+//                 dice land on the SERVER's rolled faces (roll_details).
+//                 An optional 自動 toggle rolls on its own. A rarity meter fills as each stat lands and
 //                 fires a breakthrough when it crosses 稀有/史詩/傳奇. The climb
 //                 is honest: rarity IS the sum of these dice. If the last stat
-//                 can still change the tier, it becomes 「命運的一擲」.
+//                 can still change the tier, it becomes 「命運的一擲」: the
+//                 tray waits, trembling, for the player's click.
 //   顯現 reveal → flash, shockwave, god rays scaled to tier; the card flips,
 //                 the total counts up and a rarity seal-stamp slams down.
 //
@@ -19,7 +21,7 @@
 // prefers-reduced-motion collapses every stage to near-instant fades.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { ArrowRight, FastForward, SkipForward } from "lucide-react";
+import { ArrowRight, Dices, Repeat, SkipForward } from "lucide-react";
 import { MAX_TOTAL_STATS, RARITY_THRESHOLDS, rarityForTotal, type Rarity } from "@/lib/cards/dice";
 
 // ─── Card shape (structurally compatible with CardRollReveal's RevealCard) ────
@@ -95,7 +97,7 @@ const isDie = (d: unknown) => Number.isInteger(d) && (d as number) >= 1 && (d as
 
 // ─── Hooks & small helpers ────────────────────────────────────────────────────
 
-function usePrefersReducedMotion(): boolean {
+export function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -169,17 +171,24 @@ const PIPS: Record<number, number[]> = {
   1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8],
 };
 
-function Die3D({ value, delay, duration, reduced, size = 54 }: {
-  value: number; delay: number; duration: number; reduced: boolean; size?: number;
+function Die3D({ value, delay, duration, reduced, idle = false, tremble = false, size = 54 }: {
+  value: number; delay: number; duration: number; reduced: boolean;
+  /** Waiting in the tray for the player to roll: a neutral pose that never
+   *  shows the result face-on, so nothing is spoiled. */
+  idle?: boolean;
+  tremble?: boolean;
+  size?: number;
 }) {
   // Start at a random orientation behind the target so the tumble always spins
   // forward; land on target + whole turns (same face, more drama).
   const [pose, setPose] = useState<[number, number]>(() =>
-    reduced ? FACE_SHOW[value] : [-(120 + Math.random() * 300), -(120 + Math.random() * 300)]
+    idle ? [-28 - Math.random() * 20, 35 + Math.random() * 30]
+      : reduced ? FACE_SHOW[value] : [-(120 + Math.random() * 300), -(120 + Math.random() * 300)]
   );
-  const [landed, setLanded] = useState(reduced);
+  const [landed, setLanded] = useState(reduced && !idle);
 
   useEffect(() => {
+    if (idle) return;
     if (reduced) { setPose(FACE_SHOW[value]); setLanded(true); return; }
     const [fx, fy] = FACE_SHOW[value];
     let r1 = 0, r2 = 0;
@@ -187,23 +196,24 @@ function Die3D({ value, delay, duration, reduced, size = 54 }: {
     r1 = requestAnimationFrame(() => { r2 = requestAnimationFrame(() => setPose([fx + 720, fy + 1080])); });
     const t = setTimeout(() => setLanded(true), delay + duration);
     return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2); clearTimeout(t); };
-  }, [value, delay, duration, reduced]);
+  }, [value, delay, duration, reduced, idle]);
 
-  const tossStyle: CSSProperties = reduced
+  const tossStyle: CSSProperties = reduced || idle
     ? {}
     : { animationDuration: `${duration}ms`, animationDelay: `${delay}ms` };
+  const motion = reduced ? "" : idle ? (tremble ? "gacha-die-tremble" : "gacha-die-idle") : "gacha-die-toss";
 
   return (
-    <div className={`gacha-die-slot${landed ? " is-landed" : ""}`} style={{ width: size, height: size }}>
-      <div className={reduced ? "" : "gacha-die-shadow"} style={tossStyle} />
-      <div className={reduced ? "" : "gacha-die-toss"} style={tossStyle}>
+    <div className={`gacha-die-slot${landed ? " is-landed" : ""}${idle ? " is-idle" : ""}`} style={{ width: size, height: size }}>
+      <div className={reduced || idle ? "gacha-die-shadow-rest" : "gacha-die-shadow"} style={tossStyle} />
+      <div className={motion} style={tossStyle}>
         <div className="gacha-die-tilt">
           <div
             className="gacha-die"
             style={{
               width: size, height: size,
               transform: `rotateX(${pose[0]}deg) rotateY(${pose[1]}deg)`,
-              transition: reduced ? "none" : `transform ${duration}ms cubic-bezier(.12,.7,.2,1) ${delay}ms`,
+              transition: reduced || idle ? "none" : `transform ${duration}ms cubic-bezier(.12,.7,.2,1) ${delay}ms`,
             }}
           >
             {[1, 2, 3, 4, 5, 6].map((f) => (
@@ -289,8 +299,9 @@ function CardBack({ breaking, cracks, holdMs, reduced }: {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 type Stage = "seal" | "breaking" | "dice" | "reveal";
+type RollPhase = "ready" | "rolling" | "landed";
 
-interface RollTiming { toss: number; stagger: number; lead: number; fate: boolean }
+interface RollTiming { toss: number; stagger: number; lead: number }
 
 const TIER_ORDER: Rarity[] = ["Common", "Rare", "Epic", "Legendary"];
 const THRESHOLDS: { tier: Rarity; at: number }[] = [
@@ -312,14 +323,15 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
   const [flash, setFlash] = useState(false);
   const [shake, setShake] = useState(false);
   const [idx, setIdx] = useState(0);
+  const [rollPhase, setRollPhase] = useState<RollPhase>("ready");
+  const [rollNo, setRollNo] = useState(0);
   const [landedCount, setLandedCount] = useState(0);
-  const [roll, setRoll] = useState<RollTiming | null>(null);
+  const [roll, setRoll] = useState<RollTiming>({ toss: 0, stagger: 0, lead: 0 });
   const [breakthrough, setBreakthrough] = useState<Rarity | null>(null);
-  const [fast, setFast] = useState(false);
-  const fastRef = useRef(fast);
-  fastRef.current = fast;
+  const [auto, setAuto] = useState(false);
   const [counted, setCounted] = useState(false);
   const [stamped, setStamped] = useState(false);
+  const leaving = useRef(false);
 
   const cracks = useMemo(() => crackPaths(tier.cracks), [tier.cracks]);
   const motes = useMemo(() => {
@@ -342,62 +354,72 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
   // Would the LAST stat's roll decide the tier? Then it is the fate roll.
   const beforeLast = steps.slice(0, last).reduce((s, x) => s + x.total, 0);
   const fateTarget = THRESHOLDS.find((t) => t.at > beforeLast && beforeLast + steps[last].max >= t.at) ?? null;
+  const isFate = useCallback((i: number) => i === last && !!fateTarget && !reduced, [last, fateTarget, reduced]);
 
   const flashTo = useCallback((next: Stage, withShake: boolean) => {
     if (reduced) { setStage(next); return; }
     setFlash(true);
     if (withShake) setShake(true);
-    later(() => { setStage(next); }, 160);
-    later(() => { setFlash(false); setShake(false); }, 620);
+    later(() => { setStage(next); }, 180);
+    later(() => { setFlash(false); setShake(false); }, 750);
   }, [later, reduced]);
 
   // ── seal ──
-  const holdMs = reduced ? 0 : card.rarity === "Legendary" ? 1500 : card.rarity === "Epic" ? 1150 : 850;
+  const holdMs = reduced ? 0 : card.rarity === "Legendary" ? 2000 : card.rarity === "Epic" ? 1550 : 1200;
   const breakSeal = useCallback(() => {
     if (stage !== "seal") return;
     setStage("breaking");
-    if (tier.shake && !reduced) later(() => setShake(true), holdMs * 0.45);
+    if (tier.shake && !reduced) later(() => setShake(true), holdMs * 0.5);
     later(() => flashTo(hasDice ? "dice" : "reveal", false), holdMs);
   }, [stage, tier.shake, reduced, later, holdMs, flashTo, hasDice]);
 
-  // ── dice: one stat per pass; timings captured at start so 快轉 never re-tosses a stat mid-air ──
-  useEffect(() => {
-    if (stage !== "dice") return;
-    const speed = fastRef.current ? 0.5 : 1;
-    const isLast = idx === last;
-    const fate = isLast && !!fateTarget && !reduced;
+  // ── dice: the player rolls each stat; every toss starts from a click (or 自動) ──
+  const rollStat = useCallback((i: number) => {
+    const fate = isFate(i);
     const t: RollTiming = reduced
-      ? { toss: 0, stagger: 0, lead: 0, fate: false }
-      : {
-          toss: Math.round((isLast ? (fate ? 1300 : 900) : idx < 2 ? 800 : 620) * speed),
-          stagger: Math.round(110 * speed),
-          lead: fate ? 700 : 0,   // the tray holds its breath before the fate roll
-          fate,
-        };
+      ? { toss: 0, stagger: 0, lead: 0 }
+      : { toss: fate ? 1900 : i < 2 ? 1300 : 1150, stagger: 170, lead: fate ? 250 : 0 };
+    setIdx(i);
     setRoll(t);
-    const dice = steps[idx].dice.length;
-    const landAt = t.lead + t.stagger * (dice - 1) + t.toss + (reduced ? 120 : 60);
+    setRollNo((n) => n + 1);
+    setRollPhase("rolling");
+    const landAt = t.lead + t.stagger * (steps[i].dice.length - 1) + t.toss + (reduced ? 60 : 90);
     later(() => {
-      const before = steps.slice(0, idx).reduce((s, x) => s + x.total, 0);
-      const after = before + steps[idx].total;
-      setLandedCount(idx + 1);
+      const before = steps.slice(0, i).reduce((s, x) => s + x.total, 0);
+      const after = before + steps[i].total;
+      setLandedCount(i + 1);
+      setRollPhase("landed");
       const from = rarityForTotal(before), to = rarityForTotal(after);
       if (to !== from && !reduced) {
         setBreakthrough(to);
-        later(() => setBreakthrough(null), 1400);
+        later(() => setBreakthrough(null), 1800);
       }
+      // The fate roll gets its own held breath: after the second-to-last stat
+      // lands, the tray turns to LUCK and waits — trembling — for the click.
+      if (i === last - 1 && isFate(last)) later(() => { setIdx(last); setRollPhase("ready"); }, 1300);
     }, landAt);
-    const pause = reduced ? 80 : isLast ? 1100 : Math.round((idx < 2 ? 420 : 300) * speed);
-    later(() => {
-      if (isLast) flashTo("reveal", tier.shake);
-      else setIdx(idx + 1);
-    }, landAt + pause);
-    // later() timers are only cleared on unmount / skip — never on re-render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, idx]);
+  }, [isFate, reduced, steps, later, last]);
+
+  const waitingForFate = rollPhase === "landed" && idx === last - 1 && isFate(last);
+
+  const advance = useCallback(() => {
+    if (stage !== "dice" || leaving.current) return;
+    if (rollPhase === "rolling" || waitingForFate) return;
+    if (rollPhase === "ready") { rollStat(idx); return; }
+    if (idx >= last) { leaving.current = true; flashTo("reveal", tier.shake); return; }
+    rollStat(idx + 1);
+  }, [stage, rollPhase, waitingForFate, rollStat, idx, last, flashTo, tier.shake]);
+
+  // 自動: same sequence, the machine presses 擲骰 for you (off by default).
+  useEffect(() => {
+    if (!auto || stage !== "dice" || rollPhase === "rolling") return;
+    const id = setTimeout(advance, rollPhase === "ready" ? 900 : 1400);
+    return () => clearTimeout(id);
+  }, [auto, stage, rollPhase, idx, advance]);
 
   const skip = useCallback(() => {
     clearAll();
+    leaving.current = true;
     setLandedCount(steps.length);
     setBreakthrough(null);
     setShake(false);
@@ -414,16 +436,17 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
       setStamped(true);
       if ((card.rarity === "Epic" || card.rarity === "Legendary") && !reduced) {
         setShake(true);
-        later(() => setShake(false), 380);
+        later(() => setShake(false), 420);
       }
-    }, reduced ? 0 : 140);
+    }, reduced ? 0 : 380);
   }, [stage, counted, steps.length, later, card.rarity, reduced]);
 
-  // Keyboard: Space/Enter breaks the seal and continues from the reveal; Esc skips.
+  // Keyboard: Space/Enter = the main button of each stage; Esc skips to the reveal.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === " " || e.key === "Enter") {
         if (stage === "seal") { e.preventDefault(); breakSeal(); }
+        else if (stage === "dice") { e.preventDefault(); advance(); }
         else if (stage === "reveal" && stamped) { e.preventDefault(); onComplete(); }
       } else if (e.key === "Escape" && stage !== "reveal") {
         skip();
@@ -431,10 +454,18 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [stage, stamped, breakSeal, skip, onComplete]);
+  }, [stage, stamped, breakSeal, advance, skip, onComplete]);
 
   const step = steps[Math.min(idx, last)];
   const currentLanded = landedCount > idx;
+  const fateNow = isFate(idx) && !currentLanded;
+  const rollLabel =
+    rollPhase === "rolling" ? "擲骰中……"
+    : rollPhase === "ready" ? (isFate(idx) ? "命運的一擲" : `擲骰 · ${step.zh}`)
+    : idx >= last ? "揭曉結果"
+    : waitingForFate ? "……"
+    : `擲下一項 · ${steps[idx + 1].zh}`;
+  const rollDisabled = rollPhase === "rolling" || waitingForFate;
   const meterPct = Math.min(100, (running / MAX_TOTAL_STATS) * 100);
 
   return (
@@ -490,12 +521,12 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
       )}
 
       {/* ───────────── 擲骰 ───────────── */}
-      {stage === "dice" && roll && (
-        <div className={`relative my-auto w-full max-w-[420px] flex flex-col gap-4 px-4${roll.fate && !currentLanded ? " is-fate" : ""}`}>
+      {stage === "dice" && (
+        <div className={`relative my-auto w-full max-w-[420px] flex flex-col gap-4 px-4${fateNow ? " is-fate" : ""}`}>
           <div className="flex items-center gap-3">
             <div className="h-px flex-1" style={{ background: `linear-gradient(to right, transparent, ${gold(0.3)})` }} />
             <span className="text-[10px] tracking-[0.3em]" style={{ color: gold(0.55) }}>
-              擲骰 · {Math.min(landedCount + (currentLanded ? 0 : 1), steps.length)} / {steps.length}
+              擲骰 · {idx + 1} / {steps.length}
             </span>
             <div className="h-px flex-1" style={{ background: `linear-gradient(to left, transparent, ${gold(0.3)})` }} />
           </div>
@@ -521,7 +552,7 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
 
           {/* tray */}
           <div className="gacha-tray relative rounded-xl px-3 pt-3 pb-4 text-center">
-            {roll.fate && (
+            {isFate(idx) && (
               <p className="gacha-fate-banner text-[11px] tracking-[0.3em] mb-1" style={{ color: PARCHMENT }}>
                 命 運 的 一 擲
               </p>
@@ -531,14 +562,16 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
             </p>
             <p className="text-[11px] leading-snug mb-3" style={{ color: gold(0.45) }}>{step.desc}</p>
 
-            <div key={idx} className="flex items-end justify-center gap-4 h-[92px] pb-1">
-              {step.dice.map((d, i) => (
+            <div key={`${idx}-${rollPhase === "ready" ? "ready" : rollNo}`} className="flex items-end justify-center gap-4 h-[92px] pb-1">
+              {step.dice.map((d, i) => rollPhase === "ready" ? (
+                <Die3D key={i} value={d} reduced={reduced} idle tremble={fateNow} delay={0} duration={0} />
+              ) : (
                 <Die3D key={i} value={d} reduced={reduced}
                   delay={roll.lead + i * roll.stagger} duration={roll.toss} />
               ))}
             </div>
 
-            <div className="h-7 flex items-center justify-center">
+            <div className="h-7 mt-5 flex items-center justify-center">
               {currentLanded ? (
                 <span className="gacha-formula text-sm tabular-nums" style={{ color: gold(0.75) }}>
                   ({step.dice.join(" + ")}
@@ -546,7 +579,7 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
                   ) × 5 ={" "}
                   <b className="text-xl" style={{ color: "#c9a96e", textShadow: `0 0 14px ${gold(0.5)}` }}>{step.total}</b>
                 </span>
-              ) : roll.fate ? (
+              ) : fateNow ? (
                 <span className="text-[11px]" style={{ color: gold(0.6) }}>
                   距離〈{TIER[fateTarget!.tier].zh}〉還差 {fateTarget!.at - running} 點
                 </span>
@@ -596,15 +629,28 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <button type="button" onClick={() => setFast((f) => !f)}
+          <button type="button" onClick={advance} disabled={rollDisabled}
+            className={`gacha-roll-btn w-full py-3 rounded-xl font-serif text-base tracking-[0.15em] transition-all${fateNow && rollPhase === "ready" ? " is-fate-btn" : ""}${rollPhase === "ready" || rollPhase === "landed" ? " is-armed" : ""}`}
+            style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07" }}>
+            <span className="inline-flex items-center justify-center gap-2">
+              {rollPhase === "landed" && idx >= last ? (
+                <>{rollLabel} <ArrowRight size={16} strokeWidth={2} /></>
+              ) : (
+                <>{rollPhase !== "rolling" && !waitingForFate && <Dices size={17} strokeWidth={2} />}{rollLabel}</>
+              )}
+            </span>
+          </button>
+
+          <div className="flex items-center justify-between -mt-1">
+            <button type="button" onClick={() => setAuto((v) => !v)}
               className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full transition-colors"
-              style={fast
+              style={auto
                 ? { background: gold(0.18), border: `1px solid ${gold(0.5)}`, color: PARCHMENT }
                 : { border: `1px solid ${gold(0.2)}`, color: gold(0.55) }}
-              aria-pressed={fast}>
-              <FastForward size={12} strokeWidth={2} /> 快轉
+              aria-pressed={auto}>
+              <Repeat size={12} strokeWidth={2} /> 自動
             </button>
+            <span className="text-[10px]" style={{ color: gold(0.3) }}>空白鍵也可以擲骰</span>
             <button type="button" onClick={skip} className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300">
               跳過 <SkipForward size={12} strokeWidth={2} />
             </button>
@@ -644,7 +690,7 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
               <p className="text-[10px] tracking-[0.25em] mt-5" style={{ color: gold(0.5) }}>屬性總計</p>
               <div className="text-6xl font-bold tabular-nums leading-none mt-1"
                 style={{ color: "#c9a96e", textShadow: `0 0 ${18 + 30 * tier.glow}px ${gold(0.3 + tier.glow * 0.7)}` }}>
-                <CountUp to={card.total_stats} ms={1000} reduced={reduced} onDone={() => setCounted(true)} />
+                <CountUp to={card.total_stats} ms={1700} reduced={reduced} onDone={() => setCounted(true)} />
               </div>
               <div className="h-[74px] flex items-center justify-center mt-3">
                 {stamped && (
