@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateGMResponseStreaming, sanitizeChoicesWithMeta, summarizeRejections, CHOICE_COUNT, GMAIInput, ScenarioGMContext, LedgerEntry, NpcEntry } from "@/lib/ai/gm";
+import { ensureHorrorFx, horrorFxTag } from "@/lib/ai/text-fx";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -1497,6 +1498,7 @@ export async function POST(request: Request) {
                 roll: roll.san_check.roll,
                 success: roll.san_check.success,
                 sanLoss: roll.san_check.san_loss,
+                fxTag: horrorFxTag(roll.san_check.severity),
               }
             : null,
           attack: attack
@@ -1723,6 +1725,22 @@ export async function POST(request: Request) {
           );
         }
       }
+    }
+
+    // Horror text effect: the server decided this turn needs one (SAN check
+    // fired); make sure the saved narration carries it, and log compliance so
+    // "we never see the effects" is answerable from Vercel logs.
+    {
+      const required = roll?.san_check ? horrorFxTag(roll.san_check.severity) : null;
+      const fx = ensureHorrorFx(gmResponse.narration, required, roll?.san_check?.trigger_text ?? null);
+      if (required || fx.emitted.length) {
+        console.info(
+          `[fx] room=${roomId} round=${room.current_round} horror=${roll?.san_check?.severity ?? "none"} ` +
+          `required=${required ?? "-"} gm_emitted=${JSON.stringify(fx.emitted)} ` +
+          `safety_net=${fx.added ? `wrapped "${roll?.san_check?.trigger_text}"` : required && !fx.emitted.length ? "trigger word not in narration" : "not needed"}`
+        );
+      }
+      gmResponse.narration = fx.text;
     }
 
     await supabase.from("story_logs").insert({

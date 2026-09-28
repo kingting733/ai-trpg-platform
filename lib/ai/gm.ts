@@ -154,6 +154,8 @@ export interface GMAIInput {
       roll: number;
       success: boolean;
       sanLoss: number;
+      /** Server-decided: this horror turn MUST carry this text effect (lib/ai/text-fx.ts). */
+      fxTag?: "dread" | "eerie";
     } | null;
     attack?: {
       attackerName: string;
@@ -423,7 +425,10 @@ NARRATION FORMAT:
   • [[eerie]]…[[/eerie]] — a SMALL creeping unease or wrong little detail (a subtler, quieter horror than dread).
   • [[whisper]]…[[/whisper]] — something ghostly, faint, or barely audible.
   • [[chant]]…[[/chant]] — occult words, an incantation, or an eldritch utterance.
-  Never decorate ordinary text with these; if in doubt, leave it plain. Most turns should use none.
+  Never decorate ordinary text with these; if in doubt, leave it plain. Most turns should use none —
+  EXCEPT when the turn data contains a "HORROR PEAK" line: then the named effect is REQUIRED that turn.
+  These markers are part of the web-novel voice above, not an exception to it: the plain worked example
+  simply shows a turn with no horror peak.
 - Do NOT use bullet points or numbered lists inside the narration.
 - NEVER print game mechanics in the prose. No "SAN -6", no "HP 8/11", no d100 rolls, no skill percentages, no check names, no success/failure labels. The turn data you are given states these so YOU know what happened — the players see them in the UI already. Show the SAN loss as trembling hands and a swimming vision; never as a number.
 
@@ -578,6 +583,17 @@ function buildDiceDirective(input: GMAIInput): string {
   const r = input.resolution;
   if (!r) return "";
 
+  // Horror witnessed this turn (server-detected). Built FIRST: the social-
+  // immunity and attack branches below return early, and used to drop the
+  // horror entirely — fighting or pleading with a monster never got its effect.
+  const sc = r.sanCheck;
+  const fxLine = sc?.fxTag
+    ? `\n- HORROR PEAK — TEXT EFFECT REQUIRED THIS TURN: wrap the single most horrifying phrase of your narration (the concrete thing seen or heard, 2–12 characters) in [[${sc.fxTag}]]…[[/${sc.fxTag}]]. Exactly one span. This overrides "most turns should use none".`
+    : "";
+  const sanLine = sc
+    ? `\n- SAN CHECK (${sc.severityLabel}): ${input.actingCharacterName} rolled d100 ${sc.roll} vs POW ${sc.pow} → ${sc.success ? "held their nerve" : "FAILED"}, losing ${sc.sanLoss} SAN. Narrate the psychological impact of witnessing this horror: ${sc.success ? "shaken but composed" : "a visible crack in their sanity — trembling, nausea, dread, or a brief loss of composure"}. Do NOT downplay the horror.${fxLine}`
+    : "";
+
   // Social immunity — a social skill used against an immune NPC/monster.
   // The roll was voided server-side; the GM must narrate the attempt as futile.
   if (r.socialImmune) {
@@ -589,7 +605,7 @@ SOCIAL IMMUNITY RESULT (FINAL — YOU MUST OBEY THIS):
 - ${targetName} is IMMUNE to social influence. The attempt has NO mechanical effect whatsoever — no pacification, no distraction, no attitude change.
 - Narrate why this entity is unmoved: it may be mindless, alien, consumed by rage, or simply beyond the reach of human emotion. The attempt can land as well as it possibly could and still achieve nothing.
 - Do NOT invent any partial effect, softened hostility, or moment of hesitation as a result of this check. The entity's behaviour toward the party is UNCHANGED.
-- ${input.actingCharacterName} wasted their action; make the futility clear without being cheap about it.
+- ${input.actingCharacterName} wasted their action; make the futility clear without being cheap about it.${sanLine}
 `;
   }
 
@@ -610,7 +626,7 @@ SOCIAL IMMUNITY RESULT (FINAL — YOU MUST OBEY THIS):
     return `
 ATTACK RESULT (THIS IS FINAL — YOU MUST OBEY IT):
 - ${atk.attackerName} rolled d100 ${r.d100} vs ${atk.skillLabel} ${r.target}% → ${r.outcome?.replace(/_/g, " ").toUpperCase()}.
-- ${body}
+- ${body}${sanLine}
 STRICT RULES: The HP damage above has ALREADY been applied by the system — do NOT invent a different amount and do NOT flag a separate injury for this attack. Do NOT turn a miss/dodge into a hit, or a hit into a miss. Narrate exactly this outcome.
 `;
   }
@@ -627,11 +643,6 @@ STRICT RULES: The HP damage above has ALREADY been applied by the system — do 
   const isCrit = r.outcome === "critical_success" || r.outcome === "critical_failure";
   const critLine = isCrit
     ? `\n- CRITICAL NARRATION GUIDE: ${criticalGuidance(r.outcome as "critical_success" | "critical_failure", r.statUsed)}`
-    : "";
-
-  const sc = r.sanCheck;
-  const sanLine = sc
-    ? `\n- SAN CHECK (${sc.severityLabel}): ${input.actingCharacterName} rolled d100 ${sc.roll} vs POW ${sc.pow} → ${sc.success ? "held their nerve" : "FAILED"}, losing ${sc.sanLoss} SAN. Narrate the psychological impact of witnessing this horror: ${sc.success ? "shaken but composed" : "a visible crack in their sanity — trembling, nausea, dread, or a brief loss of composure"}. Do NOT downplay the horror.`
     : "";
 
   return `
