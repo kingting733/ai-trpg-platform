@@ -12,8 +12,12 @@
 //                 is honest: rarity IS the sum of these dice. If the last stat
 //                 can still change the tier, it becomes 「命運的一擲」: the
 //                 tray waits, trembling, for the player's click.
-//   顯現 reveal → flash, shockwave, god rays scaled to tier; the card flips,
-//                 the total counts up and a rarity seal-stamp slams down.
+//   顯現 reveal → charge → flip → settle. The same sealed card slides back
+//                 in face-down and draws light into itself (longer and harder
+//                 for better tiers), then turns over in a real two-faced 3D
+//                 flip; the burst fires at the flip's midpoint. Only once the
+//                 front faces the player does the total count up and the
+//                 rarity seal-stamp press down over the medallion.
 //
 // Nothing here decides anything: every number comes from the card the server
 // already persisted. Rarity is shown as gold INTENSITY and light only — the
@@ -296,6 +300,15 @@ function CardBack({ breaking, cracks, holdMs, reduced }: {
   );
 }
 
+// ─── Reveal timing ────────────────────────────────────────────────────────────
+
+const CARD_W = 270, CARD_H = 378;          // same 5:7 as the seal's card back
+const FLIP_MS = 900;
+/** How long the face-down card gathers light before it turns. Better tiers
+ *  make the player wait a little longer — the standard gacha tell. */
+const CHARGE_MS: Record<Rarity, number> = { Common: 900, Rare: 1100, Epic: 1450, Legendary: 1850 };
+const CONVERGE: Record<Rarity, number> = { Common: 10, Rare: 16, Epic: 24, Legendary: 34 };
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 type Stage = "seal" | "breaking" | "dice" | "reveal";
@@ -331,7 +344,11 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
   const [auto, setAuto] = useState(false);
   const [counted, setCounted] = useState(false);
   const [stamped, setStamped] = useState(false);
+  const [rv, setRv] = useState<"charge" | "flip" | "shown">("charge");
+  const [burst, setBurst] = useState(false);
+  const [impact, setImpact] = useState(false);
   const leaving = useRef(false);
+  const quickReveal = useRef(false);   // 跳過 lands straight on the face-up card
 
   const cracks = useMemo(() => crackPaths(tier.cracks), [tier.cracks]);
   const motes = useMemo(() => {
@@ -346,6 +363,16 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
     const d = 140 + Math.random() * 180;
     return { dx: Math.cos(a) * d, dy: Math.sin(a) * d, delay: Math.random() * 160, size: 2.5 + Math.random() * 3 };
   }), [tier.sparks]);
+
+  const chargeMs = CHARGE_MS[card.rarity];
+  const converge = useMemo(() => Array.from({ length: CONVERGE[card.rarity] }, (_, i) => {
+    const a = (i / CONVERGE[card.rarity]) * Math.PI * 2 + Math.random() * 0.5;
+    const d = 150 + Math.random() * 110;
+    return {
+      dx: Math.cos(a) * d, dy: Math.sin(a) * d, size: 2 + Math.random() * 2.5,
+      delay: Math.random() * chargeMs * 0.55, dur: chargeMs * (0.35 + Math.random() * 0.15),
+    };
+  }), [card.rarity, chargeMs]);
 
   const running = steps.slice(0, landedCount).reduce((s, x) => s + x.total, 0);
   const runningTier = rarityForTotal(running);
@@ -406,7 +433,7 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
     if (stage !== "dice" || leaving.current) return;
     if (rollPhase === "rolling" || waitingForFate) return;
     if (rollPhase === "ready") { rollStat(idx); return; }
-    if (idx >= last) { leaving.current = true; flashTo("reveal", tier.shake); return; }
+    if (idx >= last) { leaving.current = true; setStage("reveal"); return; }
     rollStat(idx + 1);
   }, [stage, rollPhase, waitingForFate, rollStat, idx, last, flashTo, tier.shake]);
 
@@ -420,6 +447,7 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
   const skip = useCallback(() => {
     clearAll();
     leaving.current = true;
+    quickReveal.current = true;
     setLandedCount(steps.length);
     setBreakthrough(null);
     setShake(false);
@@ -427,19 +455,38 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
     setStage("reveal");
   }, [clearAll, steps.length]);
 
-  // ── reveal ──
+  // ── reveal: charge → flip (burst at the midpoint) → shown ──
   useEffect(() => {
     if (stage !== "reveal") return;
     setLandedCount(steps.length);
-    if (!counted) return;
+    if (reduced || quickReveal.current) { setRv("shown"); return; }
+    setRv("charge");
+    later(() => setRv("flip"), chargeMs);
+    later(() => {
+      setBurst(true);
+      if (tier.shake) { setShake(true); later(() => setShake(false), 460); }
+    // Slightly before the true midpoint: the burst must already be up when
+    // the card is edge-on, or that frame is an empty screen with a thin line.
+    }, chargeMs + FLIP_MS * 0.38);
+    later(() => setRv("shown"), chargeMs + FLIP_MS);
+    // Timers live in useTimers and are cleared on unmount / skip only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage]);
+
+  // The stamp presses down only after the count has finished in plain view.
+  useEffect(() => {
+    if (stage !== "reveal" || !counted) return;
     later(() => {
       setStamped(true);
-      if ((card.rarity === "Epic" || card.rarity === "Legendary") && !reduced) {
+      if (reduced) return;
+      setImpact(true);
+      later(() => setImpact(false), 420);
+      if (card.rarity === "Epic" || card.rarity === "Legendary") {
         setShake(true);
-        later(() => setShake(false), 420);
+        later(() => setShake(false), 380);
       }
-    }, reduced ? 0 : 380);
-  }, [stage, counted, steps.length, later, card.rarity, reduced]);
+    }, reduced ? 0 : 280);
+  }, [stage, counted, later, card.rarity, reduced]);
 
   // Keyboard: Space/Enter = the main button of each stage; Esc skips to the reveal.
   useEffect(() => {
@@ -660,66 +707,128 @@ export function GachaSummon({ card, onComplete }: { card: SummonCard; onComplete
 
       {/* ───────────── 顯現 ───────────── */}
       {stage === "reveal" && (
-        <div className="relative my-auto flex flex-col items-center gap-6 px-4">
-          <div className="relative">
-          {!reduced && tier.rays > 0 && (
-            <div className="gacha-rays" aria-hidden style={{
-              background: `repeating-conic-gradient(from 0deg, transparent 0deg 8deg, ${gold(tier.rays)} 11deg, transparent 14deg 22deg)`,
-            }} />
-          )}
-          {!reduced && Array.from({ length: tier.rings }, (_, i) => (
-            <span key={i} className="gacha-ring" aria-hidden style={{ animationDelay: `${i * 170}ms`, borderColor: gold(0.35 + tier.glow * 0.8) }} />
-          ))}
-          {!reduced && sparks.map((s, i) => (
-            <span key={i} className="gacha-spark" aria-hidden style={{
-              width: s.size, height: s.size, animationDelay: `${s.delay}ms`,
-              ["--dx" as string]: `${s.dx}px`, ["--dy" as string]: `${s.dy}px`,
-            } as CSSProperties} />
-          ))}
+        <div className="relative my-auto flex flex-col items-center gap-8 px-4 gacha-fade-in">
+          <div className="gacha-rv-scene" style={{
+            width: CARD_W, height: CARD_H,
+            ["--charge-ms" as string]: `${chargeMs}ms`, ["--flip-ms" as string]: `${FLIP_MS}ms`,
+          } as CSSProperties}>
+            {/* light behind the card — only once it has turned */}
+            {burst && tier.rays > 0 && (<>
+              <div className="gacha-rays" aria-hidden style={{
+                background: `repeating-conic-gradient(from 0deg, transparent 0deg, ${gold(tier.rays)} 6deg, transparent 12deg 24deg)`,
+              }} />
+              <div className="gacha-rays is-counter" aria-hidden style={{
+                background: `repeating-conic-gradient(from 12deg, transparent 0deg, ${gold(tier.rays * 0.55)} 5deg, transparent 10deg 30deg)`,
+              }} />
+            </>)}
+            <div className={`gacha-bloom${burst || (reduced && rv === "shown") ? " is-on" : ""}`} aria-hidden
+              style={{ background: `radial-gradient(circle, ${gold(0.12 + tier.glow * 0.45)} 0%, transparent 62%)` }} />
 
-          <div className={`gacha-card-front relative${reduced ? "" : " is-flipping"}${tier.rays >= 0.2 && !reduced ? " has-shimmer" : ""}`}
-            style={{
-              width: 240, minHeight: 300,
-              border: `1px solid ${gold(tier.frame + 0.15)}`,
-              boxShadow: `0 0 ${24 + 50 * tier.glow}px ${gold(tier.glow)}, 0 20px 50px rgba(0,0,0,0.7)`,
-            }}>
-            <div className="absolute inset-[7px] rounded-xl pointer-events-none" style={{ border: `1px solid ${gold(tier.frame)}` }} />
-            <div className="relative flex flex-col items-center px-5 pt-6 pb-5 h-full">
-              <p className="text-[10px] tracking-[0.3em]" style={{ color: gold(0.5) }}>調查員檔案</p>
-              <h2 className="font-serif text-xl mt-2 text-center break-all" style={{ color: PARCHMENT, letterSpacing: "0.04em" }}>{card.name}</h2>
-              <p className="text-[10px] tracking-[0.25em] mt-5" style={{ color: gold(0.5) }}>屬性總計</p>
-              <div className="text-6xl font-bold tabular-nums leading-none mt-1"
-                style={{ color: "#c9a96e", textShadow: `0 0 ${18 + 30 * tier.glow}px ${gold(0.3 + tier.glow * 0.7)}` }}>
-                <CountUp to={card.total_stats} ms={1700} reduced={reduced} onDone={() => setCounted(true)} />
-              </div>
-              <div className="h-[74px] flex items-center justify-center mt-3">
-                {stamped && (
-                  <div className={`gacha-stamp${reduced ? "" : " is-slamming"}`}
-                    style={{
-                      color: card.rarity === "Legendary" ? PARCHMENT : "#c9a96e",
-                      borderColor: gold(0.45 + tier.frame),
-                      boxShadow: `0 0 ${10 + 30 * tier.glow}px ${gold(tier.glow)}, inset 0 0 12px ${gold(tier.glow * 0.6)}`,
-                      textShadow: `0 0 ${8 + 16 * tier.glow}px ${gold(0.3 + tier.glow)}`,
-                    }}>
-                    {tier.zh}
+            {/* charge: motes pulled into the face-down card */}
+            {rv === "charge" && !reduced && converge.map((m, i) => (
+              <span key={i} className="gacha-converge" aria-hidden style={{
+                width: m.size, height: m.size,
+                ["--dx" as string]: `${m.dx}px`, ["--dy" as string]: `${m.dy}px`,
+                animationDuration: `${m.dur}ms`, animationDelay: `${m.delay}ms`,
+              } as CSSProperties} />
+            ))}
+
+            {/* burst at the flip's midpoint — sparks emerge from behind the card */}
+            {burst && sparks.map((sp, i) => (
+              <span key={i} className="gacha-spark" aria-hidden style={{
+                width: sp.size, height: sp.size, animationDelay: `${sp.delay}ms`,
+                ["--dx" as string]: `${sp.dx}px`, ["--dy" as string]: `${sp.dy}px`,
+              } as CSSProperties} />
+            ))}
+            {burst && Array.from({ length: tier.rings }, (_, i) => (
+              <span key={i} className="gacha-shock" aria-hidden style={{ animationDelay: `${i * 150}ms` }} />
+            ))}
+
+            <div className={`gacha-rv-float${rv === "shown" && !reduced ? " is-floating" : ""}${rv === "charge" && tier.amp >= 2 && !reduced ? " is-charging-hot" : ""}`}>
+              <div className={`gacha-rv-card is-${rv}${impact ? " is-impact" : ""}`}>
+                {/* back: the very card the player broke the seal of */}
+                <div className="gacha-rv-face gacha-rv-back">
+                  <CardBack breaking={false} cracks={[]} holdMs={0} reduced={reduced} />
+                </div>
+
+                {/* front */}
+                <div className={`gacha-rv-face gacha-rv-front tier-${card.rarity.toLowerCase()}`}
+                  style={{
+                    border: `1px solid ${gold(tier.frame + 0.2)}`,
+                    boxShadow: `0 0 ${18 + 60 * tier.glow}px ${gold(tier.glow)}, 0 24px 60px rgba(0,0,0,0.75)`,
+                  }}>
+                  <div className="gacha-rv-dots" />
+                  <svg viewBox="0 0 200 280" className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden>
+                    <polygon points={pentagram(78)} fill="none" stroke={gold(0.06)} strokeWidth="1" transform="translate(0,-14)" />
+                  </svg>
+                  <div className="absolute inset-[8px] rounded-[11px] pointer-events-none" style={{ border: `1px solid ${gold(tier.frame + 0.1)}` }} />
+                  <div className="absolute inset-[13px] rounded-[8px] pointer-events-none" style={{ border: `1px solid ${gold(tier.frame * 0.55)}` }} />
+                  {["left-[5px] top-[5px]", "right-[5px] top-[5px]", "left-[5px] bottom-[5px]", "right-[5px] bottom-[5px]"].map((pos) => (
+                    <span key={pos} className={`absolute ${pos} w-[7px] h-[7px] rotate-45`} style={{ background: gold(0.3 + tier.frame) }} />
+                  ))}
+
+                  <div className="relative h-full flex flex-col items-center pt-[30px]">
+                    <p className="text-[10px] tracking-[0.35em]" style={{ color: gold(0.5) }}>調查員檔案</p>
+                    <h2 className="font-serif text-[21px] mt-1.5 text-center px-6 leading-tight break-all" style={{ color: PARCHMENT, letterSpacing: "0.04em" }}>
+                      {card.name}
+                    </h2>
+                    <div className="flex items-center gap-2 mt-2.5" aria-hidden>
+                      <span className="h-px w-10" style={{ background: `linear-gradient(to right, transparent, ${gold(0.5)})` }} />
+                      <span className="w-[5px] h-[5px] rotate-45" style={{ background: gold(0.6) }} />
+                      <span className="h-px w-10" style={{ background: `linear-gradient(to left, transparent, ${gold(0.5)})` }} />
+                    </div>
+
+                    {/* medallion */}
+                    <div className="gacha-medallion relative mt-5 flex flex-col items-center justify-center"
+                      style={{
+                        width: 140, height: 140, border: `1.5px solid ${gold(0.4 + tier.frame)}`,
+                        boxShadow: `0 0 ${10 + 30 * tier.glow}px ${gold(tier.glow * 0.7)}, inset 0 0 24px rgba(0,0,0,0.6)`,
+                      }}>
+                      <span className="absolute inset-[7px] rounded-full pointer-events-none" style={{ border: `1px dashed ${gold(0.22)}` }} />
+                      <span className="text-[9px] tracking-[0.3em] -mb-0.5" style={{ color: gold(0.5) }}>屬性總計</span>
+                      <span className="font-serif font-bold tabular-nums leading-none text-[50px]"
+                        style={{ color: "#c9a96e", textShadow: `0 0 ${14 + 26 * tier.glow}px ${gold(0.3 + tier.glow * 0.6)}` }}>
+                        {rv === "shown"
+                          ? <CountUp to={card.total_stats} ms={quickReveal.current ? 500 : 1600} reduced={reduced} onDone={() => setCounted(true)} />
+                          : "\u00a0"}
+                      </span>
+                      {stamped && (<>
+                        {!reduced && <span className="gacha-stamp-puff" aria-hidden style={{ borderColor: gold(0.5 + tier.glow * 0.5) }} />}
+                        <span className={`gacha-stamp${reduced ? "" : " is-slamming"}`}
+                          style={{
+                            color: card.rarity === "Legendary" ? PARCHMENT : "#c9a96e",
+                            borderColor: gold(0.5 + tier.frame),
+                            boxShadow: `0 0 ${8 + 26 * tier.glow}px ${gold(tier.glow)}, inset 0 0 10px ${gold(tier.glow * 0.5)}`,
+                            textShadow: `0 0 ${6 + 14 * tier.glow}px ${gold(0.3 + tier.glow)}`,
+                          }}>
+                          {tier.zh}
+                        </span>
+                      </>)}
+                    </div>
+
+                    <div className="absolute left-[24px] right-[24px] bottom-[26px] grid grid-cols-3">
+                      {[{ l: "生命", v: card.hp }, { l: "理智", v: card.san }, { l: "魔力", v: card.mp }].map((d, i) => (
+                        <div key={d.l} className="text-center" style={i ? { borderLeft: `1px solid ${gold(0.2)}` } : undefined}>
+                          <div className="text-[10px] tracking-[0.2em]" style={{ color: gold(0.5) }}>{d.l}</div>
+                          <div className="font-serif text-[19px] leading-tight" style={{ color: PARCHMENT }}>{d.v}</div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                )}
-              </div>
-              <div className="grid grid-cols-3 gap-2 w-full mt-2">
-                {[{ l: "生命", v: card.hp }, { l: "理智", v: card.san }, { l: "魔力", v: card.mp }].map((d) => (
-                  <div key={d.l} className="rounded-lg py-1.5 text-center" style={{ background: "rgba(14,12,8,0.6)", border: "1px solid #2a2010" }}>
-                    <div className="text-[10px]" style={{ color: gold(0.5) }}>{d.l}</div>
-                    <div className="text-base font-bold" style={{ color: PARCHMENT }}>{d.v}</div>
-                  </div>
-                ))}
+
+                  {rv === "shown" && !reduced && card.rarity !== "Common" && (
+                    <div className={`gacha-rv-sheen${tier.rays >= 0.2 ? " is-looping" : ""}`} aria-hidden />
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+
+            {burst && <span className="gacha-burst" aria-hidden />}
           </div>
 
           <button type="button" onClick={onComplete}
-            className={`w-[240px] py-2.5 rounded-lg font-serif text-sm transition-all hover:brightness-110${stamped ? " gacha-fade-in" : " invisible"}`}
-            style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07", boxShadow: `0 0 18px ${gold(0.25)}` }}>
+            className={`py-2.5 rounded-lg font-serif text-sm tracking-[0.15em] transition-all hover:brightness-110${stamped ? " gacha-fade-up" : " invisible"}`}
+            style={{ width: CARD_W, background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07", boxShadow: `0 0 18px ${gold(0.25)}` }}>
             <span className="inline-flex items-center gap-1">
               {card.occupation ? "抽取職業" : "查看屬性總覽"} <ArrowRight size={15} strokeWidth={2} />
             </span>
