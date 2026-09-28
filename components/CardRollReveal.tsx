@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Drama, Sparkle, Star, ArrowRight, AlertTriangle } from "lucide-react";
+import { Drama, Star, ArrowRight, AlertTriangle } from "lucide-react";
+import { GachaSummon, TIER, gold, buildStatSteps } from "@/components/GachaSummon";
 
 const OCCUPATION_ICON: Record<string, string> = {
   "記者":     "/reporter.png",
@@ -53,62 +54,11 @@ export interface RevealCard {
   occupation?: string | null;
 }
 
-const RARITY_ACCENT: Record<Rarity, { color: string; glow: string; label: string }> = {
-  Common:    { color: "#a1a1aa", glow: "rgba(161,161,170,0.25)", label: "Common"    },
-  Rare:      { color: "#7dd3fc", glow: "rgba(125,211,252,0.30)", label: "Rare"      },
-  Epic:      { color: "#c4b5fd", glow: "rgba(196,181,253,0.30)", label: "Epic"      },
-  Legendary: { color: "#c9a96e", glow: "rgba(201,169,110,0.45)", label: "Legendary" },
-};
-
 const PANEL = {
   background: "linear-gradient(150deg,#1c1813 0%,#13100b 55%,#0f0c08 100%)",
   border: "1px solid #2e2416",
   boxShadow: "0 4px 24px rgba(0,0,0,0.5)",
 };
-
-interface Step {
-  key: string; label: string; labelZh: string;
-  sides: number; base: number; dice: number[]; total: number;
-}
-
-// Short, player-facing note on what each stat governs in play.
-const STAT_DESC: Record<string, string> = {
-  str:  "近戰傷害與力量檢定（搬、推、抓握）",
-  con:  "生命值，以及抵抗疾病與毒素的能力",
-  siz:  "生命值與近戰傷害加值（體格越大越痛）",
-  dex:  "行動順序、閃避，以及各種身手檢定",
-  app:  "魅惑與社交第一印象的基礎",
-  int:  "推理、靈感檢定，並提供技能點數",
-  pow:  "魔力上限、理智抵抗與意志對抗",
-  edu:  "知識類技能，並提供大量技能點數",
-  luck: "運氣檢定與面對隨機事件的命運",
-};
-
-function buildSteps(card: RevealCard): Step[] {
-  const rd = card.roll_details;
-  if (!rd) {
-    const mk = (key: string, label: string, labelZh: string, total: number): Step =>
-      ({ key, label, labelZh, sides: 6, base: 0, dice: [total], total });
-    return [
-      mk("str",  "STR",  "力量", card.str),  mk("con",  "CON",  "體質", card.con),
-      mk("siz",  "SIZ",  "體型", card.siz),  mk("dex",  "DEX",  "敏捷", card.dex),
-      mk("app",  "APP",  "外貌", card.app),  mk("int",  "INT",  "智力", card.int),
-      mk("pow",  "POW",  "意志", card.pow),  mk("edu",  "EDU",  "教育", card.edu),
-      mk("luck", "LUCK", "幸運", card.luck),
-    ];
-  }
-  return [
-    { key: "str",  label: "STR",  labelZh: "力量", sides: 6, base: 0,                  dice: rd.str.dice,  total: card.str  },
-    { key: "con",  label: "CON",  labelZh: "體質", sides: 6, base: 0,                  dice: rd.con.dice,  total: card.con  },
-    { key: "siz",  label: "SIZ",  labelZh: "體型", sides: 6, base: rd.siz.base * 5,    dice: rd.siz.dice,  total: card.siz  },
-    { key: "dex",  label: "DEX",  labelZh: "敏捷", sides: 6, base: 0,                  dice: rd.dex.dice,  total: card.dex  },
-    { key: "app",  label: "APP",  labelZh: "外貌", sides: 6, base: 0,                  dice: rd.app.dice,  total: card.app  },
-    { key: "int",  label: "INT",  labelZh: "智力", sides: 6, base: rd.int.base * 5,    dice: rd.int.dice,  total: card.int  },
-    { key: "pow",  label: "POW",  labelZh: "意志", sides: 6, base: 0,                  dice: rd.pow.dice,  total: card.pow  },
-    { key: "edu",  label: "EDU",  labelZh: "教育", sides: 6, base: rd.edu.base * 5,    dice: rd.edu.dice,  total: card.edu  },
-    { key: "luck", label: "LUCK", labelZh: "幸運", sides: 6, base: 0,                  dice: rd.luck.dice, total: card.luck },
-  ];
-}
 
 // ─── Skill system ─────────────────────────────────────────────────────────────
 
@@ -408,61 +358,14 @@ function OccupationReveal({
   );
 }
 
-// ─── Die face ─────────────────────────────────────────────────────────────────
-
-type DieState = "idle" | "rolling" | "settled";
-
-function Die({ value, state, sides, delay = 0 }: { value: number; state: DieState; sides: number; delay?: number }) {
-  const [display, setDisplay] = useState(value);
-  // Per-die settle stagger: while the stat is "rolling", each die keeps tumbling
-  // a touch longer than the previous one, then locks onto its real face.
-  const [locked, setLocked] = useState(state === "settled");
-
-  useEffect(() => {
-    if (state === "idle") { setLocked(false); return; }
-    if (state === "settled") { setLocked(true); setDisplay(value); return; }
-    // rolling
-    setLocked(false);
-    const spin = setInterval(() => setDisplay(Math.floor(Math.random() * sides) + 1), 70);
-    const stop = setTimeout(() => { setDisplay(value); setLocked(true); clearInterval(spin); }, 520 + delay);
-    return () => { clearInterval(spin); clearTimeout(stop); };
-  }, [state, value, sides, delay]);
-
-  const tumbling = state === "rolling" && !locked;
-  const showSettled = locked && state !== "idle";
-
-  return (
-    <span
-      className="inline-flex items-center justify-center w-14 h-14 rounded-xl text-2xl font-bold select-none"
-      style={
-        state === "idle"
-          ? { background: "#0e0c08", border: "1.5px solid rgba(201,169,110,0.25)", color: "rgba(201,169,110,0.4)",
-              boxShadow: "inset 0 0 8px rgba(0,0,0,0.5)" }
-          : tumbling
-          ? { background: "#1a150e", border: "1.5px solid rgba(201,169,110,0.3)", color: "rgba(201,169,110,0.6)",
-              boxShadow: "inset 0 0 8px rgba(0,0,0,0.4)",
-              animation: "dieWobble 0.22s linear infinite" }
-          : showSettled
-          ? { background: "linear-gradient(150deg,#1c1813,#0f0c08)", border: "1.5px solid rgba(201,169,110,0.6)",
-              color: "#e4d8be", boxShadow: "0 0 14px rgba(201,169,110,0.45), inset 0 0 8px rgba(0,0,0,0.4)",
-              transition: "box-shadow 0.3s, border-color 0.3s" }
-          : {}
-      }>
-      {state === "idle" ? <Sparkle size={18} strokeWidth={2} /> : display}
-    </span>
-  );
-}
-
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () => void }) {
-  const steps = useRef(buildSteps(card)).current;
-  const [index, setIndex] = useState(0);
-  const [rollState, setRollState] = useState<DieState>("idle");
-  const [phase, setPhase] = useState<"rolling" | "occupation" | "summary" | "skills">("rolling");
+  const steps = useRef(buildStatSteps(card)).current;
+  const [phase, setPhase] = useState<"summon" | "occupation" | "summary" | "skills">("summon");
   const [confirmSkip, setConfirmSkip] = useState(false);
-  const completed = steps.slice(0, index).map((s) => ({ label: s.labelZh, total: s.total }));
-  const rarity = RARITY_ACCENT[card.rarity];
+  const tier = TIER[card.rarity];
+  const rarity = { glow: gold(tier.glow), label: tier.zh };
 
   // Derive the two buffed skill keys from the card's seeded skills (if any)
   const buffedSkillKeys: string[] = card.skills
@@ -474,30 +377,17 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
       })
     : [];
 
-  // The stat roll is now fully click-driven. When "rolling" begins we let the
-  // dice tumble, then settle the stat total a beat after the last die locks.
-  useEffect(() => {
-    if (rollState !== "rolling") return;
-    const settle = setTimeout(() => setRollState("settled"), 900);
-    return () => clearTimeout(settle);
-  }, [rollState]);
-
-  function nextStat() {
-    if (index + 1 >= steps.length) {
-      setPhase(card.occupation ? "occupation" : "summary");
-    } else {
-      setIndex((i) => i + 1);
-      setRollState("idle");
-    }
+  // 調查員召喚: seal → 3D dice with the rarity meter → reveal (components/GachaSummon.tsx).
+  if (phase === "summon") {
+    return <GachaSummon card={card} onComplete={() => setPhase(card.occupation ? "occupation" : "summary")} />;
   }
-
-  const step = steps[index];
-  const lastStat = index + 1 >= steps.length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: "rgba(5,4,2,0.88)", backdropFilter: "blur(6px)" }}
-      onClick={phase === "skills" ? undefined : onDone}>
+      // A stray backdrop click used to close the overlay outright, silently
+      // skipping skill allocation; route it through the same warning as 跳過.
+      onClick={phase === "skills" ? undefined : () => setConfirmSkip(true)}>
 
       <div className="relative w-full max-w-md rounded-2xl"
         style={{ ...PANEL, boxShadow: `0 0 60px rgba(0,0,0,0.7), 0 0 28px ${rarity.glow}` }}
@@ -536,90 +426,8 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
             </div>
           </div>
 
-          {/* ── Rolling phase ── */}
-          {phase === "rolling" && step ? (
-            <div>
-              {/* progress pip */}
-              <p className="text-center text-[10px] tracking-[0.2em] mb-2" style={{ color: "rgba(201,169,110,0.45)" }}>
-                {index + 1} / {steps.length}
-              </p>
-
-              <div className="text-center py-4 px-3 rounded-xl mb-4"
-                style={{ background: "rgba(14,12,8,0.6)", border: "1px solid #2a2010" }}>
-                <p className="text-xs mb-0.5 tracking-[0.2em] uppercase" style={{ color: "rgba(201,169,110,0.6)" }}>{step.label}</p>
-                <p className="text-zinc-300 text-base font-serif mb-1">{step.labelZh}</p>
-                {/* what this stat affects */}
-                <p className="text-[11px] leading-snug mb-4 px-2" style={{ color: "rgba(201,169,110,0.5)" }}>
-                  {STAT_DESC[step.key] ?? ""}
-                </p>
-
-                <div className="flex items-center justify-center gap-2.5 mb-4 flex-wrap">
-                  {step.dice.map((d, i) => (
-                    <Die key={i} value={d} state={rollState} sides={step.sides} delay={i * 130} />
-                  ))}
-                </div>
-
-                <div className="h-10 flex items-center justify-center">
-                  {rollState === "settled" ? (
-                    <span className="text-3xl font-bold" style={{ color: "#c9a96e", textShadow: "0 0 18px rgba(201,169,110,0.4)" }}>
-                      {step.base > 0 && (
-                        <span className="text-lg mr-1" style={{ color: "rgba(201,169,110,0.5)" }}>
-                          {step.base} + {step.total - step.base} =
-                        </span>
-                      )}
-                      {step.total}
-                    </span>
-                  ) : (
-                    <span className="text-3xl font-bold" style={{ color: "rgba(201,169,110,0.2)" }}>
-                      {rollState === "rolling" ? "…" : "?"}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Action button: roll, then advance */}
-              {rollState === "idle" ? (
-                <button onClick={() => setRollState("rolling")}
-                  className="w-full py-2.5 rounded-lg font-serif text-sm tracking-wide transition-all hover:brightness-110"
-                  style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07", boxShadow: "0 0 16px rgba(201,169,110,0.2)" }}>
-                  擲骰！
-                </button>
-              ) : rollState === "settled" ? (
-                <button onClick={nextStat}
-                  className="w-full py-2.5 rounded-lg font-serif text-sm tracking-wide transition-all hover:brightness-110"
-                  style={{ background: "linear-gradient(180deg,#c9a96e,#a8884f)", color: "#0c0a07", boxShadow: "0 0 16px rgba(201,169,110,0.2)" }}>
-                  <span className="inline-flex items-center gap-1">
-                    {lastStat ? (card.occupation ? "抽取職業" : "查看屬性總覽") : "下一項"}
-                    <ArrowRight size={14} strokeWidth={2} />
-                  </span>
-                </button>
-              ) : (
-                <div className="w-full py-2.5 text-center text-sm font-serif" style={{ color: "rgba(201,169,110,0.5)" }}>
-                  擲骰中…
-                </div>
-              )}
-
-              {/* Running tally */}
-              {completed.length > 0 && (
-                <div className="grid grid-cols-5 gap-1.5 mt-4 mb-2">
-                  {completed.map((c) => (
-                    <div key={c.label} className="rounded-lg px-1 py-1.5 text-center"
-                      style={{ background: "rgba(14,12,8,0.6)", border: "1px solid #2a2010" }}>
-                      <div className="text-[9px] tracking-wide mb-0.5" style={{ color: "rgba(201,169,110,0.5)" }}>{c.label}</div>
-                      <div className="text-sm font-bold" style={{ color: "#e4d8be" }}>{c.total}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <button onClick={() => setPhase(card.occupation ? "occupation" : "summary")}
-                className="w-full text-xs text-zinc-600 hover:text-zinc-400 py-1 mt-1">
-                跳過動畫
-              </button>
-            </div>
-
-          /* ── Occupation reveal phase ── */
-          ) : phase === "occupation" && card.occupation ? (
+          {/* ── Occupation reveal phase ── */}
+          {phase === "occupation" && card.occupation ? (
             <OccupationReveal
               occupation={card.occupation}
               buffedSkills={buffedSkillKeys}
@@ -635,7 +443,8 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
                 <div className="text-5xl font-bold mb-1" style={{ color: "#c9a96e", textShadow: `0 0 24px ${rarity.glow}` }}>
                   {card.total_stats}
                 </div>
-                <div className="text-lg font-semibold tracking-widest" style={{ color: rarity.color }}>
+                <div className="text-lg font-semibold tracking-widest font-serif"
+                  style={{ color: card.rarity === "Legendary" ? "#e4d8be" : "#c9a96e", textShadow: `0 0 14px ${rarity.glow}` }}>
                   {rarity.label}
                 </div>
               </div>
@@ -654,7 +463,7 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
                 {steps.map((s) => (
                   <div key={s.key} className="rounded-lg px-1 py-1.5 text-center"
                     style={{ background: "rgba(14,12,8,0.6)", border: "1px solid #2a2010" }}>
-                    <div className="text-[9px] tracking-wide mb-0.5" style={{ color: "rgba(201,169,110,0.5)" }}>{s.labelZh}</div>
+                    <div className="text-[9px] tracking-wide mb-0.5" style={{ color: "rgba(201,169,110,0.5)" }}>{s.zh}</div>
                     <div className="text-sm font-bold" style={{ color: "#e4d8be" }}>{s.total}</div>
                   </div>
                 ))}
@@ -710,14 +519,6 @@ export function CardRollReveal({ card, onDone }: { card: RevealCard; onDone: () 
         )}
       </div>
 
-      {/* die tumble animation */}
-      <style>{`
-        @keyframes dieWobble {
-          0%   { transform: translateY(0) rotate(-4deg) scale(0.96); }
-          50%  { transform: translateY(-3px) rotate(4deg) scale(1.02); }
-          100% { transform: translateY(0) rotate(-4deg) scale(0.96); }
-        }
-      `}</style>
     </div>
   );
 }

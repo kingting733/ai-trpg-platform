@@ -53,10 +53,18 @@ function rollDice(count: number, sides: number): number[] {
 
 const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
 
+/** Minimum total_stats for each tier above Common. The single source of truth:
+ *  rarityForTotal() uses it, and the draw animation's rarity meter draws its
+ *  threshold ticks from it, so the two can never disagree. */
+export const RARITY_THRESHOLDS = { Rare: 470, Epic: 570, Legendary: 650 } as const;
+
+/** Largest possible total_stats: six 3d6×5 stats (max 90) + three (2d6+6)×5 (max 90). */
+export const MAX_TOTAL_STATS = 9 * 90;
+
 export function rarityForTotal(totalStats: number): Rarity {
-  if (totalStats >= 650) return "Legendary";
-  if (totalStats >= 570) return "Epic";
-  if (totalStats >= 470) return "Rare";
+  if (totalStats >= RARITY_THRESHOLDS.Legendary) return "Legendary";
+  if (totalStats >= RARITY_THRESHOLDS.Epic) return "Epic";
+  if (totalStats >= RARITY_THRESHOLDS.Rare) return "Rare";
   return "Common";
 }
 
