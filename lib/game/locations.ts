@@ -1667,6 +1667,47 @@ export function locationShortName(name: string): string {
   return shortName(name);
 }
 
+/**
+ * The ONE map place an objective is explicitly tied to, or null.
+ *
+ * 「在東北角補一炷香」 → the node 1404東北角: the act only counts when it is done
+ * THERE. The AI objective judge matched on the act alone, so three incense
+ * sticks pushed into the 1404神位 censer ticked the 東北角 objective. The caller
+ * uses this to veto a completion when the acting character never stood at the
+ * bound node this turn (server decides, not the judge).
+ *
+ * Deliberately conservative — null (no veto, the judge alone decides) unless:
+ *  - the objective names exactly ONE map node (full short name, or a ≥2-char
+ *    CJK run of it, so 東北角 reaches 1404東北角), and no other node;
+ *  - that mention directly follows 在/於/喺 ("do it AT X", not "bring her to
+ *    X" or "stop her entering X", which complete from somewhere else);
+ *  - it is not "outside / opposite X" (在房間外);
+ *  - the objective is not a multi-place one (各/每/分別/所有/全部).
+ */
+export function objectivePlaceNode(text: string, graph: LocationGraph): LocationNode | null {
+  const t = text.toLowerCase();
+  if (!t.trim() || /各|每|分別|所有|全部/.test(t)) return null;
+
+  const mentioned: { node: LocationNode; pos: number; len: number }[] = [];
+  for (const node of graph.nodes) {
+    const sn = shortName(node.name).toLowerCase();
+    if (!sn) continue;
+    const runs = (sn.match(/[㐀-鿿]+/g) ?? []).filter((r) => r.length >= 2);
+    let best: { pos: number; len: number } | null = null;
+    for (const key of [sn, ...runs]) {
+      const pos = t.indexOf(key);
+      if (pos >= 0 && (!best || key.length > best.len)) best = { pos, len: key.length };
+    }
+    if (best) mentioned.push({ node, ...best });
+  }
+  if (mentioned.length !== 1) return null;
+
+  const { node, pos, len } = mentioned[0];
+  if (!/[在於喺]/.test(t[pos - 1] ?? "")) return null;
+  if (/^(外|以外|之外|對面)/.test(t.slice(pos + len))) return null;
+  return node;
+}
+
 // ── Legacy location migration ──────────────────────────────────────────────────
 
 /** Minimal shape of a legacy free-text location entry. */

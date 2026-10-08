@@ -320,7 +320,10 @@ export async function checkObjectiveProgress(
   playerAction: string,
   actingCharacter: string,
   gmNarration: string,
-  progress: ObjectiveProgress
+  progress: ObjectiveProgress,
+  /** Where the acting character stood this turn per the SERVER map, e.g.
+   *  "1404神位" or "1404神位 → 1404東北角". Null when the scenario has no map. */
+  actorLocation: string | null = null
 ): Promise<ObjectiveVerdict> {
   const none: ObjectiveVerdict = { completed: [], notes: {} };
   if (incomplete.length === 0) return none;
@@ -339,12 +342,14 @@ Mark an objective COMPLETE when ALL of these hold:
 2. The GM NARRATION describes events in which the attempt SUCCEEDS. IMPORTANT: the GM is forbidden from naming or announcing objectives, so do NOT wait for the GM to say a goal is "complete" or to restate the objective's wording. Judge from the concrete events the narration describes: if those events amount to the objective being achieved, it counts. It does NOT count only when a dice check explicitly FAILED, or the narration shows the attempt blocked, interrupted, refused, undone, or left unresolved.
 3. The accomplishment matches the objective's concrete meaning — not a vaguely related or symbolic gesture.
 4. For a multi-step objective, PROGRESS SO FAR plus this turn's events together cover EVERY step. Earlier steps recorded in PROGRESS SO FAR count as done; do not require them to be re-shown this turn.
+5. PLACE: if the objective names a specific place (a corner, room, altar, doorway…), the act happened AT THAT PLACE — per ${actingCharacter}'s SERVER LOCATION when one is given (authoritative: narration cannot move them), or, for a spot inside that location, as the narration explicitly shows. The same kind of act done somewhere else does NOT count, however similar the wording: incense placed in the shrine's censer does not satisfy "add incense at the northeast corner". Quantity and distribution must match too: "one stick in each of three corners" is not satisfied by three sticks in one place.
 
 DO NOT mark complete for any of these (common false positives):
 - Only talking about, planning, or deciding to do the objective (with no narrated success this turn).
 - The GM merely mentioning, foreshadowing, or describing the objective's existence without it actually happening.
 - Being near, on the way to, or only partway through it (record that in "progress" instead).
 - A dice check for the action FAILED, or the narration says the attempt did not work.
+- The right act at the WRONG place; or, for a place-specific objective that the SERVER LOCATION does not settle, at a place the narration never states.
 
 PROGRESS NOTES — for objectives NOT completed this turn:
 - Add an entry in "progress" ONLY when this turn made concrete, narrated headway on a multi-step objective (e.g. one of several items placed, two of three witnesses questioned). No entry for plans, intentions, or failed attempts.
@@ -365,7 +370,7 @@ RECENT STORY (context only — do NOT judge completion from this):
 ${recentLog.slice(-6).join("\n")}
 
 THIS TURN —
-${actingCharacter}'s ACTION: ${playerAction}
+${actorLocation ? `${actingCharacter}'s SERVER LOCATION (authoritative): ${actorLocation}\n` : ""}${actingCharacter}'s ACTION: ${playerAction}
 GM NARRATION OF OUTCOME: ${gmNarration}
 
 Which objectives were ACTUALLY completed THIS turn, and which multi-step ones advanced? Be strict.`;
@@ -375,7 +380,7 @@ Which objectives were ACTUALLY completed THIS turn, and which multi-step ones ad
   // reporting "objectives never fire" can be diagnosed from logs instead of
   // guessing. Keyed by acting character + the objective ids it was asked about.
   const askedIds = incomplete.map((o) => o.id).join(",");
-  const tag = `objectives:check actor=${actingCharacter} asked=[${askedIds}] action=${JSON.stringify(playerAction.slice(0, 120))} narration=${JSON.stringify(gmNarration.slice(0, 400))}`;
+  const tag = `objectives:check actor=${actingCharacter}${actorLocation ? ` at=${actorLocation}` : ""} asked=[${askedIds}] action=${JSON.stringify(playerAction.slice(0, 120))} narration=${JSON.stringify(gmNarration.slice(0, 400))}`;
 
   // 800 (not ~50 the JSON needs): if AI_CLASSIFY_MODEL is a reasoning model,
   // hidden thinking tokens are drawn from this budget BEFORE any visible JSON is

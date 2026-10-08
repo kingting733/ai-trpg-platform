@@ -44,6 +44,7 @@ import {
   evalUnlockConditions,
   buildLocationBlock,
   locationShortName,
+  objectivePlaceNode,
   resolveMoveTarget,
   type TravelDirective,
   type NpcEncounter,
@@ -786,8 +787,13 @@ export async function POST(request: Request) {
 
   // Split-party: everything below is relative to the ACTING character's node.
   let actorNode: string | null = null;
+  // Every node the actor stood on this turn (start, typed travel, GM move_to),
+  // in order. The objective place guard needs all of them: the act may happen
+  // before or after the move.
+  const actorPathThisTurn: string[] = [];
   if (locationGraph && locState) {
     actorNode = resolvedActor ? positionOf(locState, resolvedActor.id, locationGraph) : locState.current;
+    if (actorNode) actorPathThisTurn.push(actorNode);
     // A search that NAMES another location should relocate the ACTOR there
     // first, then search it — players expect "偵查 B" (while in A) to search B,
     // not A. Reuses the travel machinery below; if the named place is locked,
@@ -855,6 +861,7 @@ export async function POST(request: Request) {
                 return { firstVisit: false, discovered: [] };
               })();
           actorNode = targetNode.id;
+          actorPathThisTurn.push(targetNode.id);
           const firstVisit = moved.firstVisit;
           // Discovered-but-locked places surface on the map panel (🔒) without
           // a log message; only real unlocks announce (see the UNLOCKS pass —
@@ -1874,6 +1881,7 @@ export async function POST(request: Request) {
               return { firstVisit: false, discovered: [] };
             })();
         actorNode = dest.id;
+        actorPathThisTurn.push(dest.id);
         const firstVisit = moved.firstVisit;
         if (firstVisit) {
           // Discovered-but-locked places surface silently on the map panel.
@@ -2168,14 +2176,36 @@ export async function POST(request: Request) {
       }
 
       if (sharedObjectives.length > 0) {
+        const actorPathNames = locationGraph
+          ? actorPathThisTurn
+              .filter((id, i) => id !== actorPathThisTurn[i - 1])
+              .map((id) => locationShortName(locationGraph!.nodes.find((n) => n.id === id)?.name ?? id))
+          : [];
         const verdict = await checkObjectiveProgress(
           incompleteObjectives(sharedObjectives, sharedProgress),
           storyLogSoFar,
           actionText,
           actingName,
           gmResponse.narration,
-          sharedProgress
+          sharedProgress,
+          actorPathNames.length ? actorPathNames.join(" → ") : null
         );
+        // PLACE GUARD (server decides): an objective bound to one map place
+        // (「在東北角補一炷香」) only completes if the actor actually stood
+        // there this turn. The judge once ticked it for incense placed at
+        // 1404神位 — same act, wrong place.
+        if (locationGraph && actorPathThisTurn.length > 0) {
+          verdict.completed = verdict.completed.filter((id) => {
+            const obj = sharedObjectives.find((o) => o.id === id);
+            const place = obj ? objectivePlaceNode(obj.text, locationGraph!) : null;
+            if (!place || actorPathThisTurn.includes(place.id)) return true;
+            console.info(
+              `[objectives:place-guard] dropped ${id} 「${obj!.text}」 — bound to ${locationShortName(place.name)}, ` +
+              `but ${actingName} was at ${actorPathNames.join(" → ")} this turn.`
+            );
+            return false;
+          });
+        }
         const applied = applyVerdict(sharedObjectives, sharedProgress, verdict, actingName, room.current_round);
         if (applied.changed) {
           sharedProgress = applied.progress;
