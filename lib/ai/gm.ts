@@ -649,6 +649,7 @@ ATTACK RESULT (THIS IS FINAL — YOU MUST OBEY IT):
 - ${atk.attackerName} rolled d100 ${r.d100} vs ${atk.skillLabel} ${r.target}% → ${r.outcome?.replace(/_/g, " ").toUpperCase()}.
 - ${body}${sanLine}
 STRICT RULES: The HP damage above has ALREADY been applied by the system — do NOT invent a different amount and do NOT flag a separate injury for this attack. Do NOT turn a miss/dodge into a hit, or a hit into a miss. Narrate exactly this outcome.
+WEAPONS: ${atk.attackerName} strikes with what they actually hold. A weapon named in the action that is not in CURRENT PARTY POSSESSIONS and was never established in the scene does not exist — narrate the hand finding nothing and the blow landing bare-handed. Never let a weapon appear from nowhere.
 `;
   }
 

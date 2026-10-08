@@ -125,6 +125,8 @@ Return ONLY valid JSON, no markdown:
 - title: use the ending's name verbatim, or a 4–7 word poetic variation of it.
 - summary: a vivid epilogue of about 300 words in flowing prose. Describe what happens AFTERWARD — the fate of each character, what becomes of the world or place, how the threads resolve. Personalise it by weaving in the specific actions, choices, and sacrifices shown in STORY FACTS and RECENT STORY. Do not invent characters or events that contradict the story facts. Do not mention game mechanics.
 
+PLAYER AGENCY (strict): a player character's part in how the story ended is exactly what STORY FACTS and RECENT STORY show that character doing. Never credit one with a deed, a decision or a line of dialogue they did not take — a character who did not act in the final scene was there, not the one who did it. Quoted speech comes from NPCs, or from a player character's own words in RECENT STORY. What became of each of them afterwards may be told briefly, from the outside.
+
 The ENDING DIRECTIVE is the creator's intention for this epilogue — honour it, but expand and personalise it using the actual story history. It is a starting point, not a script.
 ${narrativeStyleBlock(language)}
 EPILOGUE EXCEPTION: the game is over, so unlike in-play narration you MAY state

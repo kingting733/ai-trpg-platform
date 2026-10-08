@@ -179,6 +179,13 @@ export default function CharactersPage() {
     setRolling(null);
     if (card) setRevealed(card);
     await loadCards();
+    // The drawn card is already persisted (the open API returned it). Make sure
+    // it is in the list even if the reload above came back without it —
+    // playtest saw 「抽取調查員 (0/3)」 and the old total until a manual refresh.
+    if (card) {
+      const drawn = { ...card, created_at: card.created_at ?? new Date().toISOString() };
+      setCards((prev) => (prev.some((c) => c.id === drawn.id) ? prev : [drawn, ...prev]));
+    }
   }
 
   function handleNameSaved(id: string, newName: string) {

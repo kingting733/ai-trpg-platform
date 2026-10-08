@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { TrendingUp, Dices, Check } from "lucide-react";
-import { SKILL_ZH_BY_KEY } from "@/lib/game/skills";
+import { SKILL_ZH_BY_KEY, SKILL_CAP } from "@/lib/game/skills";
 
 interface EligibleSkill { key: string; name: string; current: number; }
 interface Claim { skill_key: string; d100_roll: number; old_value: number; gain: number; new_value: number; }
@@ -107,7 +107,7 @@ export default function GrowthPage({ params }: { params: { id: string } }) {
         eligible.length === 0 ? (
           <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 text-center text-slate-400 text-sm mb-4">
             本局沒有可成長的技能。<br />
-            <span className="text-slate-500 text-xs">（需在冒險中至少成功使用過一個技能，且該技能尚未達上限 99。）</span>
+            <span className="text-slate-500 text-xs">（需在冒險中至少成功使用過一個技能，且該技能尚未達上限 {SKILL_CAP}。）</span>
           </div>
         ) : (
           <div className="flex flex-col gap-2 mb-4">

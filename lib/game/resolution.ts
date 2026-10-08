@@ -756,7 +756,10 @@ const SAN_TIERS: SanTier[] = [
   {
     severity: "core", label: "核心真相／邪神",
     keywords: [
-      "邪神", "儀式", "不可理解", "真相", "異界", "觸手", "祭品", "獻祭",
+      // No bare 真相 / 儀式: they are ordinary words in an investigation and
+      // fired a 1d10 SAN check on any narration that said "the truth" or
+      // described the scenario's own (harmless) incense ritual.
+      "邪神", "邪教儀式", "血祭", "不可理解", "異界", "觸手", "祭品", "獻祭",
       "古老的存在", "禁忌知識", "瘋狂的真相", "扭曲的維度",
     ],
     successLoss: () => rollDiceN(1, 3),
@@ -987,7 +990,10 @@ export function resolveAction(
   // SAN check is a SEPARATE roll. Its loss lives ONLY in `san_check` (not folded
   // into san_change) so the UI can show it as its own dice box. The route applies
   // both san_change (action) and san_check.san_loss to the character.
-  const sanCheck = resolveSanCheck(`${actionText}\n${sceneContext}`, char);
+  // Only what the world SHOWED triggers horror — never the player's own words
+  // (「我是神，我直接贏了」 cost 14 SAN in playtest: player text is intent, not
+  // fact, and must not be able to charge the character a SAN roll).
+  const sanCheck = resolveSanCheck(sceneContext, char);
 
   // 1. Try skill-first match. A player-chosen skill overrides keyword detection.
   const skillRule = (forcedSkill ? skillRuleByKey(forcedSkill) : null) ?? matchSkill(actionText);

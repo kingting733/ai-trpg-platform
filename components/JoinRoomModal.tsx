@@ -130,7 +130,7 @@ export function JoinRoomModal({ open, onClose }: { open: boolean; onClose: () =>
           value={code}
           onChange={(e) => { setCode(e.target.value.toUpperCase()); setError(null); }}
           onKeyDown={(e) => { if (e.key === "Enter") join(); }}
-          placeholder="XXXXXX"
+          placeholder="XXXXX"
           maxLength={6}
           disabled={busy}
           className="w-full rounded-lg px-3 py-2.5 text-center font-mono text-xl tracking-[0.3em] uppercase text-zinc-100 placeholder-zinc-700 focus:outline-none disabled:opacity-50"

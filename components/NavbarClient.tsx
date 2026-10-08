@@ -12,7 +12,10 @@ export function NavbarClient({ user }: Props) {
 
   async function handleLogout() {
     const supabase = createClient();
-    await supabase.auth.signOut();
+    // "local": end only this device's session. The default ("global") revoked
+    // every session of the account, so logging out in one browser logged out
+    // the others too (playtest bug 11).
+    await supabase.auth.signOut({ scope: "local" });
     router.push("/");
     router.refresh();
   }

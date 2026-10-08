@@ -59,6 +59,13 @@ import {
   type InventoryItem,
 } from "@/lib/game/inventory";
 
+/** Player-facing wound state for an NPC. Its exact HP is GM-side state —
+ *  players see how hurt it looks, never "剩餘 2/6" (playtest bug 12). */
+function npcWound(hp: number, max: number): string {
+  const r = max > 0 ? hp / max : 0;
+  return r > 0.66 ? "輕傷" : r > 0.33 ? "負傷" : "重傷，搖搖欲墜";
+}
+
 export async function POST(request: Request) {
   const supabase = createClient();
   // Authoritative in-room state (character HP/SAN) is written server-side from
@@ -145,6 +152,11 @@ export async function POST(request: Request) {
   // Who the actor attacked this turn (weapon or damaging spell) — feeds the
   // SCENE REACTION directive, so the victim and the witnesses respond.
   let violence: { victim: string; victimIsNpc: boolean; hurt: boolean } | null = null;
+  // Everyone whose HP the server already settled by combat this turn (attack,
+  // spell, NPC strike — hit or miss). A GM-flagged injury on one of them is a
+  // second charge for the same blow (playtest: 打陳婆婆 −5 by the NPC strike,
+  // then −2 more from the GM's narration of it), so it is dropped.
+  const combatSettled = new Set<string>();
   let actorDied = false;
   let actorBroke = false;
 
@@ -401,6 +413,8 @@ export async function POST(request: Request) {
     }
     attack = resolveAttack(resolvedActor, dodgeVal, attackType, targetName, isNpc);
     violence = { victim: targetName, victimIsNpc: isNpc, hurt: attack.damage > 0 };
+    combatSettled.add(isNpc ? npcStateKey(targetName, npcRoster) : targetName);
+    if (attack.fumble) combatSettled.add(resolvedActor.name);
 
     if (attack.damage > 0) {
       if (isNpc) {
@@ -421,7 +435,7 @@ export async function POST(request: Request) {
         attack.target_hp_after = npc.hp;
         attack.target_died = !npc.alive;
         attackSystemLog = npc.alive
-          ? `💢 ${targetName} 被 ${resolvedActor.name} 的${attack.skill_label}攻擊命中（−${attack.damage} HP，剩餘 ${npc.hp}/${npc.max_hp}）`
+          ? `💢 ${targetName} 被 ${resolvedActor.name} 的${attack.skill_label}攻擊命中（−${attack.damage} HP，${npcWound(npc.hp, npc.max_hp)}）`
           : `☠ ${targetName} 被 ${resolvedActor.name} 擊倒，已死亡。`;
         attackLedgerEntries.push({
           turn: room.current_round, type: npc.alive ? "event" : "death", character: targetName,
@@ -495,7 +509,7 @@ export async function POST(request: Request) {
     // The horror SAN check stacks on top of the attack, exactly like every
     // other action — charging the monster must not be a way to DODGE the
     // scene's SAN roll.
-    const attackSanCheck = resolveSanCheck(`${actionText}\n${sceneContext}`, resolvedActor);
+    const attackSanCheck = resolveSanCheck(sceneContext, resolvedActor); // the scene, not the player's words
     if (attackSanCheck && attackSanCheck.san_loss > 0) {
       const newSan = Math.max(0, resolvedActor.san - attackSanCheck.san_loss);
       actorBroke = newSan <= 0;
@@ -528,7 +542,7 @@ export async function POST(request: Request) {
     // ── Mythos cast — costs already rolled; apply them, then the effect ──
     // The horror SAN check stacks on top of the cast price, exactly like every
     // other action (casting must not be a way to DODGE the scene's SAN roll).
-    const mythosSanCheck = resolveSanCheck(`${actionText}\n${sceneContext}`, resolvedActor);
+    const mythosSanCheck = resolveSanCheck(sceneContext, resolvedActor); // the scene, not the player's words
     const horrorLoss = mythosSanCheck?.san_loss ?? 0;
     const totalSanLoss = Math.min(resolvedActor.san, mythosCast.sanLoss + horrorLoss);
     const newMp = Math.max(0, (resolvedActor.mp ?? 0) - mythosCast.mpCost);
@@ -563,8 +577,9 @@ export async function POST(request: Request) {
       await supabase.from("rooms").update({ npc_states: npcStates }).eq("id", roomId);
       npcStateNow = npcStates;
       violence = { victim: mythosTargetName, victimIsNpc: true, hurt: true };
+      combatSettled.add(npcStateKey(mythosTargetName, npcRoster));
       attackSystemLog = npc.alive
-        ? `🜏 ${mythosTargetName} 被 ${resolvedActor.name} 的「${mythosSpell.zh}」灼傷（−${damage} HP，剩餘 ${npc.hp}/${npc.max_hp}）`
+        ? `🜏 ${mythosTargetName} 被 ${resolvedActor.name} 的「${mythosSpell.zh}」灼傷（−${damage} HP，${npcWound(npc.hp, npc.max_hp)}）`
         : `☠ ${mythosTargetName} 在「${mythosSpell.zh}」下凋萎而亡。`;
       attackLedgerEntries.push({
         turn: room.current_round, type: npc.alive ? "event" : "death", character: mythosTargetName,
@@ -1157,6 +1172,7 @@ export async function POST(request: Request) {
       statesChanged = true;
       attacksDone++;
       npcStruckThisTurn.add(key);
+      combatSettled.add(target.name);
       await supabase.from("story_logs").insert({
         room_id: roomId, round_number: room.current_round, entry_type: "system", content: logLine,
       });
@@ -1200,7 +1216,7 @@ export async function POST(request: Request) {
       room_id: roomId,
       round_number: nextRound,
       entry_type: "system",
-      content: `--- Round ${nextRound} begins ---`,
+      content: `── 第 ${nextRound} 回合 ──`,
     });
   }
 
@@ -1928,7 +1944,11 @@ export async function POST(request: Request) {
     // The GM only classifies WHO got hurt and HOW BADLY; the dice math and HP
     // writes are entirely server-side, preserving tamper-resistance.
     const injuryLedgerEntries: LedgerEntry[] = [];
-    const injury = gmResponse.injury;
+    let injury = gmResponse.injury;
+    if (injury?.target && combatSettled.has(injury.is_npc ? npcStateKey(injury.target, npcRoster) : injury.target)) {
+      console.info(`[injury] room=${roomId} round=${room.current_round} dropped GM-flagged injury on ${injury.target} (${injury.severity}): combat already settled their HP this turn`);
+      injury = undefined;
+    }
     if (injury && injury.target && injury.severity) {
       const validSeverities: InjurySeverity[] = ["minor", "moderate", "serious", "severe"];
       const severity = validSeverities.includes(injury.severity) ? injury.severity : "minor";
@@ -1955,7 +1975,7 @@ export async function POST(request: Request) {
             round_number: room.current_round,
             entry_type: "system",
             content: npc.alive
-              ? `💢 ${injury.target} 受到${dmg.label}傷害（−${dmg.amount} HP，剩餘 ${npc.hp}/${npc.max_hp}）`
+              ? `💢 ${injury.target} 受到${dmg.label}傷害（−${dmg.amount} HP，${npcWound(npc.hp, npc.max_hp)}）`
               : `☠ ${injury.target} 傷重不治，已死亡。`,
           });
           injuryLedgerEntries.push({

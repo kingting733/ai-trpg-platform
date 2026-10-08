@@ -142,7 +142,10 @@ function renderInline(text: string) {
   });
 }
 
-function GmText({ content }: { content: string }) {
+// keepLines: a location 發現 card is author text (e.g. an 11-rule notice) whose
+// single line breaks are the layout — collapsed, the rules ran together into
+// one unreadable paragraph (playtest bug 20). GM narration keeps the default.
+function GmText({ content, keepLines = false }: { content: string; keepLines?: boolean }) {
   const paragraphs = content.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
   if (paragraphs.length === 0) return null;
   return (
@@ -158,7 +161,7 @@ function GmText({ content }: { content: string }) {
           return <p key={i} className="text-gold font-semibold text-sm">{headerMatch[1]}</p>;
         }
         return (
-          <p key={i} className="text-zinc-300 text-sm leading-relaxed">
+          <p key={i} className={`text-zinc-300 text-sm leading-relaxed${keepLines ? " whitespace-pre-line" : ""}`}>
             {renderInline(para)}
           </p>
         );
@@ -566,7 +569,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
       room_id: room.id,
       round_number: 1,
       entry_type: "system",
-      content: `Turn order: ${sorted.map((c) => `${c.name} (DEX ${c.dex})`).join(" → ")}`,
+      content: `行動順序：${sorted.map((c) => `${c.name}（敏捷 ${c.dex}）`).join(" → ")}`,
     });
 
     await fetchAll();
@@ -1112,7 +1115,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
           <Clip className="hidden sm:block -top-1.5 left-7" />
           <div className="absolute -top-2 right-9 px-3 py-1 rotate-3 pointer-events-none z-10 text-[10px] italic hidden sm:block"
             style={{ background: "rgba(40,34,24,0.92)", border: "1px solid rgba(201,169,110,0.2)", color: "rgba(201,169,110,0.5)", boxShadow: "0 2px 8px rgba(0,0,0,0.5)" }}>
-            observe · record
+            觀察 · 紀錄
           </div>
           <div className="absolute bottom-5 right-6 pointer-events-none z-0 opacity-[0.10] hidden sm:block">
             <Seal size={88} glyph="◬" />
@@ -1166,7 +1169,7 @@ export default function RoomPlayPage({ params }: { params: { id: string } }) {
                       onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                     />
                   )}
-                  {entry.content && <GmText content={entry.content} />}
+                  {entry.content && <GmText content={entry.content} keepLines />}
                 </div>
               )}
             </div>
