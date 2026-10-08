@@ -169,6 +169,14 @@ export interface LocationState {
   /** Round on which each encounter's `when` first held (for `delay`/`at`
    *  gates, which may fire later). Key format "enc:<index>". */
   encounters_armed: Record<string, number>;
+  /** Where a fired encounter brought a PLACED NPC, keyed by npcStateKey.
+   *  `row` = the placement row in force when it fired (-1 = none). The move
+   *  holds until the creator's schedule moves on (another row becomes the
+   *  last satisfied one) — see npcNodeFromRows. Without this the encounter
+   *  only narrated the NPC into the scene while the placement kept them at
+   *  their old node: gone again next turn, unattackable, and in split-party
+   *  shown in two scenes at once. */
+  npc_moves: Record<string, { at: string; row: number }>;
 }
 
 // ── Coercion / validation ─────────────────────────────────────────────────────
@@ -503,6 +511,7 @@ export function initLocationState(graph: LocationGraph): LocationState {
     stuck_counter: 0,
     encounters_fired: [],
     encounters_armed: {},
+    npc_moves: {},
   };
 }
 
@@ -544,6 +553,14 @@ export function coerceLocationState(raw: any, graph: LocationGraph): LocationSta
             Object.entries(raw.encounters_armed)
               .filter(([, v]) => Number.isFinite(Number(v)))
               .map(([k, v]) => [k, Number(v)])
+          )
+        : {},
+    npc_moves:
+      raw.npc_moves && typeof raw.npc_moves === "object"
+        ? Object.fromEntries(
+            Object.entries(raw.npc_moves as Record<string, any>)
+              .filter(([, v]) => v && typeof v.at === "string" && status[v.at] !== undefined && Number.isInteger(v.row))
+              .map(([k, v]) => [k, { at: v.at as string, row: v.row as number }])
           )
         : {},
   };
@@ -603,7 +620,7 @@ function condSatisfied(
 // default for a scenario that gates on evidence it has no location system for.
 const EMPTY_LOCATION_STATE: LocationState = {
   current: null, positions: {}, status: {}, visited: [], entered_round: {}, evidence_found: [],
-  stuck_counter: 0, encounters_fired: [], encounters_armed: {},
+  stuck_counter: 0, encounters_fired: [], encounters_armed: {}, npc_moves: {},
 };
 const EMPTY_LOCATION_GRAPH: LocationGraph = {
   version: 2, travel_mode: "free", containers: [], nodes: [], edges: [],
@@ -695,32 +712,71 @@ export function evaluateNpcPlacements(
   state: LocationState,
   currentRound: number,
   objectiveProgress: ObjectiveProgressLike = {},
-  atNode?: string | null
+  atNode?: string | null,
+  /** Groups rows by canonical NPC (id- and name-refs to one NPC are one NPC)
+   *  and keys encounter moves. Without it refs are compared raw. */
+  roster: NpcRef[] = []
 ): string[] {
   const scene = atNode ?? state.current;
   if (!scene || graph.npc_placements.length === 0) return [];
 
-  // Group placements by NPC, preserving insertion order.
-  const byNpc = new Map<string, NpcPlacement[]>();
-  for (const p of graph.npc_placements) {
-    if (!byNpc.has(p.npc)) byNpc.set(p.npc, []);
-    byNpc.get(p.npc)!.push(p);
-  }
-
   const present: string[] = [];
-  byNpc.forEach((placements, npc) => {
-    let lastSatisfied: NpcPlacement | null = null;
-    for (const p of placements) {
-      if (condSatisfied(p.when, state, graph, currentRound, objectiveProgress)) lastSatisfied = p;
+  placementRowsByNpc(graph, roster).forEach((rows, key) => {
+    if (npcNodeFromRows(rows, key, graph, state, currentRound, objectiveProgress) === scene) {
+      present.push(graph.npc_placements[rows[0]].npc);
     }
-    if (lastSatisfied && lastSatisfied.at === scene) present.push(npc);
   });
   return present;
 }
 
+/** Placement rows per NPC (indices into graph.npc_placements, in order),
+ *  keyed by npcStateKey. Insertion order = first appearance. */
+function placementRowsByNpc(graph: LocationGraph, roster: NpcRef[]): Map<string, number[]> {
+  const byNpc = new Map<string, number[]>();
+  graph.npc_placements.forEach((p, i) => {
+    const key = npcStateKey(p.npc, roster);
+    if (!byNpc.has(key)) byNpc.set(key, []);
+    byNpc.get(key)!.push(i);
+  });
+  return byNpc;
+}
+
+/** Index of the LAST satisfied row ("last satisfied wins"), or -1. */
+function lastSatisfiedRow(
+  rows: number[],
+  graph: LocationGraph,
+  state: LocationState,
+  currentRound: number,
+  objectiveProgress: ObjectiveProgressLike
+): number {
+  let last = -1;
+  for (const i of rows) {
+    if (condSatisfied(graph.npc_placements[i].when, state, graph, currentRound, objectiveProgress)) last = i;
+  }
+  return last;
+}
+
+/** Where one placed NPC stands now. A fired encounter's move wins while the
+ *  row it was made under is still the one in force; once the creator's
+ *  schedule moves on (「第 5 回合後在碼頭」), the schedule wins again. */
+function npcNodeFromRows(
+  rows: number[],
+  key: string,
+  graph: LocationGraph,
+  state: LocationState,
+  currentRound: number,
+  objectiveProgress: ObjectiveProgressLike
+): string | null {
+  const last = lastSatisfiedRow(rows, graph, state, currentRound, objectiveProgress);
+  const move = state.npc_moves?.[key];
+  if (move && move.row === last) return move.at;
+  return last >= 0 ? graph.npc_placements[last].at : null;
+}
+
 /**
  * Where the server currently places ONE NPC: the node of their last satisfied
- * placement (same "last satisfied wins" rule as evaluateNpcPlacements), or
+ * placement (same "last satisfied wins" rule as evaluateNpcPlacements — and,
+ * like it, a fired encounter's move while that row is in force), or
  * null when the NPC has no placement at all (a follow-the-action NPC) or the
  * ref matches no placement. Used to tell a player WHERE an NPC they named is,
  * instead of a bare "not here" — the narration may have just shown that NPC
@@ -735,26 +791,37 @@ export function npcPlacementNode(
   roster: NpcRef[]
 ): string | null {
   const key = npcStateKey(npcRef, roster);
-  let last: NpcPlacement | null = null;
-  for (const p of graph.npc_placements) {
-    if (npcStateKey(p.npc, roster) !== key) continue;
-    if (condSatisfied(p.when, state, graph, currentRound, objectiveProgress)) last = p;
-  }
-  return last?.at ?? null;
+  const rows = placementRowsByNpc(graph, roster).get(key);
+  return rows ? npcNodeFromRows(rows, key, graph, state, currentRound, objectiveProgress) : null;
 }
 
 /**
  * Fire any NPC encounters whose conditions just became true.
  * Mutates state.encounters_fired so each fires at most once per room.
  * Returns the newly fired encounters.
+ *
+ * Split-party: everything is relative to the ACTING character (`actorNode`).
+ * The `at` gate used to read the legacy `current` mirror — the LAST MOVER —
+ * so an encounter set for 走廊 fired on the turn of a player still in 房間
+ * (because someone else had just walked into 走廊), and the beat was narrated
+ * into the wrong scene.
+ *
+ * A fired encounter also MOVES a placed NPC to the actor's node (recorded in
+ * state.npc_moves) so presence, combat and the next turn's scene agree with
+ * what the GM is about to narrate. NPCs with no placement rows are untouched:
+ * they already follow the action everywhere.
  */
 export function evaluateEncounters(
   graph: LocationGraph,
   state: LocationState,
   currentRound: number,
-  objectiveProgress: ObjectiveProgressLike = {}
+  objectiveProgress: ObjectiveProgressLike = {},
+  actorNode: string | null = null,
+  roster: NpcRef[] = []
 ): NpcEncounter[] {
   if (graph.npc_encounters.length === 0) return [];
+  const here = actorNode ?? state.current;
+  const rowsByNpc = placementRowsByNpc(graph, roster);
   const fired: NpcEncounter[] = [];
   for (let i = 0; i < graph.npc_encounters.length; i++) {
     const enc = graph.npc_encounters[i];
@@ -768,18 +835,25 @@ export function evaluateEncounters(
     // even if the party wanders off before the gate opens.
     if (state.encounters_armed[key] === undefined) state.encounters_armed[key] = currentRound;
     if (enc.delay && currentRound - state.encounters_armed[key] < enc.delay) continue;
-    if (enc.at && !partyIsAt(enc.at, state, graph)) continue;
+    if (enc.at && !isAtOrInside(enc.at, here, graph)) continue;
     state.encounters_fired.push(key);
     fired.push(enc);
+
+    const npcKey = npcStateKey(enc.npc, roster);
+    const rows = rowsByNpc.get(npcKey);
+    if (rows && here && npcNodeFromRows(rows, npcKey, graph, state, currentRound, objectiveProgress) !== here) {
+      if (!state.npc_moves) state.npc_moves = {};
+      state.npc_moves[npcKey] = { at: here, row: lastSatisfiedRow(rows, graph, state, currentRound, objectiveProgress) };
+    }
   }
   return fired;
 }
 
-/** Is the party's current node `id`, or inside container `id`? */
-function partyIsAt(id: string, state: LocationState, graph: LocationGraph): boolean {
-  if (!state.current) return false;
-  if (state.current === id) return true;
-  const node = graph.nodes.find((n) => n.id === state.current);
+/** Is `nodeId` the node `id`, or inside container `id`? */
+function isAtOrInside(id: string, nodeId: string | null, graph: LocationGraph): boolean {
+  if (!nodeId) return false;
+  if (nodeId === id) return true;
+  const node = graph.nodes.find((n) => n.id === nodeId);
   return !!node && node.container === id;
 }
 
@@ -1434,7 +1508,7 @@ export function composeSceneChoices(
   }
 
   // 2. Engage — an NPC actually placed at this node (and still alive).
-  const npcHere = evaluateNpcPlacements(graph, state, currentRound, objectiveProgress, nodeId)
+  const npcHere = evaluateNpcPlacements(graph, state, currentRound, objectiveProgress, nodeId, npcRoster)
     .filter((ref) => (npcAlive ? npcAlive(ref) : true));
   for (const ref of npcHere) out.push(`與${npcDisplayName(ref, npcRoster)}交談`);
 
@@ -1544,7 +1618,7 @@ export function buildLocationBlock(
   }
 
   // NPC presence — server-computed, GM must not add or remove NPCs from the scene.
-  const npcsHere = evaluateNpcPlacements(graph, state, currentRound, objectiveProgress, sceneNode);
+  const npcsHere = evaluateNpcPlacements(graph, state, currentRound, objectiveProgress, sceneNode, npcRoster);
   if (graph.npc_placements.length > 0) {
     if (npcsHere.length > 0) {
       lines.push(`NPCS PRESENT HERE: ${npcsHere.map((ref) => npcDisplayName(ref, npcRoster)).join("、")}`);
@@ -1650,7 +1724,7 @@ export function buildLocationBlock(
   for (const enc of firedEncounters) {
     lines.push(
       enc.at
-        ? `NPC ENCOUNTER THIS TURN — ${npcDisplayName(enc.npc, npcRoster)} is here at the party's current location and makes contact now. Weave this into the scene immediately. Beat: ${enc.beat}`
+        ? `NPC ENCOUNTER THIS TURN — ${npcDisplayName(enc.npc, npcRoster)} is here at ${scene ? `${scene.actorName}'s` : "the party's"} current location and makes contact now. Weave this into the scene immediately. Beat: ${enc.beat}`
         : `NPC ENCOUNTER THIS TURN — ${npcDisplayName(enc.npc, npcRoster)} arrives / makes contact with the party regardless of location. Weave this into the scene immediately. Beat: ${enc.beat}`
     );
   }

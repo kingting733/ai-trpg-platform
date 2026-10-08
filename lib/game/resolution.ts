@@ -676,6 +676,51 @@ export function resolveFuzzyNpcTarget(actionText: string, candidateNames: string
   return best.name;
 }
 
+/** What a GM-flagged NPC injury's `target` refers to. */
+export type InjuredNpcMatch =
+  | { kind: "known"; name: string }
+  /** Shares nothing with any known NPC — a GM-invented one; track it fresh. */
+  | { kind: "new" }
+  /** Looks like a known NPC but can't be pinned to exactly one — skip it. */
+  | { kind: "ambiguous" };
+
+/**
+ * Map a GM injury target onto the NPCs the room already knows (roster names +
+ * names tracked in npc_states). State is keyed by EXACT name, so 「婆婆」 for
+ * 陳婆婆 used to open a second HP pool — two of the same NPC, and an
+ * npc_dead:陳婆婆 ending that never fires.
+ *
+ * Conservative: exact (case-insensitive) match, else a UNIQUE containment
+ * (「婆婆」⊂「陳婆婆」, 「陳婆婆的鬼魂」⊃「陳婆婆」). No typo/one-char-off guessing —
+ * on 2-char names that would turn a GM-invented 「老伯」 into 王伯. Anything
+ * that still shares a 2-char chunk / distinctive word with a known name is
+ * ambiguous (better no damage than damage on the wrong NPC or a duplicate).
+ */
+export function matchInjuredNpc(target: string, knownNames: string[]): InjuredNpcMatch {
+  const t = target.trim().toLowerCase();
+  if (!t) return { kind: "ambiguous" };
+  const names = Array.from(new Set(knownNames.map((n) => n.trim()).filter(Boolean)));
+
+  const exact = names.find((n) => n.toLowerCase() === t);
+  if (exact) return { kind: "known", name: exact };
+
+  const contained = names.filter((n) => {
+    const nl = n.toLowerCase();
+    return t.length >= 2 && nl.length >= 2 && (nl.includes(t) || t.includes(nl));
+  });
+  if (contained.length === 1) return { kind: "known", name: contained[0] };
+  if (contained.length > 1) return { kind: "ambiguous" };
+
+  const sharesChunk = names.some((n) => {
+    const nl = n.toLowerCase();
+    for (const run of nl.match(/[㐀-鿿]+/g) ?? []) {
+      for (let i = 0; i + 2 <= run.length; i++) if (t.includes(run.slice(i, i + 2))) return true;
+    }
+    return latinNameSegments(n).some((seg) => t.includes(seg));
+  });
+  return sharesChunk ? { kind: "ambiguous" } : { kind: "new" };
+}
+
 /**
  * Guard for the "sole candidate present → use them" fallback that attacks and
  * targeted spells share. That fallback exists for UNNAMED targets ("attack

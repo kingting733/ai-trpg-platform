@@ -8,6 +8,7 @@ import {
   resolveAction, rollInjuryDamage, rollFirstAidHeal, InjurySeverity,
   resolveAttack, dodgeValueOf, NPC_DEFAULT_DODGE, AttackResult,
   detectAttackTypeForTargets, detectNamedStrike, resolveFuzzyNpcTarget, findNamedNonCandidate, isBareNameLike, resolveSanCheck,
+  matchInjuredNpc,
   PLAYER_SKILL_LIST,
 } from "@/lib/game/resolution";
 import { generateSceneChoices } from "@/lib/ai/scene-choices";
@@ -179,7 +180,7 @@ export async function POST(request: Request) {
     : null;
   const combatPlacedKeys = new Set(
     combatGraph && combatLocState && combatActorNode
-      ? evaluateNpcPlacements(combatGraph, combatLocState, room.current_round, combatObjProgress, combatActorNode)
+      ? evaluateNpcPlacements(combatGraph, combatLocState, room.current_round, combatObjProgress, combatActorNode, npcRoster)
           .map((r) => npcStateKey(r, npcRoster))
       : []
   );
@@ -968,10 +969,19 @@ export async function POST(request: Request) {
     }
 
     // 4. NPC ENCOUNTERS — one-shot triggers that fire when conditions are met.
-    locationFiredEncounters = evaluateEncounters(locationGraph, locState, room.current_round, objProgress);
+    //    Relative to the ACTING character; a placed NPC is moved to them.
+    const movesBefore = { ...locState.npc_moves };
+    locationFiredEncounters = evaluateEncounters(locationGraph, locState, room.current_round, objProgress, actorNode, npcRoster);
     for (const enc of locationFiredEncounters) {
       locationProgress = true;
       const encNpcName = npcDisplayName(enc.npc, npcRoster);
+      const move = locState.npc_moves[npcStateKey(enc.npc, npcRoster)];
+      console.info(
+        `[npc:encounter] fired for ${encNpcName} on ${resolvedActor?.name ?? "party"}'s turn @ ${actorNode ?? "-"}` +
+        (move && move !== movesBefore[npcStateKey(enc.npc, npcRoster)]
+          ? ` — placed NPC moved to ${locationShortName(locationGraph.nodes.find((n) => n.id === move.at)?.name ?? move.at)}`
+          : " — no position change (already here, or unplaced follow-the-action NPC)")
+      );
       await supabase.from("story_logs").insert({
         room_id: roomId,
         round_number: room.current_round,
@@ -1090,7 +1100,7 @@ export async function POST(request: Request) {
     // behavior (they follow the action). Placed hostiles elsewhere hold still —
     // their scene isn't being narrated this turn.
     const placedNames = locationGraph && locState
-      ? evaluateNpcPlacements(locationGraph, locState, room.current_round, objProgress, actorNode)
+      ? evaluateNpcPlacements(locationGraph, locState, room.current_round, objProgress, actorNode, npcRoster)
       : [];
     const placedKeys = new Set(placedNames.map((r) => npcStateKey(r, npcRoster)));
     const hasPlacementFor = (key: string): boolean =>
@@ -1623,7 +1633,7 @@ export async function POST(request: Request) {
     const nextRegion = nextNodeDef?.container
       ? locationGraph.containers.find((c) => c.id === nextNodeDef.container)
       : null;
-    const npcsHere = evaluateNpcPlacements(locationGraph, locState, room.current_round, objProgress, nextActorNode)
+    const npcsHere = evaluateNpcPlacements(locationGraph, locState, room.current_round, objProgress, nextActorNode, npcRoster)
       .filter((ref) => npcStateEntry(ref, npcRoster, npcStateNow)?.alive !== false)
       .map((ref) => npcDisplayName(ref, npcRoster));
     const openExits = computeExits(locationGraph, locState, nextActorNode).open;
@@ -1945,6 +1955,28 @@ export async function POST(request: Request) {
     // writes are entirely server-side, preserving tamper-resistance.
     const injuryLedgerEntries: LedgerEntry[] = [];
     let injury = gmResponse.injury;
+    // One NPC, one HP pool: map the GM's name for an injured NPC onto the NPC
+    // the room already knows (「婆婆」 → 陳婆婆) BEFORE anything keys state by
+    // it — state is keyed by exact name, so a variant opened a second pool.
+    if (injury?.target && injury.is_npc) {
+      const knownNpcNames = Array.from(new Set([
+        ...npcRoster.map((n) => n.name),
+        ...Object.keys(npcStateNow).map((k) => npcDisplayName(k, npcRoster)),
+      ]));
+      const match = matchInjuredNpc(injury.target, knownNpcNames);
+      if (match.kind === "known" && match.name !== injury.target) {
+        console.info(`[injury] room=${roomId} round=${room.current_round} mapped GM NPC name "${injury.target}" → ${match.name}`);
+        injury = { ...injury, target: match.name };
+      } else if (match.kind === "ambiguous") {
+        console.warn(
+          `[injury] room=${roomId} round=${room.current_round} dropped GM-flagged injury on "${injury.target}" (${injury.severity}): ` +
+          `resembles a known NPC but matches none uniquely (known: ${JSON.stringify(knownNpcNames)}) — not opening a second HP pool`
+        );
+        injury = undefined;
+      } else if (match.kind === "new") {
+        console.info(`[injury] room=${roomId} round=${room.current_round} "${injury.target}" matches no known NPC — tracking it as a new GM-introduced NPC`);
+      }
+    }
     if (injury?.target && combatSettled.has(injury.is_npc ? npcStateKey(injury.target, npcRoster) : injury.target)) {
       console.info(`[injury] room=${roomId} round=${room.current_round} dropped GM-flagged injury on ${injury.target} (${injury.severity}): combat already settled their HP this turn`);
       injury = undefined;

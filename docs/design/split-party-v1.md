@@ -53,7 +53,11 @@ interface LocationState {
    holds/roams per placement rules). A lone investigator fights alone.
 6. **First-visit media / on_enter / discovers** fire on first visit by anyone.
 7. **Encounters** fire once globally (as today); the beat is delivered into the
-   acting character's scene.
+   acting character's scene. An `at` gate is checked against the ACTING
+   character's node (not the legacy `current`, which is the last mover), and a
+   fired encounter moves a PLACED NPC to that node (`LocationState.npc_moves`)
+   until the creator's placement schedule moves on — so the NPC is never in
+   two scenes at once. Unplaced NPCs keep following the action. (2026-10-08)
 8. **Spawn**: opening + turn-1 seed put every character at the entry node.
    Splitting is opt-in by walking away.
 
