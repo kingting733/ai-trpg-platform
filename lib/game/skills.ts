@@ -35,8 +35,14 @@ export const SKILL_KEY_BY_ZH: Record<string, string> =
 export const SKILL_ZH_BY_KEY: Record<string, string> =
   Object.fromEntries(SKILL_CATALOGUE.map((s) => [s.key, s.zh]));
 
-/** Highest a skill can reach. */
+/** Highest a skill can reach through growth (end-of-adventure checks, 幕間任務). */
 export const SKILL_CAP = 95;
+
+/** Highest a skill can be set to when allocating points on a new card. Lower
+ *  than SKILL_CAP so a fresh investigator still has room to grow and a search
+ *  still carries risk — at 95, playtest saw 12/12 偵查 rolls succeed.
+ *  Cards allocated before this cap keep their values (stats are locked). */
+export const SKILL_ALLOC_CAP = 80;
 
 /** Resolve a skill's base value for a given card's attributes. */
 export function skillBase(

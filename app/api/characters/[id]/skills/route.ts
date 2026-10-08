@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { SKILL_ALLOC_CAP } from "@/lib/game/skills";
 
 // Base skill values (mirrors CardRollReveal.tsx SKILLS list).
 const SKILL_BASES: Record<string, number | "dex2" | "app2" | "inv_app"> = {
@@ -55,10 +56,12 @@ export async function PATCH(
   let totalAllocated = 0;
 
   for (const [key, val] of Object.entries(skills)) {
-    if (!Number.isInteger(val) || val < 0 || val > 95) {
-      return NextResponse.json({ error: `Invalid value for skill ${key}.` }, { status: 400 });
-    }
     const floor = floorFor(key);
+    // A skill may not be raised above SKILL_ALLOC_CAP; a starting value that
+    // is already higher (occupation seed) is accepted as-is but not raised.
+    if (!Number.isInteger(val) || val < 0 || val > Math.max(SKILL_ALLOC_CAP, floor)) {
+      return NextResponse.json({ error: `技能「${key}」最多只能配到 ${SKILL_ALLOC_CAP}。` }, { status: 400 });
+    }
     const allocated = val - floor;
     if (allocated < 0) {
       return NextResponse.json({ error: `Value for ${key} is below its starting value of ${floor}.` }, { status: 400 });

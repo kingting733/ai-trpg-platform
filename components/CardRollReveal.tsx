@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { Drama, Star, ArrowRight, AlertTriangle } from "lucide-react";
 import { GachaSummon, TIER, gold, buildStatSteps } from "@/components/GachaSummon";
 import { OccupationRoulette } from "@/components/OccupationRoulette";
+import { SKILL_ALLOC_CAP } from "@/lib/game/skills";
 
 const OCCUPATION_ICON: Record<string, string> = {
   "記者":     "/reporter.png",
@@ -114,7 +115,7 @@ function SkillAllocator({ card, onSaved, onRequestSkip }: { card: RevealCard; on
       if (next < 0) return prev;
       if (delta > 0 && remaining <= 0) return prev;
       const base = floorFor(SKILLS.find((s) => s.key === key)!);
-      if (base + next > 95) return prev;
+      if (base + next > SKILL_ALLOC_CAP) return prev;
       return { ...prev, [key]: next };
     });
   }
@@ -125,7 +126,7 @@ function SkillAllocator({ card, onSaved, onRequestSkip }: { card: RevealCard; on
     const base = floorFor(SKILLS.find((s) => s.key === key)!);
     const cur = allocated[key] ?? 0;
     const headroom = remaining + cur;
-    const capped = Math.min(n, headroom, 95 - base);
+    const capped = Math.max(0, Math.min(n, headroom, SKILL_ALLOC_CAP - base));
     setAllocated((prev) => ({ ...prev, [key]: capped }));
   }
 
@@ -153,7 +154,7 @@ function SkillAllocator({ card, onSaved, onRequestSkip }: { card: RevealCard; on
     <div>
       {/* Points header */}
       <div className="flex items-center justify-between mb-3 px-1">
-        <span className="text-zinc-400 text-sm">分配技能點數</span>
+        <span className="text-zinc-400 text-sm">分配技能點數<span className="text-zinc-600 text-xs ml-1.5">每項最高 {SKILL_ALLOC_CAP}</span></span>
         <span className="text-sm font-bold px-3 py-0.5 rounded-full"
           style={remaining === 0
             ? { background: "rgba(6,78,59,0.4)", color: "#6ee7b7", border: "1px solid rgba(6,95,70,0.6)" }
@@ -186,11 +187,11 @@ function SkillAllocator({ card, onSaved, onRequestSkip }: { card: RevealCard; on
               <button onClick={() => adjust(s.key, -1)} disabled={add <= 0}
                 className="w-5 h-5 rounded flex items-center justify-center text-xs disabled:opacity-25 hover:brightness-125"
                 style={{ background: "#1a150e", border: "1px solid #2e2416", color: "#c9a96e" }}>−</button>
-              <input type="number" min={0} max={95 - base} value={add}
+              <input type="number" min={0} max={Math.max(0, SKILL_ALLOC_CAP - base)} value={add}
                 onChange={(e) => setDirect(s.key, e.target.value)}
                 className="w-9 rounded text-center text-xs py-0.5 focus:outline-none"
                 style={{ background: "#0e0c08", border: "1px solid rgba(201,169,110,0.3)", color: "#e4d8be" }} />
-              <button onClick={() => adjust(s.key, 1)} disabled={remaining <= 0 || base + add >= 95}
+              <button onClick={() => adjust(s.key, 1)} disabled={remaining <= 0 || base + add >= SKILL_ALLOC_CAP}
                 className="w-5 h-5 rounded flex items-center justify-center text-xs disabled:opacity-25 hover:brightness-125"
                 style={{ background: "#1a150e", border: "1px solid #2e2416", color: "#c9a96e" }}>+</button>
               <span className="w-9 text-right text-xs font-bold shrink-0"
