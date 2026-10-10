@@ -38,3 +38,6 @@ next-env.d.ts
 /stories/out/
 /stories/ui-*/
 /stories/run-*/
+
+# purchased source stories for the coc-story skill — analysed, never committed
+/stories/source/
