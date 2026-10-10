@@ -47,3 +47,4 @@ Multiplayer AI-GM TRPG (Call of Cthulhu-style, zh-TW UI). Next.js 14 app router 
 - `docs/ai-ops/06-lessons.md` — append-only log of solved bugs and the rules they taught
 - `docs/ai-ops/07-narrative-voice.md` — why the GM reads as AI and the 網文 voice spec (`lib/ai/style.ts`)
 - `docs/design/security-hardening-pass.md` — **scheduled** RLS/service-role hardening pass; execute before any public test (see the doc; do not skip)
+- `docs/playtest-plan.md` — browser playtest runbook (prereqs, version check, test list, Vercel logs, report format); **follow it when the user asks to 跑 playtest**
